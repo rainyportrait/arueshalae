@@ -1,0 +1,29 @@
+CREATE TABLE posts (
+  id INTEGER PRIMARY KEY NOT NULL,
+  remote_id INTEGER NOT NULL UNIQUE,
+  added_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE downloads (
+  id INTEGER PRIMARY KEY NOT NULL,
+  post_id INTEGER NOT NULL UNIQUE REFERENCES posts (id),
+
+  file_name TEXT NOT NULL UNIQUE,
+  mime TEXT NOT NULL,
+  original BOOLEAN NOT NULL,
+
+  downloaded_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE tags (
+  id INTEGER PRIMARY KEY NOT NULL,
+  name TEXT NOT NULL UNIQUE
+);
+
+CREATE TABLE post_tags (
+  post_id INTEGER NOT NULL REFERENCES posts (id),
+  tag_id INTEGER NOT NULL REFERENCES tags (id),
+  PRIMARY KEY (post_id, tag_id)
+);
+
+CREATE INDEX IDX_post_tags_tag_id ON post_tags (tag_id);

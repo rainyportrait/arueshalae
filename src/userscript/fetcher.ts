@@ -1,3 +1,8 @@
+const MAX_RETRIES = 5;
+const BASE_DELAY = 100;
+const BACKOFF_MULTIPLIER = 2;
+const RETRY_STATUS = [429, 500, 502, 503, 504];
+
 const parser = new DOMParser();
 
 const supportedTypes: readonly DOMParserSupportedType[] = [
@@ -15,7 +20,7 @@ function isValidDOMParserContentType(
 }
 
 export async function fetchDocument(url: string): Promise<Document> {
-  const response = await fetch(url);
+  const response = await getWithRetry(url);
   const body = await response.text();
   const contentType = response.headers
     .get("Content-Type")
@@ -31,4 +36,26 @@ export async function fetchDocument(url: string): Promise<Document> {
   }
 
   return parser.parseFromString(body, contentType);
+}
+
+async function getWithRetry(url: string): Promise<Response> {
+  let attempt = 1;
+  while (attempt <= MAX_RETRIES) {
+    try {
+      const response = await fetch(url);
+      if (!RETRY_STATUS.includes(response.status)) {
+        return response;
+      }
+    } catch {}
+    await sleep(BASE_DELAY * Math.pow(BACKOFF_MULTIPLIER, attempt - 1));
+    attempt++;
+  }
+
+  throw "Exceeded MAX_RETRIES";
+}
+
+function sleep(timeInMilliseconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, timeInMilliseconds);
+  });
 }

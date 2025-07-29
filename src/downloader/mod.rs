@@ -1,6 +1,6 @@
 mod api;
 mod database;
-mod image_file;
+mod media_processor;
 mod worker;
 
 pub use api::create_api_server;

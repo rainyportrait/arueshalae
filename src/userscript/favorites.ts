@@ -17,7 +17,7 @@ export class Favorites {
 
     this.container = document.createElement("div");
     this.container.classList.add("arue-container");
-    header.appendChild(this.container);
+    this.header.appendChild(this.container);
 
     this.button = document.createElement("button");
     this.button.innerHTML = "Sync";

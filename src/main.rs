@@ -22,26 +22,37 @@ use crate::{
 struct Args {
     #[arg(default_value = "./r34", index = 1)]
     path: Utf8PathBuf,
+
+    #[arg(default_value_t = false, long)]
+    verbose: bool,
 }
 
-fn path_from_args() -> Utf8PathBuf {
+fn args() -> (Utf8PathBuf, bool) {
     let args = Args::parse();
     let path = args.path;
 
-    std::fs::create_dir_all(&path).expect("create base directory");
+    std::fs::create_dir_all(path.join(".thumbs")).expect("create base directory");
 
     if path.is_file() {
         panic!("{path} is not a directory");
     }
 
-    path
+    (path, args.verbose)
 }
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt::init();
+    let (path, verbose) = args();
+    let logging_level = if verbose {
+        tracing::Level::DEBUG
+    } else {
+        tracing::Level::INFO
+    };
 
-    let path = path_from_args();
+    tracing_subscriber::fmt::fmt()
+        .with_max_level(logging_level)
+        .pretty()
+        .init();
 
     let shutdown_signal = shutdown_signal();
     let shutdown_token = CancellationToken::new();

@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Result, anyhow};
 use camino::{Utf8Path, Utf8PathBuf};
 use reqwest::Client;
 use serde::Deserialize;
@@ -12,9 +12,9 @@ use tokio::{
     task::JoinHandle,
 };
 use tokio_util::sync::CancellationToken;
-use tracing::error;
+use tracing::{debug, error, info};
 
-use crate::{database::Database, downloader::image_file::ImageFile};
+use crate::{database::Database, downloader::media_processor::MediaProcessor};
 
 const HTTP_TIMEOUT: u64 = 60;
 const MAX_CONCURRENT_DOWNLOADS: usize = 10;
@@ -57,7 +57,7 @@ impl Downloader {
     }
 
     async fn start(&mut self) -> Result<()> {
-        // self.queue_pending_posts().await?;
+        self.queue_pending_posts().await?;
         let handles = (0..MAX_CONCURRENT_DOWNLOADS)
             .map(|_| {
                 let worker = self.clone();
@@ -98,18 +98,23 @@ impl Downloader {
     }
 
     async fn process_post(&self, post_id: i64) -> Result<()> {
+        debug!("Downloading post {post_id}");
         let info = self.post_info(post_id).await?;
+        let temp_file = self.download(&info.file_url).await?;
+
         let sort_id = self.database.get_internal_post_id(post_id).await?;
-        let image = self.download(post_id, sort_id, &info.file_url).await?;
+        let process_result =
+            MediaProcessor::process(&self.path, post_id, sort_id, temp_file).await?;
         self.database
             .insert_download(
                 post_id,
-                &image.file_name(),
-                &image.mime(),
-                image.is_original(),
+                &process_result.file_name,
+                process_result.mime,
+                process_result.original,
             )
             .await?;
-        image.commit();
+        process_result.commit();
+        info!("Downloaded post https://rule34.xxx/index.php?page=post&s=view&id={post_id}");
         Ok(())
     }
 
@@ -131,12 +136,7 @@ impl Downloader {
             .ok_or(anyhow!("API did not return a post"))
     }
 
-    async fn download(&self, post_id: i64, sort_id: i64, url: &str) -> Result<ImageFile> {
-        let mime = match mime(url) {
-            Some(mime) => mime,
-            None => bail!("Couldn't guess mime from file name"),
-        };
-
+    async fn download(&self, url: &str) -> Result<NamedTempFile> {
         let temp_file = NamedTempFile::new()?;
 
         let mut response = self.client.get(url).send().await?;
@@ -147,11 +147,7 @@ impl Downloader {
         file.flush().await?;
         drop(file);
 
-        if mime.starts_with("image") {
-            Ok(ImageFile::new(self.path.clone(), post_id, sort_id, temp_file).await?)
-        } else {
-            bail!("videos is todo")
-        }
+        Ok(temp_file)
     }
 
     async fn queue_pending_posts(&self) -> Result<()> {
@@ -163,22 +159,16 @@ impl Downloader {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize)]
 pub struct XMLPosts {
     #[serde(rename = "post")]
     pub posts: Vec<XMLPost>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize)]
 pub struct XMLPost {
     #[serde(rename = "@file_url")]
     pub file_url: String,
     #[serde(rename = "@tags")]
-    pub space_seperated_tags: String,
-}
-
-fn mime(path: &str) -> Option<String> {
-    mime_guess::from_path(path)
-        .first()
-        .map(|mime| mime.to_string())
+    pub _space_seperated_tags: String,
 }

@@ -38,7 +38,6 @@ export class Favorites {
       const postIds = await this.getIdsFromPage(pid);
       await sendPostIds(postIds);
       postsOutstanding -= 50;
-      break;
     }
   }
 

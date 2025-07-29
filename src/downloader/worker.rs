@@ -102,7 +102,7 @@ impl Downloader {
         let info = self.post_info(post_id).await?;
         let temp_file = self.download(&info.file_url).await?;
 
-        let sort_id = self.database.get_internal_post_id(post_id).await?;
+        let sort_id = self.database.get_sort_id_for_post(post_id).await?;
         let process_result =
             MediaProcessor::process(&self.path, post_id, sort_id, temp_file).await?;
         self.database
@@ -111,6 +111,7 @@ impl Downloader {
                 &process_result.file_name,
                 process_result.mime,
                 process_result.original,
+                &info.space_seperated_tags,
             )
             .await?;
         process_result.commit();
@@ -170,5 +171,5 @@ pub struct XMLPost {
     #[serde(rename = "@file_url")]
     pub file_url: String,
     #[serde(rename = "@tags")]
-    pub _space_seperated_tags: String,
+    pub space_seperated_tags: String,
 }

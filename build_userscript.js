@@ -72,6 +72,8 @@ esbuild
 // @match        https://rule34.xxx/index.php?*
 // @grant        none
 // @run-at       document-idle
+// @downloadUrl  http://localhost:34343/arueshalae.user.js
+// @updateUrl    http://localhost:34343/arueshalae.user.js
 // ==/UserScript==
 `,
     },

@@ -101,4 +101,21 @@ impl Database {
             .await
             .map_err(anyhow::Error::from)
     }
+
+    pub async fn filter_existing_posts(&self, post_ids: &[i64]) -> Result<Vec<i64>> {
+        if post_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut query_builder = sqlx::QueryBuilder::new("SELECT id FROM posts WHERE id IN (");
+        query_builder.push_values(post_ids, |mut builder, post_id| {
+            builder.push_bind(post_id);
+        });
+        query_builder.push(") ");
+
+        Ok(query_builder
+            .build_query_scalar()
+            .fetch_all(&self.pool)
+            .await?)
+    }
 }

@@ -38,6 +38,12 @@ export async function fetchDocument(url: string): Promise<Document> {
   return parser.parseFromString(body, contentType);
 }
 
+export function getIdsFromDOM(dom: Document): number[] {
+  return Array.from(document.querySelectorAll(".thumb > a"))
+    .map((anchor) => Number.parseInt(anchor.id.substring(1), 10))
+    .reverse();
+}
+
 async function getWithRetry(url: string): Promise<Response> {
   let attempt = 1;
   while (attempt <= MAX_RETRIES) {

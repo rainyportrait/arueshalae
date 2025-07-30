@@ -1,5 +1,5 @@
 import { getApiPostCount, sendPostIds } from "./api";
-import { fetchDocument } from "./fetcher";
+import { fetchDocument, getIdsFromDOM } from "./fetcher";
 
 const POSTS_PER_PAGE = 50;
 
@@ -80,8 +80,6 @@ export class Favorites {
     const document = await fetchDocument(
       `/index.php?page=favorites&s=view&id=${this.getUserId()}&pid=${pid}`,
     );
-    return Array.from(document.querySelectorAll(".thumb > a"))
-      .map((anchor) => Number.parseInt(anchor.id.substring(1), 10))
-      .reverse();
+    return getIdsFromDOM(document);
   }
 }

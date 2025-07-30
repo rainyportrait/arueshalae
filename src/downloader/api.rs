@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use axum::{
     Json, Router,
-    extract::State,
+    extract::{Query, State},
     http::{HeaderValue, Method, header},
     response::IntoResponse,
     routing::get,
@@ -30,6 +30,7 @@ pub fn create_api_server(database: &Database, sender: &mpsc::UnboundedSender<i64
     Router::new()
         .route("/", get(hello))
         .route("/post", get(post_count).post(receive_posts))
+        .route("/post/check", get(check_post))
         .with_state(state)
         .layer(
             CorsLayer::new()
@@ -65,5 +66,29 @@ async fn receive_posts(
 async fn post_count(
     State(ApiState { database, .. }): State<ApiState>,
 ) -> AppResult<impl IntoResponse> {
-    json_ok!({"count": database.post_count().await? })
+    json_ok!({"count": database.post_count().await?})
+}
+
+#[derive(Deserialize)]
+struct CheckRequest {
+    #[serde(deserialize_with = "deserialize_comma_separated")]
+    post_ids: Vec<i64>,
+}
+
+fn deserialize_comma_separated<'de, D>(deserializer: D) -> Result<Vec<i64>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    s.split(',')
+        .map(|id| id.trim().parse().map_err(serde::de::Error::custom))
+        .collect()
+}
+
+async fn check_post(
+    State(ApiState { database, .. }): State<ApiState>,
+    Query(query): Query<CheckRequest>,
+) -> AppResult<impl IntoResponse> {
+    let post_ids = database.filter_existing_posts(&query.post_ids).await?;
+    json_ok!({"post_ids": post_ids})
 }

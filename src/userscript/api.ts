@@ -30,3 +30,21 @@ export async function getApiPostCount(): Promise<number> {
   }
   return json.count;
 }
+
+export async function filterPostIds(ids: number[]): Promise<number[]> {
+  const response = await fetch(
+    `${BASE_URL}/api/post/check?post_ids=${ids.join(",")}`,
+  );
+  const json: unknown = await response.json();
+  if (
+    !(
+      json &&
+      typeof json === "object" &&
+      "post_ids" in json &&
+      Array.isArray(json.post_ids)
+    )
+  ) {
+    throw "API did not send post ids";
+  }
+  return json.post_ids.filter((id) => typeof id === "number");
+}

@@ -18,3 +18,8 @@
     cursor: pointer;
   }
 }
+
+.arue-favorited-post {
+  border: 2px solid rgb(0, 255, 88) !important;
+  box-sizing: border-box;
+}

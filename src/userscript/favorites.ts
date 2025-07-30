@@ -77,9 +77,9 @@ export class Favorites {
   }
 
   private async getIdsFromPage(pid: number): Promise<number[]> {
-    const document = await fetchDocument(
+    const dom = await fetchDocument(
       `/index.php?page=favorites&s=view&id=${this.getUserId()}&pid=${pid}`,
     );
-    return getIdsFromDOM(document);
+    return getIdsFromDOM(dom);
   }
 }

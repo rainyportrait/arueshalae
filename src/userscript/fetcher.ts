@@ -39,7 +39,7 @@ export async function fetchDocument(url: string): Promise<Document> {
 }
 
 export function getIdsFromDOM(dom: Document): number[] {
-  return Array.from(document.querySelectorAll(".thumb > a"))
+  return Array.from(dom.querySelectorAll(".thumb > a"))
     .map((anchor) => Number.parseInt(anchor.id.substring(1), 10))
     .reverse();
 }

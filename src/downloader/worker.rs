@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use camino::{Utf8Path, Utf8PathBuf};
 use reqwest::Client;
 use serde::Deserialize;
@@ -51,7 +51,7 @@ impl Downloader {
     pub fn spawn(mut self) -> JoinHandle<()> {
         tokio::spawn(async move {
             if let Err(e) = self.start().await {
-                error!("Failed to download: {e}");
+                error!("Failed to download: {e:#}");
             }
         })
     }
@@ -120,28 +120,37 @@ impl Downloader {
     }
 
     async fn post_info(&self, post_id: i64) -> Result<XMLPost> {
+        let url = format!("https://api.rule34.xxx/index.php?page=dapi&s=post&q=index&id={post_id}");
         let body = self
             .client
-            .get(format!(
-                "https://api.rule34.xxx/index.php?page=dapi&s=post&q=index&id={post_id}"
-            ))
+            .get(&url)
             .send()
-            .await?
+            .await
+            .context("GET for post info failed")?
             .text()
-            .await?;
+            .await
+            .context("Could not get response body for post info")?;
 
-        quick_xml::de::from_str::<XMLPosts>(body.as_str())?
+        quick_xml::de::from_str::<XMLPosts>(body.as_str())
+            .with_context(|| format!("Answer from {url} could not be parsed."))?
             .posts
             .into_iter()
             .next()
-            .ok_or(anyhow!("API did not return a post"))
+            .ok_or_else(|| anyhow!("Answer from {url} did not include post info"))
     }
 
     async fn download(&self, url: &str) -> Result<NamedTempFile> {
         let temp_file = NamedTempFile::new()?;
 
-        let mut response = self.client.get(url).send().await?;
-        let mut file = File::create(temp_file.path()).await?;
+        let mut response = self
+            .client
+            .get(url)
+            .send()
+            .await
+            .context("GET for post image failed")?;
+        let mut file = File::create(temp_file.path())
+            .await
+            .context("Failed to open temporary file")?;
         while let Some(chunk) = response.chunk().await? {
             file.write_all(&chunk).await?;
         }

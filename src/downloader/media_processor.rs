@@ -1,6 +1,6 @@
 use std::process::Stdio;
 
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Context, Result, anyhow, bail};
 use camino::{Utf8Path, Utf8PathBuf};
 use infer::MatcherType;
 use tempfile::NamedTempFile;
@@ -84,8 +84,8 @@ impl<'a> MediaProcessor<'a> {
     ) -> Result<MediaProcessorResult> {
         let cleaner = FileCleaner::new();
 
-        let temp_path =
-            Utf8PathBuf::from_path_buf(temp_file.path().to_owned()).expect("utf8 temp path name");
+        let temp_path = Utf8PathBuf::from_path_buf(temp_file.path().to_owned())
+            .map_err(|path| anyhow!("Got non UTF-8 path: {path:?}"))?;
 
         let processor = Self {
             dir_path,
@@ -124,8 +124,10 @@ impl<'a> MediaProcessor<'a> {
             .dir_path
             .join(".thumbs")
             .join(format!("{file_name}.jpeg",));
+        self.cleaner.add(&thumb_path);
         let thumb_time = self.video_duration().await? * 0.1;
         if !Command::new("ffmpeg")
+            .arg("-y")
             .arg("-ss")
             .arg(thumb_time.to_string())
             .arg("-i")
@@ -145,7 +147,6 @@ impl<'a> MediaProcessor<'a> {
         {
             bail!("ffmpeg failed to create thumbnail")
         };
-        self.cleaner.add(&thumb_path);
         Ok(())
     }
 
@@ -227,15 +228,17 @@ impl<'a> MediaProcessor<'a> {
     async fn file_type(&self) -> Result<infer::Type> {
         let mut buf = [0; HEADER_SIZE];
         let bytes_read = File::open(&self.file_path)
-            .await?
+            .await
+            .context("Failed to open file for type infer")?
             .read_exact(&mut buf)
-            .await?;
+            .await
+            .context("Failed to read header for type infer")?;
         if bytes_read == 0 {
             bail!("{} appears to be empty", &self.file_path)
         }
         infer::Infer::new()
             .get(&buf)
-            .ok_or(anyhow!("Could not infer file type"))
+            .ok_or(anyhow!("Could not infer file type for {}", &self.file_path))
     }
 }
 

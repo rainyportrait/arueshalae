@@ -6,6 +6,7 @@ use camino::Utf8PathBuf;
 use clap::Parser;
 use tokio::signal;
 use tokio_util::sync::CancellationToken;
+use tracing::info;
 
 use crate::{
     database::Database,
@@ -20,7 +21,7 @@ use crate::{
     version
 )]
 struct Args {
-    #[arg(default_value = "./r34", index = 1)]
+    #[arg(default_value = "./rule34", index = 1)]
     path: Utf8PathBuf,
 
     #[arg(default_value_t = false, long)]
@@ -51,7 +52,6 @@ async fn main() {
 
     tracing_subscriber::fmt::fmt()
         .with_max_level(logging_level)
-        .pretty()
         .init();
 
     let shutdown_signal = shutdown_signal();
@@ -66,6 +66,12 @@ async fn main() {
 
     let server_handle = spawn_server(router, &shutdown_token);
     let downloader_handle = downloader.spawn();
+
+    info!("Arueshalae server started. Visit http://localhost:34343/ for the web view.");
+    info!("The userscript can be installed from http://localhost:34343/arueshalae.user.js");
+    info!(
+        "Your favorites can be viewed access by clicking on 'My Favorites' from this url: https://rule34.xxx/index.php?page=account&s=home"
+    );
 
     shutdown_signal.await;
     shutdown_token.cancel();

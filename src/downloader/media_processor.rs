@@ -141,6 +141,7 @@ impl<'a> MediaProcessor<'a> {
             .arg(&thumb_path)
             .stdout(Stdio::null())
             .stderr(Stdio::null())
+            .stdin(Stdio::null())
             .status()
             .await?
             .success()
@@ -160,6 +161,7 @@ impl<'a> MediaProcessor<'a> {
             .arg("format=duration")
             .arg("-of")
             .arg("csv=p=0")
+            .stdin(Stdio::null())
             .output()
             .await?;
 
@@ -210,6 +212,7 @@ impl<'a> MediaProcessor<'a> {
             .arg(&final_path)
             .stdout(Stdio::null())
             .stderr(Stdio::null())
+            .stdin(Stdio::null())
             .status()
             .await?
             .success()

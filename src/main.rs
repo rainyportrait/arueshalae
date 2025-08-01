@@ -1,6 +1,7 @@
 mod database;
 mod downloader;
 mod server;
+mod web;
 
 use camino::Utf8PathBuf;
 use clap::Parser;
@@ -62,7 +63,7 @@ async fn main() {
         .expect("open database");
 
     let downloader = Downloader::new(&database, &path, &shutdown_token);
-    let router = create_router(&database, &downloader.sender);
+    let router = create_router(&database, &path, &downloader.sender);
 
     let server_handle = spawn_server(router, &shutdown_token);
     let downloader_handle = downloader.spawn();

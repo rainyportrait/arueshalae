@@ -6,7 +6,7 @@ const POSTS_PER_PAGE = 50;
 export class Favorites {
   private header: HTMLElement;
   private container: HTMLElement;
-  private button: HTMLElement;
+  private syncButton: HTMLElement;
 
   constructor() {
     const header = document.querySelector("#header");
@@ -19,13 +19,23 @@ export class Favorites {
     this.container.classList.add("arue-container");
     this.header.appendChild(this.container);
 
-    this.button = document.createElement("button");
-    this.button.innerHTML = "Sync";
-    this.button.addEventListener("click", () => {
+    this.syncButton = document.createElement("button");
+    this.syncButton.innerHTML = "Sync";
+    this.syncButton.addEventListener("click", () => {
       this.sync();
     });
-    this.button.classList.add("arue-btn");
-    this.container.appendChild(this.button);
+    this.syncButton.classList.add("arue-btn");
+    this.container.appendChild(this.syncButton);
+
+    this.showPostCountDiff();
+  }
+
+  private async showPostCountDiff() {
+    const [totalFavorites, apiCount] = await Promise.all([
+      this.getTotalFavorites(),
+      getApiPostCount(),
+    ]);
+    this.syncButton.innerText = `Sync (${totalFavorites - apiCount})`;
   }
 
   private async sync() {
@@ -38,6 +48,7 @@ export class Favorites {
       const postIds = await this.getIdsFromPage(pid);
       await sendPostIds(postIds);
       postsOutstanding -= 50;
+      break;
     }
   }
 

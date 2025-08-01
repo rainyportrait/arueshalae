@@ -3,6 +3,7 @@ use axum::Router;
 use axum::http::{StatusCode, header};
 use axum::response::Response;
 use axum::{response::IntoResponse, routing::get};
+use camino::Utf8Path;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -11,6 +12,7 @@ use tracing::error;
 
 use crate::database::Database;
 use crate::downloader::create_api_server;
+use crate::web::create_web_server;
 
 #[macro_export]
 macro_rules! json_ok {
@@ -26,9 +28,13 @@ macro_rules! html_ok {
     };
 }
 
-pub fn create_router(database: &Database, sender: &mpsc::UnboundedSender<i64>) -> Router {
+pub fn create_router(
+    database: &Database,
+    base_path: &Utf8Path,
+    sender: &mpsc::UnboundedSender<i64>,
+) -> Router {
     Router::new()
-        .route("/", get(index))
+        .merge(create_web_server(database, base_path))
         .route("/arueshalae.user.js", get(send_userscript))
         .nest("/api", create_api_server(database, sender))
 }
@@ -55,14 +61,6 @@ async fn send_userscript() -> impl IntoResponse {
         [(header::CONTENT_TYPE, "text/javascript")],
         include_str!("../target/userscript/arueshalae.user.js"),
     )
-}
-
-async fn index() -> AppResult<impl IntoResponse> {
-    #[derive(Template)]
-    #[template(path = "index.html")]
-    struct IndexTemplate {}
-
-    html_ok!(IndexTemplate {})
 }
 
 pub struct AppError(anyhow::Error);

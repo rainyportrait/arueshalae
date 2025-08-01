@@ -1,1 +1,11 @@
-<h1>Hello, World!</h1>
+{% extends "base.html" %}
+{% block title %}Index{% endblock %}
+{% block content %}
+    <div class="posts">
+        {% for post in posts %}
+            <div class="post {% if post.is_video() %}is-video{% endif %}">
+                <img src="/image/{{ post.id }}" id="p{{ post.id }}" />
+            </div>
+        {% endfor %}
+    </div>
+{% endblock %}

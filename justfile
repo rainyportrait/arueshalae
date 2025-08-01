@@ -1,14 +1,10 @@
-build-userscript:
-  npm install
-  node build_userscript.js $(cargo metadata --format-version=1 --no-deps | jq -r '.packages[0].version')
-
-build: build-userscript
+build:
   cargo build --release
 
-run arguments="": build-userscript
+run arguments="":
   cargo run -- {{arguments}}
 
 watch arguments="":
-  watchexec -r -e rs,html,css,ts,toml,js -- just run {{arguments}}
+  watchexec -r -e rs,toml,html,css,js,ts -- just run {{arguments}}
 
 default: build

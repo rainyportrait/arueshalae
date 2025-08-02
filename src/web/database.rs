@@ -1,13 +1,23 @@
 use anyhow::{Context, Result};
+use serde::Deserialize;
 
 use crate::{
     database::Database,
     web::models::{Post, Tag},
 };
 
+pub const POSTS_PER_PAGE: i64 = 48;
+
+#[derive(Deserialize)]
+pub struct PageQuery {
+    pub page: Option<i64>,
+}
+
 impl Database {
-    pub async fn get_page(&self, limit: i64, offset: i64) -> Result<Vec<Post>> {
-        sqlx::query_as!(
+    pub async fn get_page(&self, query: &PageQuery) -> Result<(Vec<Post>, u64)> {
+        let offset = (query.page.unwrap_or(1) - 1) * POSTS_PER_PAGE;
+
+        let posts = sqlx::query_as!(
             Post,
             r#"
             SELECT p.id, d.file_name, d.mime
@@ -15,12 +25,23 @@ impl Database {
             JOIN downloads d ON d.id = p.id 
             ORDER BY p.sort_id DESC
             LIMIT ? OFFSET ?"#,
-            limit,
+            POSTS_PER_PAGE,
             offset
         )
         .fetch_all(&self.pool)
-        .await
-        .context("Could not get page from database")
+        .await?;
+
+        let total_post_count = sqlx::query_scalar!(
+            r#"
+            SELECT COUNT(1) "count: u64"
+            FROM posts p 
+            JOIN downloads d ON d.id = p.id 
+            "#
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok((posts, total_post_count))
     }
 
     pub async fn get_post_for_send_image(&self, post_id: i64) -> Result<Post> {

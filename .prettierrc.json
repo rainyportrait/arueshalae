@@ -1,0 +1,28 @@
+{
+	"printWidth": 120,
+	"singleQuote": false,
+	"trailingComma": "all",
+	"arrowParens": "avoid",
+	"endOfLine": "auto",
+	"semi": false,
+	"useTabs": true,
+	"tabWidth": 4,
+	"plugins": [
+		"@trivago/prettier-plugin-sort-imports",
+		"prettier-plugin-organize-attributes",
+		"prettier-plugin-tailwindcss",
+		"prettier-plugin-jinja-template"
+	],
+	"overrides": [
+		{
+			"files": ["*.html"],
+			"options": {
+				"parser": "jinja-template"
+			}
+		}
+	],
+	"importOrderParserPlugins": ["decorators", "typescript"],
+	"importOrderSeparation": true,
+	"importOrderSortSpecifiers": true,
+	"importOrder": ["<THIRD_PARTY_MODULES>", "([.][.]?/)|(app/)"]
+}

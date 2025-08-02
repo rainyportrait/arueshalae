@@ -10,7 +10,7 @@ opt-level = 3
 
 [dependencies]
 anyhow = "1.0.98"
-askama = "0.14.0"
+askama = { version = "0.14.0", features = ["blocks"] }
 axum = "0.8.4"
 bytes = "1.10.1"
 camino = "1.1.10"

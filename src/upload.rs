@@ -8,6 +8,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tempfile::NamedTempFile;
+use tracing::info;
 
 use crate::{
     database::Database,
@@ -35,6 +36,10 @@ pub async fn upload(
             &data.tags,
         )
         .await?;
+    info!(
+        "Saved https://rule34.xxx/index.php?page=post&s=view&id={}",
+        data.id
+    );
     processor.commit(&base_path, post_id, data.id).await?;
     json_ok!({"ok": true})
 }

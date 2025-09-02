@@ -12,3 +12,6 @@ serve-userscript:
 
 watch-cargo arguments="":
   watchexec -r -e rs,sql -- cargo run -- {{arguments}}
+
+build:
+  cargo build -r

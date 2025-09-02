@@ -1,7 +1,8 @@
-mod database;
-mod downloader;
+mod media_processor;
 mod server;
-mod web;
+mod upload;
+mod database;
+
 
 use camino::Utf8PathBuf;
 use clap::Parser;
@@ -11,7 +12,6 @@ use tracing::info;
 
 use crate::{
     database::Database,
-    downloader::Downloader,
     server::{create_router, spawn_server},
 };
 
@@ -62,13 +62,10 @@ async fn main() {
         .await
         .expect("open database");
 
-    let downloader = Downloader::new(&database, &path, &shutdown_token);
-    let router = create_router(&database, &path, &downloader.sender);
-
+    let router = create_router(&database, &path);
     let server_handle = spawn_server(router, &shutdown_token);
-    let downloader_handle = downloader.spawn();
 
-    info!("Arueshalae server started. Visit http://localhost:34343/ for the web view.");
+    info!("Arueshalae server started");
     info!("The userscript can be installed from http://localhost:34343/arueshalae.user.js");
     info!(
         "Your favorites can be viewed access by clicking on 'My Favorites' from this url: https://rule34.xxx/index.php?page=account&s=home"
@@ -76,7 +73,7 @@ async fn main() {
 
     shutdown_signal.await;
     shutdown_token.cancel();
-    _ = tokio::join!(server_handle, downloader_handle);
+    _ = server_handle.await;
     database.pool.close().await;
 }
 

@@ -1,18 +1,25 @@
-use askama::Template;
-use axum::Router;
-use axum::http::{StatusCode, header};
-use axum::response::Response;
-use axum::{response::IntoResponse, routing::get};
-use camino::Utf8Path;
-use tokio::net::TcpListener;
-use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
+use std::time::Duration;
+
+use anyhow::Result;
+use axum::{
+    Router,
+    extract::DefaultBodyLimit,
+    http::{HeaderValue, Method, StatusCode, header},
+    response::IntoResponse,
+    response::Response,
+    routing::get,
+    routing::post,
+};
+use camino::{Utf8Path, Utf8PathBuf};
+use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
+use tower_http::cors::CorsLayer;
 use tracing::error;
 
-use crate::database::Database;
-use crate::downloader::create_api_server;
-use crate::web::create_web_server;
+use crate::{
+    database::Database,
+    upload::{check_download_status, get_download_count, upload},
+};
 
 #[macro_export]
 macro_rules! json_ok {
@@ -28,15 +35,30 @@ macro_rules! html_ok {
     };
 }
 
-pub fn create_router(
-    database: &Database,
-    base_path: &Utf8Path,
-    sender: &mpsc::UnboundedSender<i64>,
-) -> Router {
+#[derive(Clone)]
+pub struct AppState {
+    pub database: Database,
+    pub base_path: Utf8PathBuf,
+}
+
+pub fn create_router(database: &Database, base_path: &Utf8Path) -> Router {
     Router::new()
-        .merge(create_web_server(database, base_path))
+        .route("/upload", post(upload))
+        .layer(DefaultBodyLimit::max(1024 * 1024 * 1024))
+        .route("/check", post(check_download_status))
+        .route("/count", get(get_download_count))
         .route("/arueshalae.user.js", get(send_userscript))
-        .nest("/api", create_api_server(database, sender))
+        .layer(
+            CorsLayer::new()
+                .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+                .allow_origin("https://rule34.xxx".parse::<HeaderValue>().unwrap())
+                .allow_headers([header::CONTENT_TYPE])
+                .max_age(Duration::from_secs(60 * 60 * 2)),
+        )
+        .with_state(AppState {
+            database: database.clone(),
+            base_path: base_path.to_path_buf(),
+        })
 }
 
 pub fn spawn_server(router: Router, shutdown_token: &CancellationToken) -> JoinHandle<()> {

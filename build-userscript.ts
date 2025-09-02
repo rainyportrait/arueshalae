@@ -1,25 +1,20 @@
-const esbuild = require("esbuild")
-const process = require("node:process")
-const path = require("path")
-const fs = require("fs").promises
+import esbuild from "esbuild"
+import process from "node:process"
+import path from "node:path"
+import fs from "node:fs/promises"
 
-const version = process.argv[2]
+const version = process.argv[2] ?? "dev"
 
 // esbuild-plugin-inline-import (c) 2020 A Beautiful Site, LLC
 // https://github.com/claviska/esbuild-plugin-inline-import/blob/master/LICENSE.md
 // TODO: Fix inlineImportPlugin to not print full path into built .js
-function inlineImportPlugin(options) {
-	const { filter, namespace, transform } = Object.assign(
-		{
-			filter: /^inline:/,
-			namespace: "_" + Math.random().toString(36).substring(2, 9),
-		},
-		options,
-	)
+function inlineImportPlugin() {
+	const filter = /^inline:/
+	const namespace = "_" + Math.random().toString(36).substring(2, 9)
 
 	return {
 		name: "esbuild-inline-plugin",
-		setup(build) {
+		setup(build: esbuild.PluginBuild) {
 			let alias = Object.entries(build.initialOptions.alias ?? {})
 			build.onResolve({ filter }, async args => {
 				let inputPath = alias.reduce((path, [key, val]) => {
@@ -54,7 +49,7 @@ function inlineImportPlugin(options) {
 
 esbuild
 	.build({
-		entryPoints: ["assets/userscript/index.ts"],
+		entryPoints: ["src/userscript/index.ts"],
 		bundle: true,
 		outfile: "target/userscript/arueshalae.user.js",
 		format: "iife",
@@ -67,12 +62,9 @@ esbuild
 // @version      ${version}
 // @description  Downloads your rule34.xxx favorites
 // @match        https://rule34.xxx/index.php?*
-// @grant        none
+// @grant        GM.xmlHttpRequest
 // @run-at       document-idle
-// @downloadUrl  http://localhost:34343/arueshalae.user.js
-// @updateUrl    http://localhost:34343/arueshalae.user.js
-// ==/UserScript==
-`,
+// ==/UserScript==`,
 		},
 		plugins: [inlineImportPlugin()],
 	})

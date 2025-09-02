@@ -1,10 +1,14 @@
-build:
-  cargo build --release
+[parallel]
+watch-and-serve-userscript: watch-userscript serve-userscript
 
-run arguments="":
-  cargo run -- {{arguments}}
+build-userscript:
+  node build-userscript.ts
 
-watch arguments="":
-  watchexec -r -e rs,toml,html,css,js,ts -- just run {{arguments}}
+watch-userscript:
+  watchexec -r -e ts,css -- just build-userscript
 
-default: build
+serve-userscript:
+  python -m http.server
+
+watch-cargo arguments="":
+  watchexec -r -e rs,sql -- cargo run -- {{arguments}}

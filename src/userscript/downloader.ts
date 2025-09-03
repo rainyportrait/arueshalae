@@ -1,12 +1,5 @@
 import { State } from "vanjs-core"
-import {
-	fetchImage,
-	fetchDocument,
-	filterForNotDownloaded,
-	upload,
-	fetchFilteredId,
-	filterForDownloadedIds,
-} from "./network"
+import { fetchImage, fetchDocument, filterForNotDownloaded, upload, filterForDownloadedIds } from "./network"
 
 // Syncs
 export type SyncProgress =
@@ -31,7 +24,10 @@ export async function sync(
 	const difference = totalFavorites - serverFavorites
 	progressState.val = { state: "downloading", downloaded, goal: difference }
 
-	let pid = difference
+	// FIXME: change approach to go backwards until it found the missing
+	// Current fix is to load at least 10 pages to check if anything has been missed
+	let pid = Math.max(difference, 500)
+
 	do {
 		pid = Math.max(0, pid - 50)
 

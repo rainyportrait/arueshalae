@@ -23,13 +23,15 @@ function addFavoritesButtons(favoritedIds: number[]) {
 export function FavoriteButton(id: string, favorited: boolean, highlightOnFavorite = false) {
   const isInFavorites = van.state(favorited)
   const isBeingAdded = van.state(false)
+  const encounteredError = van.state(false)
+
   return () => {
     if (isInFavorites.val) {
       return div(span("In favorites"))
     }
 
     if (isBeingAdded.val) {
-      return div(span("Adding to favorites"))
+      return div(span("Downloading ..."))
     }
 
     return div(
@@ -38,18 +40,27 @@ export function FavoriteButton(id: string, favorited: boolean, highlightOnFavori
           href: `javascript:void()`,
           onclick: async () => {
             isBeingAdded.val = true
+            try {
+              const parsedId = Number.parseInt(id)
+              if (!(await fetchFilteredId(parsedId))) return
+              await syncSingle(parsedId)
 
-            unsafeWindow.post_vote(id, "up")
-            unsafeWindow.addFav(id)
+              unsafeWindow.post_vote(id, "up")
+              unsafeWindow.addFav(id)
 
-            const parsedId = Number.parseInt(id)
-            if (!(await fetchFilteredId(parsedId))) return
-            await syncSingle(parsedId)
-            highlightPost(parsedId)
-            isInFavorites.val = true
+              highlightPost(parsedId)
+
+              isInFavorites.val = true
+            } catch (error: unknown) {
+              console.error(`Failed to add ${id} to favorites:`, error)
+              encounteredError.val = true
+            } finally {
+              isBeingAdded.val = false
+            }
           },
+          style: () => (encounteredError.val ? "color: red;" : ""),
         },
-        "Add to favorites",
+        () => (!encounteredError.val ? "Add to favorites" : "Failed to add to favorites (retry)"),
       ),
     )
   }

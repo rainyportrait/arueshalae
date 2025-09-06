@@ -54,7 +54,7 @@ export async function filterForNotDownloaded(ids: number[]): Promise<number[]> {
 	return ids.filter(id => !downloadedIds.includes(id))
 }
 
-export async function fetchFilteredId(id: number): Promise<number | null> {
+export async function checkIfDownloaded(id: number): Promise<number | null> {
 	const idArray = await filterForNotDownloaded([id])
 	return idArray.length ? idArray[0] : null
 }

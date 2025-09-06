@@ -1,5 +1,5 @@
 import van from "vanjs-core"
-import { fetchFilteredId, filterForDownloadedIds } from "./network"
+import { checkIfDownloaded, filterForDownloadedIds } from "./network"
 import { getPostIds, syncSingle } from "./downloader"
 
 const { div, a, span } = van.tags
@@ -25,6 +25,13 @@ export function FavoriteButton(id: string, favorited: boolean, highlightOnFavori
   const isBeingAdded = van.state(false)
   const encounteredError = van.state(false)
 
+  const parsedId = Number.parseInt(id)
+  if (!favorited) {
+    registerFavoriteButton(parsedId, () => {
+      isInFavorites.val = true
+    })
+  }
+
   return () => {
     if (isInFavorites.val) {
       return div(span("In favorites"))
@@ -41,8 +48,7 @@ export function FavoriteButton(id: string, favorited: boolean, highlightOnFavori
           onclick: async () => {
             isBeingAdded.val = true
             try {
-              const parsedId = Number.parseInt(id)
-              if (!(await fetchFilteredId(parsedId))) return
+              if (!(await checkIfDownloaded(parsedId))) return
               await syncSingle(parsedId)
 
               unsafeWindow.post_vote(id, "up")
@@ -68,4 +74,26 @@ export function FavoriteButton(id: string, favorited: boolean, highlightOnFavori
 
 function highlightPost(id: number) {
   document.querySelector(`#p${id} > img`)?.classList.add("arue-favorited-post")
+}
+
+let visibilityCallbackRegistered = false
+const favoriteButtonCallbacks = new Map<number, () => void>()
+
+function registerFavoriteButton(id: number, gotFavorited: () => void) {
+  if (!visibilityCallbackRegistered) {
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) checkFavoriteState()
+    })
+    visibilityCallbackRegistered = true
+  }
+  favoriteButtonCallbacks.set(id, gotFavorited)
+}
+
+async function checkFavoriteState() {
+  const ids = Array.from(favoriteButtonCallbacks.keys())
+  const newFavorites = await filterForDownloadedIds(ids)
+  for (let id of newFavorites) {
+    favoriteButtonCallbacks.get(id)?.()
+    favoriteButtonCallbacks.delete(id)
+  }
 }

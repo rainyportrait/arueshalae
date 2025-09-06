@@ -26,14 +26,12 @@ export function ArueFavoritesBar() {
   const favoritesCount = van.state<number | null>(null)
   const serverFavoritesCount = van.state<number | null>(null)
 
-  van.derive(async () => {
-    if (favoritesCount.val !== null) return
-    favoritesCount.val = await getUserFavoritesCount(userId.val)
-  })
-  van.derive(async () => {
-    if (serverFavoritesCount.val !== null) return
-    serverFavoritesCount.val = await getDownloadedCount()
-  })
+    ; (async () => {
+      const [fav, ser] = await Promise.all([getUserFavoritesCount(userId.val), await getDownloadedCount()])
+      console.log({ fav, ser })
+      favoritesCount.val = fav
+      serverFavoritesCount.val = ser
+    })()
 
   const difference = van.derive(() => {
     if (favoritesCount.val === null || serverFavoritesCount.val === null) return

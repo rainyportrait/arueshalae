@@ -6,8 +6,5 @@
 	"endOfLine": "auto",
 	"semi": false,
 	"useTabs": true,
-	"tabWidth": 4,
-	"importOrderParserPlugins": [
-		"typescript"
-	]
+	"tabWidth": 4
 }

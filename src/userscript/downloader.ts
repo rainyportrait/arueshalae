@@ -5,14 +5,14 @@ import { fetchImage, fetchDocument, filterForNotDownloaded, upload, filterForDow
 export type SyncProgress =
 	| { state: "none" }
 	| {
-		state: "downloading"
-		downloaded: number
-		goal: number
-	}
+			state: "downloading"
+			downloaded: number
+			goal: number
+	  }
 	| {
-		state: "done"
-		message: string
-	}
+			state: "done"
+			message: string
+	  }
 
 export async function sync(
 	userId: number,

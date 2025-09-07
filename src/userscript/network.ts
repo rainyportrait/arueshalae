@@ -95,7 +95,7 @@ export async function retry(url: string, fetch: (url: string) => Promise<Documen
 				currentDelay *= SUCCESS_DECREASE
 			}
 			return response
-		} catch { }
+		} catch {}
 		currentStreak = 0
 		currentDelay *= FAIL_INCREASE
 		await delay()

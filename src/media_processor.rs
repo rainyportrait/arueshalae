@@ -223,7 +223,7 @@ pub async fn mini_thumb(
         return Ok(new_path);
     }
 
-    debug!("vipsthumbnail {original_path} {new_path} --size {MINI_SIZE}");
+    debug!("vipsthumbnail {original_path} -o {new_path} --size {MINI_SIZE}");
 
     if !Command::new("vipsthumbnail")
         .arg(original_path)

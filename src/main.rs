@@ -4,7 +4,7 @@ mod search;
 mod server;
 mod upload;
 
-use camino::Utf8PathBuf;
+use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
 use clap::Parser;
 use tokio::signal;
 use tokio_util::sync::CancellationToken;
@@ -31,7 +31,7 @@ struct Args {
 
 fn args() -> (Utf8PathBuf, bool) {
     let args = Args::parse();
-    let path = args.path;
+    let path = normalize_path(&camino::absolute_utf8(args.path).expect("make path absolute"));
 
     std::fs::create_dir_all(path.join(".thumbs")).expect("create thumbs directory");
     std::fs::create_dir_all(path.join(".minis")).expect("create mini directory");
@@ -98,4 +98,34 @@ async fn shutdown_signal() {
         _ = ctrl_c => {},
         _ = terminate => {},
     }
+}
+
+// Stolen from: https://github.com/rust-lang/cargo/blob/fede83ccf973457de319ba6fa0e36ead454d2e20/src/cargo/util/paths.rs#L61
+// std::path::absolute doesn't resolve . and .. which seems kinda a nice thing to have for pretty
+// printing paths.
+pub fn normalize_path(path: &Utf8Path) -> Utf8PathBuf {
+    let mut components = path.components().peekable();
+    let mut ret = if let Some(c @ Utf8Component::Prefix(..)) = components.peek().cloned() {
+        components.next();
+        Utf8PathBuf::from(c.as_str())
+    } else {
+        Utf8PathBuf::new()
+    };
+
+    for component in components {
+        match component {
+            Utf8Component::Prefix(..) => unreachable!(),
+            Utf8Component::RootDir => {
+                ret.push(component.as_str());
+            }
+            Utf8Component::CurDir => {}
+            Utf8Component::ParentDir => {
+                ret.pop();
+            }
+            Utf8Component::Normal(c) => {
+                ret.push(c);
+            }
+        }
+    }
+    ret
 }

@@ -1,4 +1,4 @@
-import { PostData } from "./downloader"
+import { PostData, TagKind } from "./sync"
 
 const ARUESHALAE_API_URL = "http://localhost:34343"
 
@@ -51,7 +51,7 @@ export async function filterForDownloadedIds(ids: number[]): Promise<number[]> {
 
 export async function filterForNotDownloaded(ids: number[]): Promise<number[]> {
 	const downloadedIds = await filterForDownloadedIds(ids)
-	return ids.filter(id => !downloadedIds.includes(id))
+	return ids.filter((id) => !downloadedIds.includes(id))
 }
 
 export async function checkIfDownloaded(id: number): Promise<number | null> {
@@ -62,6 +62,21 @@ export async function checkIfDownloaded(id: number): Promise<number | null> {
 export async function getDownloadedCount(): Promise<number> {
 	const response = await fetch(`${ARUESHALAE_API_URL}/count`)
 	return (await response.json()).count
+}
+
+export async function searchFavorites(term: string): Promise<number[]> {
+	const response = await fetch(`${ARUESHALAE_API_URL}/search?term=${term}`)
+	return (await response.json()).postIds
+}
+
+export interface AutoCompleteSuggestion {
+	name: string
+	kind: TagKind
+	uses: number
+}
+export async function getAutocompleteSuggestions(term: string): Promise<AutoCompleteSuggestion[]> {
+	const response = await fetch(`${ARUESHALAE_API_URL}/search/autocomplete?term=${term}`)
+	return (await response.json()).suggestions
 }
 
 async function baseFetchDocument(url: string): Promise<Document> {
@@ -109,5 +124,5 @@ async function delay(): Promise<void> {
 }
 
 function sleep(ms: number): Promise<void> {
-	return new Promise(resolve => setTimeout(resolve, ms))
+	return new Promise((resolve) => setTimeout(resolve, ms))
 }

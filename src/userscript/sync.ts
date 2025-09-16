@@ -96,7 +96,7 @@ export async function getUserFavoritesCount(userId: number) {
 
 // Single favorites page processing
 export function getPostIds(favoritesPage: Document): number[] {
-	return Array.from(favoritesPage.querySelectorAll(".thumb > a")).map(a => Number.parseInt(a.id.substring(1), 10))
+	return Array.from(favoritesPage.querySelectorAll(".thumb > a")).map((a) => Number.parseInt(a.id.substring(1), 10))
 }
 
 function getFavoritesPage(userId: number, pid: number) {
@@ -111,7 +111,7 @@ export interface PostData {
 }
 
 const TAG_KINDS_ARRAY = ["copyright", "character", "artist", "general", "metadata"] as const
-type TagKind = (typeof TAG_KINDS_ARRAY)[number]
+export type TagKind = (typeof TAG_KINDS_ARRAY)[number]
 const TAG_KINDS = new Set<TagKind>(TAG_KINDS_ARRAY)
 function isTagKind(str: string): str is TagKind {
 	return TAG_KINDS.has(str as TagKind)
@@ -137,7 +137,7 @@ function getImageUrl(postDOM: Document): string {
 	const listElements = postDOM.querySelector(".link-list")?.querySelectorAll("li a")
 	if (!listElements) throw new Error("Could not find link list")
 	const url = Array.from(listElements)
-		.find(a => (a.textContent ?? "").trim() === "Original image")
+		.find((a) => (a.textContent ?? "").trim() === "Original image")
 		?.getAttribute("href")
 	if (!url) throw new Error("Could not find original image link")
 	return url
@@ -150,17 +150,17 @@ function tagFilter(tag: { name: string; kind: string | undefined }): tag is Tag 
 
 function getImageTags(postDOM: Document): Tag[] {
 	return Array.from(postDOM.querySelectorAll(".tag"))
-		.map(tagElement => {
+		.map((tagElement) => {
 			const name =
 				tagElement
 					.querySelector('a[href*="index.php?page=post&s=list&tags"]')
 					?.textContent?.trim()
 					.replaceAll(" ", "_") ?? ""
 			const kind = Array.from(tagElement.classList)
-				.find(c => c.startsWith(TAG_KIND_CLASS))
+				.find((c) => c.startsWith(TAG_KIND_CLASS))
 				?.substring(TAG_KIND_CLASS.length)
 			return { name, kind }
 		})
 		.filter(tagFilter)
-		.filter((t, index, array) => index === array.findIndex(t2 => t.name === t2.name))
+		.filter((t, index, array) => index === array.findIndex((t2) => t.name === t2.name))
 }

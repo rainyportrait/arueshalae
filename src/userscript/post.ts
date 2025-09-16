@@ -1,6 +1,6 @@
 import van from "vanjs-core"
 import { checkIfDownloaded } from "./network"
-import { FavoriteButton } from "./post-list"
+import { FavoriteButton } from "./components/FavoriteButton"
 
 const { ul, li, h6 } = van.tags
 

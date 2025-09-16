@@ -1,8 +1,8 @@
+import { addSearchEnhancements } from "./components/SearchEnhancements.ts"
 import "./context.d.ts"
 import { favorites } from "./favorites.ts"
 import { postList } from "./post-list.ts"
 import { post } from "./post.ts"
-import { searchBox } from "./search-box.ts"
 import "./styles"
 
 const search = new URLSearchParams(location.search)
@@ -13,7 +13,7 @@ switch (search.get("page")) {
 	}
 	case "post": {
 		const site = search.get("s")
-		searchBox()
+		addSearchEnhancements()
 		if (site === "list") {
 			postList()
 			break

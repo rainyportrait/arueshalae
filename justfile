@@ -8,7 +8,7 @@ watch-userscript:
   watchexec -r -e ts,css -- just build-userscript
 
 serve-userscript:
-  python -m http.server
+  python3 -m http.server
 
 watch-cargo arguments="":
   watchexec -r -e rs,sql -- cargo run -- {{arguments}}

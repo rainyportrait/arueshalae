@@ -1,8 +1,8 @@
+mod database;
 mod media_processor;
+mod search;
 mod server;
 mod upload;
-mod database;
-
 
 use camino::Utf8PathBuf;
 use clap::Parser;
@@ -33,7 +33,8 @@ fn args() -> (Utf8PathBuf, bool) {
     let args = Args::parse();
     let path = args.path;
 
-    std::fs::create_dir_all(path.join(".thumbs")).expect("create base directory");
+    std::fs::create_dir_all(path.join(".thumbs")).expect("create thumbs directory");
+    std::fs::create_dir_all(path.join(".minis")).expect("create mini directory");
 
     if path.is_file() {
         panic!("{path} is not a directory");

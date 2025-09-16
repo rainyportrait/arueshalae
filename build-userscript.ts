@@ -16,7 +16,7 @@ function inlineImportPlugin() {
 		name: "esbuild-inline-plugin",
 		setup(build: esbuild.PluginBuild) {
 			let alias = Object.entries(build.initialOptions.alias ?? {})
-			build.onResolve({ filter }, async args => {
+			build.onResolve({ filter }, async (args) => {
 				let inputPath = alias.reduce((path, [key, val]) => {
 					return path.replace(key, val)
 				}, args.path)
@@ -34,7 +34,7 @@ function inlineImportPlugin() {
 				}
 			})
 
-			build.onLoad({ filter: /.*/, namespace }, async args => {
+			build.onLoad({ filter: /.*/, namespace }, async (args) => {
 				let contents = await fs.readFile(args.path, "utf8")
 
 				return {
@@ -68,6 +68,6 @@ esbuild
 		},
 		plugins: [inlineImportPlugin()],
 	})
-	.catch(err => {
+	.catch((err) => {
 		throw err
 	})

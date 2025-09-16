@@ -1,7 +1,7 @@
 use std::{path::Path, process::Stdio};
 
 use anyhow::{Context, Result, anyhow, bail};
-use camino::Utf8Path;
+use camino::{Utf8Path, Utf8PathBuf};
 use infer::MatcherType;
 use tempfile::NamedTempFile;
 use tokio::{
@@ -9,11 +9,13 @@ use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     process::Command,
 };
+use tracing::debug;
 
 const HEADER_SIZE: usize = 0xFF;
 const JPEG_QUALITY: u8 = 90;
 const COMPRESSION_THRESHOLD: u64 = 3 * 1024 * 1024;
 const COMPRESSION_BLACKLIST: &[&str] = &["jpeg", "gif"];
+pub const MINI_SIZE: u32 = 350;
 
 pub struct MediaProcessorResult {
     pub file: NamedTempFile,
@@ -25,7 +27,7 @@ pub struct MediaProcessorResult {
 
 impl MediaProcessorResult {
     pub async fn commit(self, base_path: &Utf8Path, id: i64, external_id: i64) -> Result<()> {
-        let file_name = format!("{id:07}_{external_id}.{}", self.extension);
+        let file_name = file_name(id, external_id, self.extension);
 
         let Self { file, thumb, .. } = self;
         move_file(file.path(), base_path.join(&file_name).as_path()).await?;
@@ -168,7 +170,7 @@ impl MediaProcessor {
             .context("failed to start vips. is it installed?")?
             .success()
         {
-            bail!("magick failed to compress image")
+            bail!("libvips failed to compress image")
         }
 
         let compressed_size = metadata(compressed.path()).await?.len();
@@ -211,6 +213,38 @@ impl MediaProcessor {
     }
 }
 
+pub async fn mini_thumb(
+    name: &str,
+    original_path: &Utf8Path,
+    base_path: &Utf8Path,
+) -> Result<Utf8PathBuf> {
+    let new_path = base_path.join(".minis").join(format!("mini_{name}.jpeg"));
+    if new_path.is_file() {
+        return Ok(new_path);
+    }
+
+    debug!("vipsthumbnail {original_path} {new_path} --size {MINI_SIZE}");
+
+    if !Command::new("vipsthumbnail")
+        .arg(original_path)
+        .arg("-o")
+        .arg(&new_path)
+        .arg("--size")
+        .arg(format!("{MINI_SIZE}x"))
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .stdin(Stdio::null())
+        .status()
+        .await
+        .context("failed to start vips. is it installed?")?
+        .success()
+    {
+        bail!("libvips failed to create mini thumbnail")
+    }
+
+    Ok(new_path)
+}
+
 async fn move_file(from: &Path, to: &Utf8Path) -> Result<()> {
     if tokio::fs::rename(from, to).await.is_err() {
         let mut temp_file = File::open(from).await?;
@@ -220,4 +254,8 @@ async fn move_file(from: &Path, to: &Utf8Path) -> Result<()> {
         final_file.flush().await?;
     }
     Ok(())
+}
+
+pub fn file_name(id: i64, external_id: i64, extension: &str) -> String {
+    format!("{id:07}_{external_id}.{extension}")
 }

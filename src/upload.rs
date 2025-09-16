@@ -46,10 +46,10 @@ pub async fn upload(
 
 pub async fn check_download_status(
     State(AppState { database, .. }): State<AppState>,
-    Json(DownloadStatus { post_ids }): Json<DownloadStatus>,
-) -> AppResult<Json<DownloadStatus>> {
+    Json(PostIdsResponse { post_ids }): Json<PostIdsResponse>,
+) -> AppResult<Json<PostIdsResponse>> {
     let existing_ids = database.filter_already_downloaded_posts(&post_ids).await?;
-    Ok(Json(DownloadStatus {
+    Ok(Json(PostIdsResponse {
         post_ids: existing_ids,
     }))
 }
@@ -97,12 +97,16 @@ impl Database {
             id
         } else {
             sqlx::query_scalar!(
-                "INSERT INTO posts (external_id, extension, mime, original) VALUES (?, ?, ?, ?) RETURNING id",
+                r#"INSERT INTO posts (external_id, extension, mime, original) 
+                VALUES (?, ?, ?, ?) 
+                RETURNING id"#,
                 external_id,
                 extension,
                 mime,
                 original
-            ).fetch_one(&mut *trx).await?
+            )
+            .fetch_one(&mut *trx)
+            .await?
         };
 
         for tag in tags {
@@ -115,7 +119,14 @@ impl Database {
             .execute(&mut *trx)
             .await?;
 
-            sqlx::query!("INSERT INTO post_tags (post_id, tag_id) VALUES (?, (SELECT id FROM tags WHERE name = ?))", id, tag.name).execute(&mut *trx).await?;
+            sqlx::query!(
+                r#"INSERT INTO post_tags (post_id, tag_id) 
+                VALUES (?, (SELECT id FROM tags WHERE name = ?))"#,
+                id,
+                tag.name
+            )
+            .execute(&mut *trx)
+            .await?;
         }
 
         trx.commit().await?;
@@ -132,7 +143,7 @@ impl Database {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct DownloadStatus {
+pub struct PostIdsResponse {
     pub post_ids: Vec<i64>,
 }
 

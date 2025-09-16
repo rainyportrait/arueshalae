@@ -1,8 +1,7 @@
 import van from "vanjs-core"
-import { checkIfDownloaded, filterForDownloadedIds } from "./network"
-import { getPostIds, syncSingle } from "./downloader"
-
-const { div, a, span } = van.tags
+import { filterForDownloadedIds } from "./network"
+import { getPostIds } from "./sync"
+import { FavoriteButton } from "./components/FavoriteButton"
 
 export async function postList() {
 	const favoritedIds = await filterForDownloadedIds(getPostIds(document))
@@ -13,87 +12,13 @@ export async function postList() {
 }
 
 function addFavoritesButtons(favoritedIds: number[]) {
-	Array.from(document.querySelectorAll(".thumb")).forEach(t => {
+	Array.from(document.querySelectorAll(".thumb")).forEach((t) => {
 		const id = t.querySelector("a")?.id.substring(1)
 		if (!id) return
 		van.add(t, FavoriteButton(id, favoritedIds.includes(Number.parseInt(id))))
 	})
 }
 
-export function FavoriteButton(id: string, favorited: boolean, highlightOnFavorite = false) {
-	const isInFavorites = van.state(favorited)
-	const isBeingAdded = van.state(false)
-	const encounteredError = van.state(false)
-
-	const parsedId = Number.parseInt(id)
-	if (!favorited) {
-		registerFavoriteButton(parsedId, () => {
-			isInFavorites.val = true
-		})
-	}
-
-	return () => {
-		if (isInFavorites.val) {
-			return div(span("In favorites"))
-		}
-
-		if (isBeingAdded.val) {
-			return div(span("Downloading ..."))
-		}
-
-		return div(
-			a(
-				{
-					href: `javascript:void()`,
-					onclick: async () => {
-						isBeingAdded.val = true
-						try {
-							if (!(await checkIfDownloaded(parsedId))) return
-							await syncSingle(parsedId)
-
-							unsafeWindow.post_vote(id, "up")
-							unsafeWindow.addFav(id)
-
-							highlightPost(parsedId)
-
-							isInFavorites.val = true
-						} catch (error: unknown) {
-							console.error(`Failed to add ${id} to favorites:`, error)
-							encounteredError.val = true
-						} finally {
-							isBeingAdded.val = false
-						}
-					},
-					style: () => (encounteredError.val ? "color: red;" : ""),
-				},
-				() => (!encounteredError.val ? "Add to favorites" : "Failed to add to favorites (retry)"),
-			),
-		)
-	}
-}
-
-function highlightPost(id: number) {
+export function highlightPost(id: number) {
 	document.querySelector(`#p${id} > img`)?.classList.add("arue-favorited-post")
-}
-
-let visibilityCallbackRegistered = false
-const favoriteButtonCallbacks = new Map<number, () => void>()
-
-function registerFavoriteButton(id: number, gotFavorited: () => void) {
-	if (!visibilityCallbackRegistered) {
-		document.addEventListener("visibilitychange", () => {
-			if (!document.hidden) checkFavoriteState()
-		})
-		visibilityCallbackRegistered = true
-	}
-	favoriteButtonCallbacks.set(id, gotFavorited)
-}
-
-async function checkFavoriteState() {
-	const ids = Array.from(favoriteButtonCallbacks.keys())
-	const newFavorites = await filterForDownloadedIds(ids)
-	for (let id of newFavorites) {
-		favoriteButtonCallbacks.get(id)?.()
-		favoriteButtonCallbacks.delete(id)
-	}
 }

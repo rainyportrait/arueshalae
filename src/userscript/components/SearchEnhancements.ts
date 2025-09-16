@@ -2,19 +2,19 @@ import van from "vanjs-core"
 
 const { input } = van.tags
 
-export function searchBox() {
+export function addSearchEnhancements() {
 	const form = document.querySelector('form[action="index.php?page=search"]')
 	if (!form) return
 
 	van.add(
 		form,
-		SearchButton("Sort by score", "sort:score"),
-		SearchButton("Score > 50", "score:>50", true),
-		SearchButton("Score > 150", "score:>150", true),
+		EnhancedSearchButton("Sort by score", "sort:score"),
+		EnhancedSearchButton("Score > 50", "score:>50", true),
+		EnhancedSearchButton("Score > 150", "score:>150", true),
 	)
 }
 
-function SearchButton(label: string, value: string, halfButton = false) {
+function EnhancedSearchButton(label: string, value: string, halfButton = false) {
 	return input({
 		type: "submit",
 		class: `arue-search-btn${halfButton ? " arue-search-half" : ""}`,
@@ -30,7 +30,7 @@ function toggleValue(value: string) {
 	let values = searchInput.value.split(" ")
 	const special = value.substring(0, value.indexOf(":"))
 	if (special) {
-		values = values.filter(v => !v.startsWith(special))
+		values = values.filter((v) => !v.startsWith(special))
 		values.push(value)
 	} else {
 		const valueSet = new Set(values)

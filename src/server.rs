@@ -13,11 +13,12 @@ use axum::{
 use camino::{Utf8Path, Utf8PathBuf};
 use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
-use tower_http::cors::CorsLayer;
+use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing::error;
 
 use crate::{
     database::Database,
+    search::{autocomplete, search, serve_image, serve_mini},
     upload::{check_download_status, get_download_count, upload},
 };
 
@@ -47,6 +48,10 @@ pub fn create_router(database: &Database, base_path: &Utf8Path) -> Router {
         .layer(DefaultBodyLimit::max(1024 * 1024 * 1024))
         .route("/check", post(check_download_status))
         .route("/count", get(get_download_count))
+        .route("/search", get(search))
+        .route("/search/autocomplete", get(autocomplete))
+        .route("/image/{post_id}", get(serve_image))
+        .route("/image/mini/{post_id}", get(serve_mini))
         .route("/arueshalae.user.js", get(send_userscript))
         .layer(
             CorsLayer::new()
@@ -55,6 +60,7 @@ pub fn create_router(database: &Database, base_path: &Utf8Path) -> Router {
                 .allow_headers([header::CONTENT_TYPE])
                 .max_age(Duration::from_secs(60 * 60 * 2)),
         )
+        .layer(TraceLayer::new_for_http())
         .with_state(AppState {
             database: database.clone(),
             base_path: base_path.to_path_buf(),

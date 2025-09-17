@@ -1,16 +1,20 @@
 import van from "vanjs-core"
 import { AutoCompleteSuggestion, getAutocompleteSuggestions, searchFavorites } from "../network"
 import { FavoritesSearchResult } from "./FavoritesSearchResult"
+import { addToHistory, getHistory } from "./FavoritesSearchHistory"
 
 const { span, ul, li, form, input, button } = van.tags
 
-const HISTORY_NAME = "arue-history"
+const search = van.state<string>(getHistory().at(0)?.term ?? "")
+
+export function setSearch(term: string) {
+	search.val = term
+}
 
 export function FavoritesSearch() {
 	const inputActive = van.state(false)
 	const suggestions = van.state<AutoCompleteSuggestion[]>([])
 	const activeIndex = van.state<number>(-1) // -1 means "no selection"
-	const search = van.state<string>(getHistory()[0] ?? "")
 
 	;(async () => {
 		const newSuggestions = await getAutocompleteSuggestions(getLastWord(search.val))
@@ -53,7 +57,7 @@ export function FavoritesSearch() {
 				const term = (e.target as HTMLFormElement & { search: HTMLInputElement }).search.value.trim()
 				const data = await searchFavorites(term)
 				van.add(document.body, FavoritesSearchResult(term, data))
-				addToHistory(term)
+				addToHistory({ term, results: data.length })
 				inputActive.val = false
 				activeIndex.val = -1
 			},
@@ -143,24 +147,6 @@ export function FavoritesSearch() {
 					)
 				: "",
 	)
-}
-
-function addToHistory(term: string) {
-	const history = getHistory()
-	const newHistory = [term, ...history.filter((item) => item !== term)]
-	localStorage.setItem(HISTORY_NAME, JSON.stringify(newHistory))
-}
-
-function getHistory(): string[] {
-	try {
-		const history = JSON.parse(localStorage.getItem(HISTORY_NAME)!)
-		if (!history) throw new Error("no history found")
-		if (!Array.isArray(history)) throw new Error("invalid history found")
-		return history
-	} catch {
-		localStorage.setItem(HISTORY_NAME, "[]")
-		return []
-	}
 }
 
 function getLastWord(search: string) {

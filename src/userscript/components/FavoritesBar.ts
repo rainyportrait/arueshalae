@@ -2,6 +2,7 @@ import van from "vanjs-core"
 import { fullSync, getUserFavoritesCount, getUserId, sync, SyncProgress } from "../sync"
 import { getDownloadedCount } from "../network"
 import { FavoritesSearch } from "./FavoritesSearch"
+import { HistoryButton } from "./FavoritesSearchHistory"
 
 const { div, span, button } = van.tags
 
@@ -56,7 +57,7 @@ export function FavoritesBar() {
 			() => (syncProgress.val.state !== "none" ? SyncProgress(syncProgress.val) : ""),
 		),
 		div(FavoritesSearch()),
-		div(),
+		div(HistoryButton()),
 	)
 }
 

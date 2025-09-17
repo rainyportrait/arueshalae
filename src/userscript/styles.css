@@ -127,7 +127,7 @@
 	cursor: pointer;
 
 	&:hover {
-		background-color: #394539;
+		background-color: rgba(0, 0, 0, 0.25);
 	}
 
 	.arue-search + & {
@@ -185,6 +185,84 @@ body:has(.arue-container) > #header {
 	}
 }
 
+.arue-dialog-backdrop {
+	position: fixed;
+	height: 100vh;
+	width: 100vw;
+	top: 0;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+
+	.arue-dialog {
+		background-color: #394539;
+		color: #93b393;
+		border: 2px solid #93b393;
+		box-shadow: 0px 10px 15px -3px rgba(0, 0, 0, 0.1);
+		border-radius: 0.5em;
+	}
+
+	.arue-dialog-header {
+		display: flex;
+		justify-content: space-around;
+		padding: 0.5em;
+		border-bottom: 2px solid;
+		margin-bottom: 0.5em;
+
+		& > * {
+			flex: 1;
+			display: flex;
+			align-items: baseline;
+		}
+
+		& > :nth-child(1) {
+			justify-content: start;
+		}
+
+		& > :nth-child(2) {
+			justify-content: center;
+		}
+
+		& > :nth-child(3) {
+			justify-content: end;
+		}
+
+		.arue-btn {
+			aspect-ratio: 1;
+			height: 2.5em;
+		}
+	}
+
+	.arue-dialog-title {
+		font-size: 1.75em;
+	}
+}
+
+.arue-history-list {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5em;
+	padding: 0 0.5em;
+}
+
+.arue-history-list-item {
+	display: flex;
+	gap: 1em;
+	margin: 0;
+	justify-content: space-between;
+	align-items: center;
+}
+
+.arue-history-list-term {
+	font-size: 1.5em;
+}
+
+.arue-history-list-buttons {
+	display: flex;
+	gap: 0.25em;
+}
+
+/* enhancements */
 .arue-favorited-post {
 	border: 2px solid rgb(0, 255, 88) !important;
 	box-sizing: border-box;

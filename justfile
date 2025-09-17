@@ -10,7 +10,7 @@ watch-userscript:
 serve-userscript:
   python3 -m http.server
 
-watch-cargo arguments="":
+watch-and-run-cargo arguments="":
   watchexec -r -e rs,sql -- cargo run -- {{arguments}}
 
 build:

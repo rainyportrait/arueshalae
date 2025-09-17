@@ -160,19 +160,13 @@ body:has(.arue-container) > #header {
 		background-color: #394539e0;
 		backdrop-filter: blur(10px);
 		box-shadow: 0px 10px 15px -3px rgba(0, 0, 0, 0.1);
-
-		.arue-btn {
-			aspect-ratio: 1;
-			height: 2.5em;
-			position: sticky;
-			top: 0.5em;
-		}
 	}
 
 	.arue-ui-search-grid {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 0.5em;
+		padding-bottom: 0.5em;
 		justify-content: space-evenly;
 
 		a {

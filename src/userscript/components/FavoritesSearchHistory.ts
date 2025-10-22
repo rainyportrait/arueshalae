@@ -40,6 +40,19 @@ export function HistoryButton() {
 export function HistoryDialog() {
 	const open = van.state(true)
 
+	function escapeListener(e: KeyboardEvent) {
+		if (e.key === "Escape") {
+			open.val = false
+		}
+	}
+	van.derive(() => {
+		if (open.val) {
+			document.addEventListener("keydown", escapeListener)
+		} else {
+			document.removeEventListener("keydown", escapeListener)
+		}
+	})
+
 	return () =>
 		open.val
 			? div(

@@ -179,6 +179,10 @@ body:has(.arue-container) > #header {
 	}
 }
 
+body:has(.arue-dialog-backdrop) {
+	overflow: hidden;
+}
+
 .arue-dialog-backdrop {
 	position: fixed;
 	height: 100vh;
@@ -187,6 +191,7 @@ body:has(.arue-container) > #header {
 	display: flex;
 	justify-content: center;
 	align-items: center;
+	backdrop-filter: blur(2px);
 
 	.arue-dialog {
 		background-color: #394539;
@@ -194,6 +199,9 @@ body:has(.arue-container) > #header {
 		border: 2px solid #93b393;
 		box-shadow: 0px 10px 15px -3px rgba(0, 0, 0, 0.1);
 		border-radius: 0.5em;
+		max-height: calc(100vh - 1em);
+		display: flex;
+		flex-direction: column;
 	}
 
 	.arue-dialog-header {
@@ -201,7 +209,6 @@ body:has(.arue-container) > #header {
 		justify-content: space-around;
 		padding: 0.5em;
 		border-bottom: 2px solid;
-		margin-bottom: 0.5em;
 
 		& > * {
 			flex: 1;
@@ -230,6 +237,11 @@ body:has(.arue-container) > #header {
 	.arue-dialog-title {
 		font-size: 1.75em;
 	}
+
+	.arue-dialog-content {
+		padding-block: 0.5em;
+		overflow: auto;
+	}
 }
 
 .arue-history-list {
@@ -237,6 +249,7 @@ body:has(.arue-container) > #header {
 	flex-direction: column;
 	gap: 0.5em;
 	padding: 0 0.5em;
+	margin: 0;
 }
 
 .arue-history-list-item {

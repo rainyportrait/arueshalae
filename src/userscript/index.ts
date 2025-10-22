@@ -1,6 +1,7 @@
 import { addSearchEnhancements } from "./components/SearchEnhancements.ts"
 import "./context.d.ts"
 import { favorites } from "./favorites.ts"
+import { pool } from "./pool.ts"
 import { postList } from "./post-list.ts"
 import { post } from "./post.ts"
 import "./styles"
@@ -24,5 +25,9 @@ switch (search.get("page")) {
 			post(id)
 			break
 		}
+	}
+	case "pool": {
+		pool()
+		break
 	}
 }

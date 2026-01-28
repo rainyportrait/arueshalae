@@ -88,12 +88,20 @@ async function baseFetchDocument(url: string): Promise<Document> {
 	return new DOMParser().parseFromString(body, "text/html")
 }
 
-async function baseFetchImage(url: string): Promise<Blob> {
-	const response = await GM.xmlHttpRequest({ url, method: "GET", responseType: "blob" })
-	if (response.status !== 200) {
-		throw new Error(`${url} returned status ${response.status}`)
-	}
-	return response.response
+function baseFetchImage(url: string): Promise<Blob> {
+	return new Promise((resolve, reject) => {
+		GM.xmlHttpRequest({
+			url,
+			method: "GET",
+			responseType: "blob",
+			onload(result: any) {
+				resolve(result.response)
+			},
+			onerror(result: any) {
+				reject(result)
+			},
+		})
+	})
 }
 
 export async function retry(url: string, fetch: (url: string) => Promise<Blob>): Promise<Blob>

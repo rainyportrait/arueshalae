@@ -1,4 +1,6 @@
 import { FavoritesBar } from "./components/FavoritesBar"
+import { initGallery } from "./gallery"
+import { getPostIds } from "./sync"
 
 export async function favorites() {
 	improveStyles()
@@ -7,6 +9,7 @@ export async function favorites() {
 	if (!header) throw new Error("Could not find header")
 
 	header.after(FavoritesBar())
+	initGallery(getPostIds(document))
 }
 
 // Style improvments

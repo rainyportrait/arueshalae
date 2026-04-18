@@ -110,6 +110,12 @@ export interface PostData {
 	tags: Tag[]
 }
 
+export interface PostInfo {
+	id: number
+	imageUrl: string
+	tags: Tag[]
+}
+
 const TAG_KINDS_ARRAY = ["copyright", "character", "artist", "general", "metadata"] as const
 export type TagKind = (typeof TAG_KINDS_ARRAY)[number]
 const TAG_KINDS = new Set<TagKind>(TAG_KINDS_ARRAY)
@@ -117,19 +123,30 @@ function isTagKind(str: string): str is TagKind {
 	return TAG_KINDS.has(str as TagKind)
 }
 
-interface Tag {
+export interface Tag {
 	name: string
 	kind: TagKind
 }
 
-async function getPostData(postId: number): Promise<PostData> {
+export async function getPostData(postId: number, fetchBlob: true): Promise<PostData>
+export async function getPostData(postId: number, fetchBlob: false): Promise<PostInfo>
+export async function getPostData(postId: number, fetchBlob: boolean = true): Promise<PostData | PostInfo> {
 	const postDOM = await fetchDocument(`/index.php?page=post&s=view&id=${postId}`)
-	const image = await fetchImage(getImageUrl(postDOM))
 	const tags = getImageTags(postDOM)
-	return {
-		id: postId,
-		image,
-		tags,
+	const imageUrl = getImageUrl(postDOM)
+
+	if (fetchBlob) {
+		return {
+			id: postId,
+			image: await fetchImage(imageUrl),
+			tags,
+		}
+	} else {
+		return {
+			id: postId,
+			imageUrl,
+			tags,
+		}
 	}
 }
 

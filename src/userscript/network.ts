@@ -2,7 +2,7 @@ import { PostData, TagKind } from "./sync"
 
 const ARUESHALAE_API_URL = "http://localhost:34343"
 
-const MAX_RETRIES = 5
+const MAX_RETRIES = 15
 const JITTER_MS = 30
 const BASE_DELAY = 100
 const FAIL_INCREASE = 2

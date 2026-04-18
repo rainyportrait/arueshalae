@@ -5,7 +5,7 @@ import { highlightPost } from "../post-list"
 
 const { div, span, a } = van.tags
 
-export function FavoriteButton(id: string, favorited: boolean, highlightOnFavorite = true) {
+export function FavoriteButton(id: string, favorited: boolean, highlightOnFavorite = true, callback = () => {}) {
 	const isInFavorites = van.state(favorited)
 	const isBeingAdded = van.state(false)
 	const encounteredError = van.state(false)
@@ -40,6 +40,7 @@ export function FavoriteButton(id: string, favorited: boolean, highlightOnFavori
 							unsafeWindow.addFav(id)
 
 							if (highlightOnFavorite) highlightPost(parsedId)
+							if (callback) callback()
 
 							isInFavorites.val = true
 						} catch (error: unknown) {

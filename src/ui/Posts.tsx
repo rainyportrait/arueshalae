@@ -5,7 +5,7 @@ import { Link } from "./router"
 import { getPostList, PostInfo } from "./api/posts"
 
 export function Posts() {
-	const [params] = useSearchParams()
+	const [params, setParams] = useSearchParams()
 	const query = params.get("query") ?? ""
 	const pid = Number(params.get("pid") ?? "0")
 
@@ -44,7 +44,7 @@ export function Posts() {
 				<form
 					onSubmit={(e) => {
 						e.preventDefault()
-						navigate(`posts?query=${query}`)
+						navigate(query ? `/posts?query=${query}` : `/posts`)
 					}}
 					class="arue-search-form"
 				>
@@ -52,8 +52,12 @@ export function Posts() {
 						type="text"
 						value={query}
 						onChange={(e) => {
-							const [params, setParams] = useSearchParams()
 							setParams({ query: (e.target as HTMLInputElement).value })
+						}}
+						onBlur={(e) => {
+							e.preventDefault()
+							const value = (e.target as HTMLInputElement).value
+							navigate(value ? `/posts?query=${value}` : `/posts`)
 						}}
 						placeholder="Search tags..."
 						class="arue-search"

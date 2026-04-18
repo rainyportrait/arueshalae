@@ -2,7 +2,7 @@ import { useState, useEffect } from "preact/hooks"
 import { useSearchParams } from "wouter-preact"
 import { navigate } from "wouter-preact/use-browser-location"
 import { Link } from "./router"
-import { getPostList, PostInfo } from "./api/posts"
+import { getPostList, PostInfo, type PostListResult } from "./api/posts"
 
 export function Posts() {
 	const [params, setParams] = useSearchParams()
@@ -10,6 +10,7 @@ export function Posts() {
 	const pid = Number(params.get("pid") ?? "0")
 
 	const [posts, setPosts] = useState<PostInfo[]>([])
+	const [nextPid, setNextPid] = useState<number | undefined>(undefined)
 	const [loading, setLoading] = useState(true)
 	const [error, setError] = useState<string | null>(null)
 
@@ -18,7 +19,8 @@ export function Posts() {
 			try {
 				setLoading(true)
 				const data = await getPostList(query, pid || undefined)
-				setPosts(data)
+				setPosts(data.posts)
+				setNextPid(data.nextPid)
 			} catch (e) {
 				setError(e instanceof Error ? e.message : "Failed to fetch posts")
 			} finally {
@@ -67,20 +69,32 @@ export function Posts() {
 					</button>
 				</form>
 			</div>
-			<div class="columns-2 sm:columns-3 xl:columns-5 gap-4 space-y-4">
-				{posts.map((post) => (
-					<Link key={post.id} href={`/post/${post.id}`} className="block break-inside-avoid">
-						<div class="rounded-md overflow-hidden shadow hover:shadow-lg transition-shadow">
-							<img
-								src={post.imageUrl}
-								alt={`Post ${post.id}`}
-								class="w-full h-auto object-cover"
-								loading="lazy"
-							/>
-						</div>
-					</Link>
-				))}
-			</div>
+		<div class="columns-2 sm:columns-3 xl:columns-5 gap-4 space-y-4">
+			{posts.map((post) => (
+				<Link key={post.id} href={`/post/${post.id}`} className="block break-inside-avoid">
+					<div class="rounded-md overflow-hidden shadow hover:shadow-lg transition-shadow">
+						<img
+							src={post.imageUrl}
+							alt={`Post ${post.id}`}
+							class="w-full h-auto object-cover"
+							loading="lazy"
+						/>
+					</div>
+				</Link>
+			))}
+		</div>
+		<div class="mt-6 flex justify-center gap-4">
+			{nextPid ? (
+				<Link
+					href={`/posts?${query ? `query=${query}&` : ""}pid=${nextPid}`}
+					className="arue-btn"
+				>
+					<>{"Next Page"}</>
+				</Link>
+			) : (
+				<span class="text-gray-500"><>No more pages</></span>
+			)}
+		</div>
 		</div>
 	)
 }

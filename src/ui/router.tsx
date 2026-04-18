@@ -73,6 +73,9 @@ if (typeof window !== "undefined") {
 export function RouterView(): VNode {
 	return (
 		<Switch>
+			<Route path="/">
+				<Posts />
+			</Route>
 			<Route path="/post/:id">
 				<Post />
 			</Route>

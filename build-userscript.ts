@@ -2,6 +2,7 @@ import esbuild from "esbuild"
 import process from "node:process"
 import path from "node:path"
 import fs from "node:fs/promises"
+import { exec } from "node:child_process"
 
 const version = process.argv[2] ?? "dev"
 
@@ -47,27 +48,62 @@ function inlineImportPlugin() {
 	}
 }
 
-esbuild
-	.build({
-		entryPoints: ["src/userscript/index.ts"],
-		bundle: true,
-		outfile: "target/userscript/arueshalae.user.js",
-		format: "iife",
-		platform: "browser",
-		target: "es2020",
-		minify: false,
-		banner: {
-			js: `// ==UserScript==
-// @name         Arueshalae
+async function buildStyles() {
+	return new Promise<void>((resolve, reject) => {
+		exec("npx postcss src/ui/styles.css -o target/tailwind.css", (err: Error) => {
+			if (err) reject(err)
+			else resolve()
+		})
+	})
+}
+
+// Global variable to store Tailwind CSS output for the banner
+async function runBuild() {
+	await fs.mkdir("target", { recursive: true })
+	await buildStyles()
+	const tailwindStyles = await fs.readFile("target/tailwind.css", "utf8")
+
+	esbuild
+		.build({
+			entryPoints: ["src/ui/index.ts"],
+			bundle: true,
+			outfile: "target/userscript/arueshalae-ui.user.js",
+			format: "iife",
+			platform: "browser",
+			target: "es2020",
+			minify: false,
+			banner: {
+				js: `// ==UserScript==
+// @name         Arueshalae UI
 // @version      ${version}
-// @description  Downloads your rule34.xxx favorites
-// @match        https://rule34.xxx/index.php?*
+// @description  Replaces the default rule34.xxx UI
+// @match        https://rule34.xxx/*
 // @grant        GM.xmlHttpRequest
-// @run-at       document-idle
-// ==/UserScript==`,
-		},
-		plugins: [inlineImportPlugin()],
-	})
-	.catch((err) => {
-		throw err
-	})
+// @run-at       document-end
+// ==/UserScript==
+
+// Redirect to clean base path
+if (location.pathname !== "/") {
+	// Store current query params for redirect
+	const currentSearch = location.search
+	// Redirect to / with hash-based route
+	if (location.hash) {
+		history.replaceState(null, "", "/" + location.hash + currentSearch)
+	} else {
+		history.replaceState(null, "", "/")
+	}
+}
+
+// Inject Tailwind CSS into global variable
+const TAILWIND_CSS = \`${tailwindStyles}\`;
+`,
+			},
+			plugins: [inlineImportPlugin()],
+		})
+		.then(() => console.log("✓ Built userscript with Tailwind"))
+		.catch((err) => {
+			throw err
+		})
+}
+
+runBuild()

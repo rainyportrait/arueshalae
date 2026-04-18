@@ -50,7 +50,7 @@ function inlineImportPlugin() {
 
 async function buildStyles() {
 	return new Promise<void>((resolve, reject) => {
-		exec("npx postcss src/ui/styles.css -o target/tailwind.css", (err: Error) => {
+		exec("npx postcss src/ui/styles.css -o target/tailwind.css", (err: Error | null) => {
 			if (err) reject(err)
 			else resolve()
 		})
@@ -72,6 +72,8 @@ async function runBuild() {
 			platform: "browser",
 			target: "es2020",
 			minify: false,
+			jsx: "automatic",
+			jsxImportSource: "preact",
 			banner: {
 				js: `// ==UserScript==
 // @name         Arueshalae UI
@@ -79,20 +81,8 @@ async function runBuild() {
 // @description  Replaces the default rule34.xxx UI
 // @match        https://rule34.xxx/*
 // @grant        GM.xmlHttpRequest
-// @run-at       document-end
+// @run-at       document-body
 // ==/UserScript==
-
-// Redirect to clean base path
-if (location.pathname !== "/") {
-	// Store current query params for redirect
-	const currentSearch = location.search
-	// Redirect to / with hash-based route
-	if (location.hash) {
-		history.replaceState(null, "", "/" + location.hash + currentSearch)
-	} else {
-		history.replaceState(null, "", "/")
-	}
-}
 
 // Inject Tailwind CSS into global variable
 const TAILWIND_CSS = \`${tailwindStyles}\`;
@@ -100,7 +90,6 @@ const TAILWIND_CSS = \`${tailwindStyles}\`;
 			},
 			plugins: [inlineImportPlugin()],
 		})
-		.then(() => console.log("✓ Built userscript with Tailwind"))
 		.catch((err) => {
 			throw err
 		})

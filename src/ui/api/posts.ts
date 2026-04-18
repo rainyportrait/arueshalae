@@ -1,21 +1,6 @@
 import { fetchDocument } from "./network"
-
-export interface Tag {
-	name: string
-	kind: TagKind
-}
-
-export type TagKind = "copyright" | "character" | "artist" | "general" | "metadata"
-
-export interface PostInfo {
-	id: number
-	imageUrl: string
-	tags: Tag[]
-}
-
-export interface PostData extends PostInfo {
-	previewUrl?: string
-}
+import type { PostData, PostInfo, Tag } from "./post"
+export type { PostInfo}
 
 // Fetch a page of posts from the post list
 // tags should be the raw tag string (e.g., "all" or "foo_bar_baz")

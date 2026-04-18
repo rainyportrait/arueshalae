@@ -1,8 +1,8 @@
 import { useState, useEffect } from "preact/hooks"
 import { useSearchParams } from "wouter-preact"
 import { navigate } from "wouter-preact/use-browser-location"
-import { Link } from "../router"
-import { getPostList, PostInfo } from "../api/posts"
+import { Link } from "./router"
+import { getPostList, PostInfo } from "./api/posts"
 
 export function Posts() {
 	const [params] = useSearchParams()
@@ -63,7 +63,7 @@ export function Posts() {
 					</button>
 				</form>
 			</div>
-			<div class="columns-4 sm:columns-5 xl:columns-6 gap-4 space-y-4">
+			<div class="columns-2 sm:columns-3 xl:columns-5 gap-4 space-y-4">
 				{posts.map((post) => (
 					<Link key={post.id} href={`/post/${post.id}`} className="block break-inside-avoid">
 						<div class="rounded-md overflow-hidden shadow hover:shadow-lg transition-shadow">

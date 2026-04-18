@@ -5,11 +5,16 @@ import { render } from "preact"
 let pageTitle = "Arueshalae"
 
 import { RouterView } from "./router"
+import { Link } from "wouter-preact"
 
 function App(): VNode {
 	return (
 		<>
-			<h1>Arueshalae</h1>
+			<div class="px-4 pt-2 text-blue-500 hover:text-blue-800 visited:text-violet-500">
+				<Link to="/" class="text-xl">
+					Arueshalae
+				</Link>
+			</div>
 			<RouterView></RouterView>
 		</>
 	)

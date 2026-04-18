@@ -2,7 +2,8 @@ import { Route, Redirect, Switch } from "wouter-preact"
 import { useLocation } from "wouter-preact"
 import { navigate } from "wouter-preact/use-browser-location"
 import type { VNode } from "preact"
-import { Posts } from "./posts/Posts"
+import { Posts } from "./Posts"
+import { Post } from "./Post"
 
 // Link component for navigation
 export function Link({ href, children, className }: { href: string; children: VNode; className?: string }): VNode {
@@ -72,6 +73,9 @@ if (typeof window !== "undefined") {
 export function RouterView(): VNode {
 	return (
 		<Switch>
+			<Route path="/post/:id">
+				<Post />
+			</Route>
 			<Route path="posts">
 				<Posts />
 			</Route>
@@ -86,4 +90,4 @@ export function RouterView(): VNode {
 	)
 }
 
-export { Route, Redirect }
+export { Route, Redirect, navigate }

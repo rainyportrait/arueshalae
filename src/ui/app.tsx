@@ -22,15 +22,19 @@ export function initUI(): () => void {
 	titleEl.textContent = pageTitle
 	document.head.appendChild(titleEl)
 
+	const viewportEl = document.createElement("meta")
+	viewportEl.name = "viewport"
+	viewportEl.content = "width=device-width, initial-scale=1.0"
+	document.head.appendChild(viewportEl)
+
 	const styleEl = document.createElement("style")
 	styleEl.textContent = TAILWIND_CSS
-	console.log(TAILWIND_CSS)
 	document.head.appendChild(styleEl)
 
 	// Create a container for Preact mounting
 	// Emptying the body is done on purpose. Don't remove it.
 	document.body.innerHTML = ""
-	const container: HTMLElement = document.createElement("div")
+	const container = document.createElement("div")
 	container.id = "arueshalae-root"
 	document.body.prepend(container)
 

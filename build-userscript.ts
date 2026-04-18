@@ -50,7 +50,7 @@ function inlineImportPlugin() {
 
 async function buildStyles() {
 	return new Promise<void>((resolve, reject) => {
-		exec("npx postcss src/ui/styles.css -o target/tailwind.css", (err: Error | null) => {
+		exec("npx tailwindcss build src/ui/styles.css -o target/tailwind.css", (err: Error | null) => {
 			if (err) reject(err)
 			else resolve()
 		})
@@ -61,7 +61,9 @@ async function buildStyles() {
 async function runBuild() {
 	await fs.mkdir("target", { recursive: true })
 	await buildStyles()
-	const tailwindStyles = await fs.readFile("target/tailwind.css", "utf8")
+	const tailwindStyles = (await fs.readFile("target/tailwind.css", "utf8"))
+		.replace(/\\/g, "\\\\")
+		.replace(/`/g, "\\`")
 
 	esbuild
 		.build({
@@ -81,7 +83,7 @@ async function runBuild() {
 // @description  Replaces the default rule34.xxx UI
 // @match        https://rule34.xxx/*
 // @grant        GM.xmlHttpRequest
-// @run-at       document-body
+// @run-at       document-end
 // ==/UserScript==
 
 // Inject Tailwind CSS into global variable

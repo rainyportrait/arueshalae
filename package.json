@@ -6,13 +6,15 @@
 		"esbuild": "^0.25.9",
 		"preact": "^10.29.1",
 		"prettier": "^3.6.2",
+		"react": "npm:@preact/compat",
+		"react-dom": "npm:@preact/compat",
 		"wouter-preact": "^3.9.0"
 	},
 	"devDependencies": {
+		"@tailwindcss/cli": "^4.2.2",
 		"@tailwindcss/postcss": "^4.2.2",
 		"@types/node": "^25.6.0",
 		"postcss": "^8.5.10",
-		"postcss-cli": "^11.0.1",
 		"tailwindcss": "^4.2.2",
 		"typescript": "^6.0.3"
 	}

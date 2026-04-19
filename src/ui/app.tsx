@@ -1,3 +1,4 @@
+import { useState, useEffect } from "preact/hooks"
 import type { VNode } from "preact"
 import { render } from "preact"
 
@@ -6,8 +7,12 @@ let pageTitle = "Arueshalae"
 
 import { RouterView } from "./router"
 import { Link } from "wouter-preact"
+import { CaptchaModal } from "./components/CaptchaModal"
+import { useCaptcha, cleanupCaptchaState } from "./api/hooks"
 
 function App(): VNode {
+	const { captchaUrl } = useCaptcha()
+
 	return (
 		<>
 			<div class="px-4 pt-2 text-blue-500 hover:text-blue-800 visited:text-violet-500">
@@ -16,6 +21,7 @@ function App(): VNode {
 				</Link>
 			</div>
 			<RouterView></RouterView>
+			{captchaUrl && <CaptchaModal url={captchaUrl} />}
 		</>
 	)
 }
@@ -50,6 +56,7 @@ export function initUI(): () => void {
 	return () => {
 		// @ts-ignore - See above
 		render(null, container)
+		cleanupCaptchaState()
 		document.head.innerHTML = ""
 		document.body.innerHTML = ""
 	}

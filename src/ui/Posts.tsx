@@ -74,21 +74,21 @@ export function Posts() {
 					</button>
 				</form>
 			</div>
-		<div class="columns-2 sm:columns-3 xl:columns-5 gap-4 space-y-4">
-			{posts.map((post) => (
-				<Link key={post.id} href={`/post/${post.id}`} className="block break-inside-avoid">
-					<div class="rounded-md overflow-hidden shadow hover:shadow-lg transition-shadow">
-						<img
-							src={post.imageUrl}
-							alt={`Post ${post.id}`}
-							class="w-full h-auto object-cover"
-							loading="lazy"
-						/>
-					</div>
-				</Link>
-			))}
-		</div>
-		<Pagination currentPage={currentPage} nextPid={nextPid} lastPagePid={lastPagePid} query={query} />
+			<div class="columns-2 sm:columns-3 xl:columns-5 gap-4 space-y-4">
+				{posts.map((post) => (
+					<Link key={post.id} href={`/post/${post.id}`} className="block break-inside-avoid">
+						<div class="rounded-md overflow-hidden shadow hover:shadow-lg transition-shadow duration-75 ">
+							<img
+								src={post.imageUrl}
+								alt={`Post ${post.id}`}
+								class="w-full h-auto object-cover max-h-96"
+								loading="lazy"
+							/>
+						</div>
+					</Link>
+				))}
+			</div>
+			<Pagination currentPage={currentPage} nextPid={nextPid} lastPagePid={lastPagePid} query={query} />
 		</div>
 	)
 }

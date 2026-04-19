@@ -31,7 +31,7 @@ function signalCaptchaResolved(): void {
 		window.top.postMessage("captcha_passed", "*")
 	}
 	document.body.innerHTML =
-		'<div style="display:flex;justify-content:center;align-items:center;height:100vh;font-size:24px;color:white;">Closing...</div>'
+		'<div style="display:flex;justify-content:center;align-items:center;height:100vh;font-size:24px;color:#000;">Closing...</div>'
 }
 
 // Run the normal app logic when not in challenge context or iframe

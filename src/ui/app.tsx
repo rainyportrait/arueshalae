@@ -8,7 +8,7 @@ let pageTitle = "Arueshalae"
 import { RouterView } from "./router"
 import { Link } from "wouter-preact"
 import { CaptchaModal } from "./components/CaptchaModal"
-import { useCaptcha, cleanupCaptchaState } from "./api/hooks"
+import { useCaptcha } from "./api/hooks"
 
 function App(): VNode {
 	const { captchaUrl } = useCaptcha()
@@ -56,7 +56,6 @@ export function initUI(): () => void {
 	return () => {
 		// @ts-ignore - See above
 		render(null, container)
-		cleanupCaptchaState()
 		document.head.innerHTML = ""
 		document.body.innerHTML = ""
 	}

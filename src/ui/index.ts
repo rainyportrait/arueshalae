@@ -3,103 +3,78 @@ import { initUI } from "./app"
 /**
  * UI INITIALIZATION FLOW (bundled as userscript):
  *
- * This script runs in two possible contexts:
- * 1. Normal page context (iframe === false) - runs full app logic
- * 2. Cloudflare challenge page inside an iframe (challenge === true, iframe === true) - goes dormant
- * 3. After Cloudflare refreshes iframe (challenge === false, iframe === true) - signals parent
- *
- * Every time the script starts, it checks its context and acts accordingly.
+ * Context detection:
+ * 1. If on a Cloudflare challenge page → go dormant (do nothing)
+ * 2. If NOT on challenge page and inside an iframe → signal parent to close modal
+ * 3. Otherwise → run the full app
  */
 
 // Check if we're on a Cloudflare challenge page
-// This is the PRIMARY check that determines if we go dormant or proceed
 function isChallengePage(): boolean {
-	const hasChallengeToken = location.search.includes("__cf_chl_rt_tk") || location.hash.includes("__cf_chl_rt_tk")
-	if (hasChallengeToken) {
+	const search = new URLSearchParams(location.search)
+	const hash = location.hash
+	if (search.has("__cf_chl_rt_tk") || hash.includes("__cf_chl_rt_tk")) {
 		return true
 	}
-	// Fallback: check body for captcha elements
 	const bodyText = document.body?.textContent ?? ""
 	return bodyText.toLowerCase().includes("captcha") || bodyText.toLowerCase().includes("turnstile")
 }
 
 // Check if running inside an iframe
-// This is checked AFTER we know we're NOT on a challenge page
 function isInIframe(): boolean {
-	// Use both checks: window.frameElement is the most direct
-	// window.top !== window is a fallback that's more reliable after page reloads
 	return window.frameElement !== null || window.top !== window
+}
+
+// Signal parent window that captcha was resolved
+function signalCaptchaResolved(): void {
+	if (window.top) {
+		window.top.postMessage("captcha_passed", "*")
+	}
+	document.body.innerHTML =
+		'<div style="display:flex;justify-content:center;align-items:center;height:100vh;font-size:24px;color:white;">Closing...</div>'
 }
 
 // Run the normal app logic when not in challenge context
 function runApp(): void {
 	const search = new URLSearchParams(location.search)
-	switch (search.get("page")) {
-		case "favorites": {
-			initUI()
-			console.log("[Arueshalae UI] Loaded")
-			break
+	const page = search.get("page")
+	const site = search.get("s")
+	const id = search.get("id")
+
+	// Handle favorites page
+	if (page === "favorites") {
+		initUI()
+		return
+	}
+
+	// Handle post-related pages
+	if (page === "post") {
+		if (site === "list") {
+			if (isInIframe()) signalCaptchaResolved()
+			return
 		}
-		case "post": {
-			const site = search.get("s")
-			if (site === "list") {
-				// For post list pages, check iframe status first
-				if (isInIframe()) {
-					// Cloudflare cleared the challenge, send signal to close modal
-					console.log("[Arueshalae UI] Challenge cleared - signaling parent to close modal")
-					if (window.top) {
-						window.top.postMessage("captcha_passed", "*")
-					}
-					document.body.innerHTML =
-						'<div style="display:flex;justify-content:center;align-items:center;height:100vh;font-size:24px;color:white;">Closing...</div>'
-					return
-				}
-				console.log("[Arueshalae UI] Loaded")
-				break
-			}
-			if (site === "view") {
-				const id = Number.parseInt(search.get("id") ?? "", 10)
-				if (Number.isNaN(id)) break
-				console.log("[Arueshalae UI] Loaded")
-				break
-			}
+		if (site === "view" && id) {
+			const postId = Number.parseInt(id, 10)
+			if (Number.isNaN(postId)) return
+			return
 		}
-		default: {
-			if (isInIframe()) {
-				// Cloudflare cleared the challenge, send signal to close modal
-				console.log("[Arueshalae UI] Challenge cleared - signaling parent to close modal")
-				if (window.top) {
-					window.top.postMessage("captcha_passed", "*")
-				}
-				document.body.innerHTML =
-					'<div style="display:flex;justify-content:center;align-items:center;height:100vh;font-size:24px;color:white;">Closing...</div>'
-				return
-			}
-			initUI()
-			console.log("[Arueshalae UI] Loaded")
-		}
+	}
+
+	// Default: check iframe status
+	if (isInIframe()) {
+		signalCaptchaResolved()
+	} else {
+		initUI()
 	}
 }
 
-// Check for challenge first - if present, go dormant (do nothing)
-// This handles the case where Cloudflare shows us a challenge page
+// Main initialization flow
 if (isChallengePage()) {
-	console.log("[Arueshalae UI] Running on Cloudflare challenge page - going dormant")
-	// Script ends here - no further code executes
+	// Cloudflare challenge page - go dormant
+} else if (isInIframe()) {
+	// Challenge cleared in iframe - signal parent to close modal
+	signalCaptchaResolved()
 } else {
-	// We're NOT on a challenge page - check if we're in an iframe
-	console.log("[Arueshalae UI] NOT on challenge page, checking iframe status...")
-	if (isInIframe()) {
-		// Cloudflare cleared the challenge, send signal to close modal
-		console.log("[Arueshalae UI] Challenge cleared - signaling parent to close modal")
-		if (window.top) {
-			window.top.postMessage("captcha_passed", "*")
-		}
-		document.body.innerHTML =
-			'<div style="display:flex;justify-content:center;align-items:center;height:100vh;font-size:24px;color:white;">Closing...</div>'
-	} else {
-		// Normal page context - run the full app
-		console.log("[Arueshalae UI] NOT in iframe - running full app")
-		runApp()
-	}
+	// Normal page context - run full app
+	runApp()
 }

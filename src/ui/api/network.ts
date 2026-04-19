@@ -24,11 +24,11 @@ async function baseFetchDocument(url: string): Promise<Document> {
 }
 
 export async function fetchDocument(url: string): Promise<Document> {
-	return retry<Document>(url, baseFetchDocument)
+	return retry<Document>(url, async () => baseFetchDocument(url))
 }
 
 export async function fetchImage(url: string): Promise<Blob> {
-	return retry<Blob>(url, baseFetchImage)
+	return retry<Blob>(url, async () => baseFetchImage(url))
 }
 
 async function baseFetchImage(url: string): Promise<Blob> {
@@ -46,7 +46,7 @@ async function baseFetchImage(url: string): Promise<Blob> {
 							showCaptcha(url)
 						}
 						await waitForCaptchaResolved()
-						resolve(await fetchImageBlob(url))
+						resolve(await baseFetchImage(url))
 						return
 					}
 				}
@@ -107,24 +107,3 @@ async function waitForCaptchaResolved(): Promise<void> {
 	})
 }
 
-// Helper to fetch image as blob
-async function fetchImageBlob(url: string): Promise<Blob> {
-	return new Promise((resolve, reject) => {
-		const gmOptions: any = {
-			url,
-			method: "GET",
-			responseType: "blob",
-			onload: (result: any) => {
-				if (result.status === 200) {
-					resolve(result.response)
-				} else {
-					reject(new Error(`Image fetch failed: ${result.status}`))
-				}
-			},
-			onerror: (result: any) => {
-				reject(result.error || new Error("Network error"))
-			},
-		}
-		GM.xmlHttpRequest(gmOptions)
-	})
-}

@@ -34,12 +34,10 @@ function signalCaptchaResolved(): void {
 		'<div style="display:flex;justify-content:center;align-items:center;height:100vh;font-size:24px;color:white;">Closing...</div>'
 }
 
-// Run the normal app logic when not in challenge context
+// Run the normal app logic when not in challenge context or iframe
 function runApp(): void {
 	const search = new URLSearchParams(location.search)
 	const page = search.get("page")
-	const site = search.get("s")
-	const id = search.get("id")
 
 	// Handle favorites page
 	if (page === "favorites") {
@@ -47,25 +45,24 @@ function runApp(): void {
 		return
 	}
 
-	// Handle post-related pages
+	// Handle post-related pages - no iframe check needed, already done above
 	if (page === "post") {
+		const site = search.get("s")
+		const id = search.get("id")
 		if (site === "list") {
-			if (isInIframe()) signalCaptchaResolved()
+			// Post list - valid context, nothing to do
 			return
 		}
 		if (site === "view" && id) {
 			const postId = Number.parseInt(id, 10)
 			if (Number.isNaN(postId)) return
+			// Post view - valid context, nothing to do
 			return
 		}
 	}
 
-	// Default: check iframe status
-	if (isInIframe()) {
-		signalCaptchaResolved()
-	} else {
-		initUI()
-	}
+	// Default: run the app
+	initUI()
 }
 
 // Main initialization flow

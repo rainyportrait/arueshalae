@@ -1,6 +1,6 @@
 import { fetchDocument } from "./network"
-import type { PostData, PostInfo, Tag } from "./post"
-export type { PostInfo}
+import type { PostInfo } from "./post"
+export type { PostInfo }
 
 // Fetch a page of posts from the post list
 // tags should be the raw tag string (e.g., "all" or "foo_bar_baz")

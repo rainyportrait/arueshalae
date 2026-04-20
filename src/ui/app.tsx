@@ -1,17 +1,13 @@
-import { useState, useEffect } from "preact/hooks"
 import type { VNode } from "preact"
 import { render } from "preact"
 
-// Page title state - managed directly for simplicity
-let pageTitle = "Arueshalae"
-
 import { RouterView } from "./router"
 import { Link } from "wouter-preact"
-import { CaptchaModal } from "./components/CaptchaModal"
-import { useCaptcha } from "./api/hooks"
+import { CaptchaModal } from "./captcha/modal"
+import { useCaptcha } from "./captcha/index"
 
 function App(): VNode {
-	const { captchaUrl } = useCaptcha()
+	const captchaUrl = useCaptcha()
 
 	return (
 		<>
@@ -30,7 +26,7 @@ export function initUI(): () => void {
 	// Set up head elements (vanilla JS - Preact doesn't render to head well)
 	document.head.innerHTML = ""
 	const titleEl = document.createElement("title")
-	titleEl.textContent = pageTitle
+	titleEl.textContent = "Arueshalae"
 	document.head.appendChild(titleEl)
 
 	const viewportEl = document.createElement("meta")

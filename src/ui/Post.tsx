@@ -1,6 +1,6 @@
 import { useState, useEffect } from "preact/hooks"
 import { useRoute } from "wouter-preact"
-import { Link, navigate } from "./router"
+import { Link } from "./router"
 import { getPostData, PostInfo, getMediaType, MediaType } from "./api/post"
 
 export function Post() {

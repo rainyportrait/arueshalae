@@ -1,7 +1,4 @@
-// Network layer for fetching data from rule34.xxx
-// Uses GM.xmlHttpRequest for CORS-bypassing image fetches
-
-import { showCaptcha, isCaptchaActive, isWaitingForCaptcha } from "./hooks"
+import { solveCaptcha } from "../captcha/index"
 
 async function baseFetchDocument(url: string): Promise<Document> {
 	const response = await fetch(url)
@@ -9,10 +6,7 @@ async function baseFetchDocument(url: string): Promise<Document> {
 		const body = await response.text()
 		if (body.toLowerCase().includes("captcha")) {
 			console.log("[Network] Captcha detected, awaiting resolution")
-			if (!isCaptchaActive()) {
-				showCaptcha(url)
-			}
-			await waitForCaptchaResolved()
+			await solveCaptcha(url)
 			return baseFetchDocument(url)
 		}
 	}
@@ -42,10 +36,7 @@ async function baseFetchImage(url: string): Promise<Blob> {
 					const body = result.responseText || ""
 					if (body.toLowerCase().includes("captcha")) {
 						console.log("[Network] Captcha detected in image fetch, awaiting resolution")
-						if (!isCaptchaActive()) {
-							showCaptcha(url)
-						}
-						await waitForCaptchaResolved()
+						await solveCaptcha(url)
 						resolve(await baseFetchImage(url))
 						return
 					}
@@ -90,20 +81,3 @@ export async function retry<T>(
 function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms))
 }
-
-// Wait for captcha to resolve
-async function waitForCaptchaResolved(): Promise<void> {
-	return new Promise((resolve) => {
-		const checkCaptcha = setInterval(() => {
-			if (!isCaptchaActive()) {
-				clearInterval(checkCaptcha)
-				resolve()
-			}
-		}, 100)
-		setTimeout(() => {
-			clearInterval(checkCaptcha)
-			resolve()
-		}, 30000)
-	})
-}
-

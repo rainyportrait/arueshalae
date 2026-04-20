@@ -2,7 +2,7 @@ import { useState, useEffect } from "preact/hooks"
 import { useSearchParams } from "wouter-preact"
 import { navigate } from "wouter-preact/use-browser-location"
 import { Link } from "./router"
-import { getPostList, PostInfo, type PostListResult } from "./api/posts"
+import { getPostList, PostInfo } from "./api/posts"
 import { Pagination } from "./api/Pagination"
 
 export function Posts() {

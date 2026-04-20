@@ -6,7 +6,12 @@ import { Posts } from "./Posts"
 import { Post } from "./Post"
 
 // Link component for navigation
-export function Link({ href, children, className, ...props }: { href: string; children: VNode; className?: string } & Record<string, any>): VNode {
+export function Link({
+	href,
+	children,
+	className,
+	...props
+}: { href: string; children: VNode; className?: string } & Record<string, any>): VNode {
 	const [, navigate] = useLocation()
 	return (
 		<a

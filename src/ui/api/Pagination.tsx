@@ -68,10 +68,7 @@ export function Pagination({ currentPage, nextPid, lastPagePid, query }: Paginat
 				const isCurrent = currentPage === link.page
 				if (isCurrent) {
 					return (
-						<span
-							key={link.page}
-							class="px-3 py-1 rounded bg-blue-500 text-white"
-						>
+						<span key={link.page} class="px-3 py-1 rounded bg-blue-500 text-white">
 							<>{link.page}</>
 						</span>
 					)

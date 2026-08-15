@@ -14,10 +14,10 @@ export type PostList = {
 export async function fetchPostList(tags?: string, pid?: number): Promise<PostList> {
     const url = `/index.php?page=post&s=list${tags ? `&tags=${tags}` : ""}${pid ? `&pid=${pid}` : ""}`
     const doc = await fetchDocument(url)
-    return extractPostList(doc)
+    return extractPostList(doc, pid ?? 0)
 }
 
-function extractPostList(DOM: Document): PostList {
+function extractPostList(DOM: Document, currentPid: number): PostList {
     const posts: Post[] = []
 
     for (const thumb of DOM.querySelectorAll(".image-list .thumb")) {
@@ -34,7 +34,10 @@ function extractPostList(DOM: Document): PostList {
     }
 
     const lastPageLink = DOM.querySelector('a[alt="last page"]')
-    let lastPagePID = 0
+    // The site omits the "last page" link when the current page already is
+    // the last page, so in that case (and on a single page, pid=0) fall
+    // back to the pid we requested.
+    let lastPagePID = currentPid
     if (lastPageLink) {
         const href = lastPageLink.getAttribute("href") ?? ""
         const pid = parseQueryParam(href, "pid")

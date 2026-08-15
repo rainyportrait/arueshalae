@@ -10,7 +10,8 @@ type TagMeta = { label: string; color: string }
 
 // Muted pastels that echo the original site's per-type tag colors while fitting
 // the zinc/rose theme. `general` is neutral to sit with the base text color.
-const TAG_META: Record<TagType, TagMeta> = {
+// Exported so the search autocomplete can color its entries the same way.
+export const TAG_META: Record<TagType, TagMeta> = {
     copyright: { label: "Copyright", color: "text-fuchsia-300" },
     character: { label: "Character", color: "text-amber-300" },
     artist: { label: "Artist", color: "text-rose-300" },

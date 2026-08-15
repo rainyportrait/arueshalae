@@ -1,5 +1,5 @@
 import van from "vanjs-core/src/van"
-import type { ChildDom } from "vanjs-core/src/van"
+import type { ChildDom, State } from "vanjs-core/src/van"
 
 import { Link } from "./Link"
 import { TagList } from "./TagList"
@@ -58,15 +58,51 @@ function StatsSection({ post }: { post: PostDetailsData }) {
     )
 }
 
-function Sidebar({ post }: { post: PostDetailsData }) {
+// Toggles the displayed image between the (possibly sample) image and the
+// full-size file from the "Original image" sidebar link. Image posts only,
+// and hidden when the displayed image is already the original (small images
+// don't get a sample, so the two URLs are identical).
+function OriginalImageButton({
+    post,
+    showOriginal,
+}: {
+    post: PostDetailsData
+    showOriginal: State<boolean>
+}) {
+    const media = post.media
+    if (media.kind !== "image" || !media.originalImage || media.originalImage === media.src)
+        return null
+    return button(
+        {
+            class: () =>
+                clsx(
+                    "w-full rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
+                    showOriginal.val
+                        ? "border-rose-500/60 bg-rose-500/15 text-rose-300 hover:bg-rose-500/25"
+                        : "border-zinc-700 bg-zinc-800/60 text-zinc-200 hover:bg-zinc-700/60",
+                ),
+            onclick: () => (showOriginal.val = !showOriginal.val),
+        },
+        () => (showOriginal.val ? "View sample image" : "View original image"),
+    )
+}
+
+function Sidebar({ post, showOriginal }: { post: PostDetailsData; showOriginal: State<boolean> }) {
     return div(
         { class: "flex flex-col gap-6" },
+        OriginalImageButton({ post, showOriginal }),
         StatsSection({ post }),
         TagList({ tags: post.tags }),
     )
 }
 
-function MediaArea({ post }: { post: PostDetailsData }) {
+function MediaArea({
+    post,
+    showOriginal,
+}: {
+    post: PostDetailsData
+    showOriginal: State<boolean>
+}) {
     const media = post.media
     const element =
         media.kind === "video"
@@ -80,7 +116,10 @@ function MediaArea({ post }: { post: PostDetailsData }) {
                   class: "max-h-[80vh] w-auto max-w-full rounded-lg",
               })
             : img({
-                  src: media.src,
+                  // Function prop: re-runs when showOriginal changes, swapping
+                  // the displayed image for the original (and back).
+                  src: () =>
+                      showOriginal.val && media.originalImage ? media.originalImage : media.src,
                   alt: post.title ? `Post ${post.id}: ${post.title}` : `Post ${post.id}`,
                   class: "max-h-[80vh] w-auto max-w-full rounded-lg",
               })
@@ -136,10 +175,15 @@ export function PostDetails() {
         const state = details.val
         if (state.status === "loading") return LoadingState()
         if (state.status === "error") return ErrorState(state.error)
+        // Fresh per post: the toggle resets whenever the details change.
+        const showOriginal = van.state(false)
         return div(
             { class: "flex gap-6" },
-            aside({ class: "hidden w-64 shrink-0 lg:block" }, Sidebar({ post: state.post })),
-            div({ class: "min-w-0 flex-1" }, MediaArea({ post: state.post })),
+            aside(
+                { class: "hidden w-64 shrink-0 lg:block" },
+                Sidebar({ post: state.post, showOriginal }),
+            ),
+            div({ class: "min-w-0 flex-1" }, MediaArea({ post: state.post, showOriginal })),
         )
     })
 }

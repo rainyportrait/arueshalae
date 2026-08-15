@@ -2,10 +2,11 @@ import { fetchDocument } from "./network"
 import { type Tag, extractTags } from "./tags"
 
 // The post's main media. Video posts carry a poster thumbnail plus the video
-// source; image posts carry just the image. Dimensions come from the "Size:"
-// stat, which both kinds provide.
+// source; image posts carry the displayed image plus the "Original image"
+// link (the displayed image may be a sample). Dimensions come from the
+// "Size:" stat, which both kinds provide.
 export type PostMedia =
-    | { kind: "image"; src: string; width: number; height: number }
+    | { kind: "image"; src: string; originalImage: string; width: number; height: number }
     | { kind: "video"; src: string; poster: string; width: number; height: number }
 
 export type PostDetails = {
@@ -66,7 +67,24 @@ function extractMedia(DOM: Document): PostMedia {
         }
     }
     const img = DOM.querySelector("img#image")
-    return { kind: "image", src: img?.getAttribute("src") ?? "", width, height }
+    return {
+        kind: "image",
+        src: img?.getAttribute("src") ?? "",
+        originalImage: originalImageHref(DOM),
+        width,
+        height,
+    }
+}
+
+// The "Original image" anchor in the sidebar's Options list. The displayed
+// img#image can be a sample, while this link always points at the full file.
+function originalImageHref(DOM: Document): string {
+    for (const a of DOM.querySelectorAll(".link-list a")) {
+        if ((a.textContent ?? "").replace(/\s+/g, " ").trim() === "Original image") {
+            return a.getAttribute("href") ?? ""
+        }
+    }
+    return ""
 }
 
 // The <li> in #stats whose text starts with the given label (e.g. "Posted:").

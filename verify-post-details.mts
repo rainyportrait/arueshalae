@@ -33,40 +33,69 @@ function check(label: string, ok: boolean, got?: unknown) {
     console.log(`  ${ok ? "ok" : "FAIL"}  ${label}${ok ? "" : `  (got ${JSON.stringify(got)})`}`)
 }
 
-// --- image post ---
+// --- image post with a sample (displayed image differs from the original) ---
 console.log("=== postdetails_image.html ===")
 {
-    const post = extract("examples/postdetails_image.html", 18072125)
+    const post = extract("examples/postdetails_image.html", 10793160)
     console.log(`  media: ${JSON.stringify(post.media)}`)
     console.log(
-        `  title=${post.title} posted=${post.posted} poster=${post.poster} rating=${post.rating} score=${post.score} tags=${post.tags.length}`,
+        `  title="${post.title}" posted=${post.posted} poster=${post.poster} rating=${post.rating} score=${post.score} tags=${post.tags.length}`,
     )
     check("media.kind is image", post.media.kind === "image")
     check(
-        "image src",
+        "image src (sample)",
         post.media.kind === "image" &&
-            post.media.src.includes("images/2875/69470f98afcc308c0958fd996a274722.png"),
+            post.media.src.includes("samples/1153/sample_1c905ed5be3b110e21d6d583754fec59.jpg"),
         post.media.src,
     )
     check(
-        "dimensions 1000x1300",
-        post.media.width === 1000 && post.media.height === 1300,
+        "dimensions 2000x2000",
+        post.media.width === 2000 && post.media.height === 2000,
         `${post.media.width}x${post.media.height}`,
     )
-    check("title", post.title === "Cressida 2", post.title)
-    check("posted", post.posted === "2026-07-11 10:28:26", post.posted)
-    check("poster", post.poster === "Tree-Bark", post.poster)
-    check("rating", post.rating === "Questionable", post.rating)
-    check("score", post.score === 16, post.score)
-    check("sourceHref", post.sourceHref.includes("deviantart.com"), post.sourceHref)
+    check(
+        "originalImage (full file)",
+        post.media.kind === "image" &&
+            post.media.originalImage.includes("images/1153/1c905ed5be3b110e21d6d583754fec59.jpeg"),
+        post.media.kind === "image" ? post.media.originalImage : undefined,
+    )
+    check(
+        "sample and original differ",
+        post.media.kind === "image" && post.media.originalImage !== post.media.src,
+    )
+    check("title empty", post.title === "", post.title)
+    check("posted", post.posted === "2024-07-28 14:42:09", post.posted)
+    check("poster", post.poster === "Crcole331", post.poster)
+    check("rating", post.rating === "Explicit", post.rating)
+    check("score", post.score === 239, post.score)
+    check("sourceHref", post.sourceHref.includes("x.com/Milapone1"), post.sourceHref)
     check("posterHref", post.posterHref.includes("page=account"), post.posterHref)
     check("tags", post.tags.length > 0, post.tags.length)
 }
 
-// --- video post ---
+// --- image post without a sample (displayed image is already the original) ---
+console.log("\n=== postdetails_no_sample.html ===")
+{
+    const post = extract("examples/postdetails_no_sample.html", 4636876)
+    console.log(`  media: ${JSON.stringify(post.media)}`)
+    check("media.kind is image", post.media.kind === "image")
+    check(
+        "image src",
+        post.media.kind === "image" &&
+            post.media.src.includes("images/4084/ff4d0b62d416462e4cfa240365f3948d.jpeg"),
+        post.media.src,
+    )
+    check(
+        "originalImage equals src (no sample)",
+        post.media.kind === "image" && post.media.originalImage === post.media.src,
+        post.media.kind === "image" ? post.media.originalImage : undefined,
+    )
+}
+
+// --- video post (no source listed) ---
 console.log("\n=== postdetails_video.html ===")
 {
-    const post = extract("examples/postdetails_video.html", 14717755)
+    const post = extract("examples/postdetails_video.html", 17413732)
     console.log(`  media: ${JSON.stringify(post.media)}`)
     console.log(
         `  title="${post.title}" posted=${post.posted} poster=${post.poster} rating=${post.rating} score=${post.score} tags=${post.tags.length}`,
@@ -75,27 +104,27 @@ console.log("\n=== postdetails_video.html ===")
     if (post.media.kind === "video") {
         check(
             "video src (mp4)",
-            post.media.src.includes("cccf76f69354516872301f9e3ca1da28.mp4"),
+            post.media.src.includes("dced569df123f42de0bdfda9418e56b3.mp4"),
             post.media.src,
         )
         check(
             "poster (jpg)",
-            post.media.poster.includes("cccf76f69354516872301f9e3ca1da28.jpg"),
+            post.media.poster.includes("dced569df123f42de0bdfda9418e56b3.jpg"),
             post.media.poster,
         )
     }
     check(
-        "dimensions 700x874",
-        post.media.width === 700 && post.media.height === 874,
+        "dimensions 1080x1920",
+        post.media.width === 1080 && post.media.height === 1920,
         `${post.media.width}x${post.media.height}`,
     )
     check("title empty", post.title === "", post.title)
-    check("posted", post.posted === "2025-09-06 14:19:21", post.posted)
-    check("poster", post.poster === "RazielKain", post.poster)
+    check("posted", post.posted === "2026-05-06 15:10:39", post.posted)
+    check("poster", post.poster === "Shadowlinkct", post.poster)
     check("rating", post.rating === "Explicit", post.rating)
-    check("score", post.score === 219, post.score)
-    check("sourceHref", post.sourceHref.includes("x.com/francisbrownGG"), post.sourceHref)
-    check("posterHref (uname)", post.posterHref.includes("uname=RazielKain"), post.posterHref)
+    check("score", post.score === 235, post.score)
+    check("sourceHref empty (no source)", post.sourceHref === "", post.sourceHref)
+    check("posterHref (uname)", post.posterHref.includes("uname=Shadowlinkct"), post.posterHref)
     check("tags", post.tags.length > 0, post.tags.length)
 }
 

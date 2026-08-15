@@ -31,7 +31,7 @@ v4.
 
 - A `van.derive` re-fetches whenever `tags`, `pid`, or `reloadTick` changes; a `requestSeq` counter
   discards out-of-order responses.
-- `search()`, `goToPage()`, `reloadList()` are the mutation helpers.
+- `search()`, `reloadList()` are the mutation helpers.
 - rule34.xxx paginates 42 posts per page: `pid = 42 * (page - 1)` (`PAGE_SIZE = 42`).
 
 ## Verification

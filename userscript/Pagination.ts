@@ -1,9 +1,11 @@
 import van from "vanjs-core/src/van"
 
+import { Link } from "./Link"
 import clsx from "./clsx"
-import { PAGE_SIZE, goToPage, list, pid } from "./state"
+import { routeToUrl } from "./router"
+import { PAGE_SIZE, list, pid, tags } from "./state"
 
-const { button, div, nav, span } = van.tags
+const { div, nav, span } = van.tags
 
 type PageItem = number | "ellipsis"
 
@@ -19,34 +21,47 @@ function pageItems(current: number, total: number): PageItem[] {
     return items
 }
 
-interface PageButtonProps {
+// The postlist URL for a given page, carrying the current tags. Being a real
+// href is what lets middle-click / ⌘-click open a page in a new tab.
+function pageHref(page: number): string {
+    return routeToUrl({ type: "postlist", tags: tags.val, pid: (page - 1) * PAGE_SIZE })
+}
+
+// Shared sizing/centering. inline-flex so min-w-9 and centering apply to the
+// inline <a>/<span> (a bare button centers its content by default).
+const ITEM_CLASS =
+    "inline-flex min-w-9 items-center justify-center rounded-lg px-3 py-1.5 text-sm tabular-nums transition-colors"
+
+interface PageItemProps {
+    page: number
     label: string
     title?: string
     disabled?: boolean
     active?: boolean
-    onGo?: () => void
 }
 
-function PageButton({
-    label,
-    title = label,
-    disabled = false,
-    active = false,
-    onGo = () => {},
-}: PageButtonProps) {
-    return button(
+// A page renders as a real Link when it's a navigable target. The current page
+// is a non-link with aria-current (you're already there), and out-of-range
+// targets are a muted, non-interactive span (there is no <a disabled>).
+function PageItem({ page, label, title = label, disabled = false, active = false }: PageItemProps) {
+    if (disabled) {
+        return span({ title, class: clsx(ITEM_CLASS, "cursor-not-allowed text-zinc-600") }, label)
+    }
+    if (active) {
+        return span(
+            {
+                "aria-current": "page",
+                title,
+                class: clsx(ITEM_CLASS, "bg-rose-500 font-medium text-white"),
+            },
+            label,
+        )
+    }
+    return Link(
         {
-            disabled,
+            href: pageHref(page),
             title,
-            onclick: onGo,
-            class: clsx(
-                "min-w-9 rounded-lg px-3 py-1.5 text-sm tabular-nums transition-colors",
-                disabled
-                    ? "cursor-not-allowed text-zinc-600"
-                    : active
-                      ? "bg-rose-500 font-medium text-white"
-                      : "text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100",
-            ),
+            class: clsx(ITEM_CLASS, "text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"),
         },
         label,
     )
@@ -66,39 +81,39 @@ export function Pagination() {
 
         return div(
             { class: "flex flex-wrap items-center justify-center gap-1.5" },
-            PageButton({
+            PageItem({
+                page: 1,
                 label: "«",
                 title: "First page",
                 disabled: currentPage <= 1,
-                onGo: () => goToPage(1),
             }),
-            PageButton({
+            PageItem({
+                page: currentPage - 1,
                 label: "‹",
                 title: "Previous page",
                 disabled: currentPage <= 1,
-                onGo: () => goToPage(currentPage - 1),
             }),
             ...pageItems(currentPage, totalPages).map((item) =>
                 item === "ellipsis"
                     ? span({ class: "px-1 text-zinc-600" }, "…")
-                    : PageButton({
+                    : PageItem({
+                          page: item,
                           label: String(item),
                           title: `Page ${item}`,
                           active: item === currentPage,
-                          onGo: () => goToPage(item),
                       }),
             ),
-            PageButton({
+            PageItem({
+                page: currentPage + 1,
                 label: "›",
                 title: "Next page",
                 disabled: currentPage >= totalPages,
-                onGo: () => goToPage(currentPage + 1),
             }),
-            PageButton({
+            PageItem({
+                page: totalPages,
                 label: "»",
                 title: "Last page",
                 disabled: currentPage >= totalPages,
-                onGo: () => goToPage(totalPages),
             }),
         )
     })

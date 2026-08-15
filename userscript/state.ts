@@ -65,12 +65,6 @@ export function search(newTags: string | undefined): void {
     navigate({ type: "postlist", tags: newTags, pid: 0 })
 }
 
-export function goToPage(page: number): void {
-    const current = route.val
-    const currentTags = current.type === "postlist" ? current.tags : undefined
-    navigate({ type: "postlist", tags: currentTags, pid: (page - 1) * PAGE_SIZE })
-}
-
 export function reloadList(): void {
     reloadTick.val += 1
 }

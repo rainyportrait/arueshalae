@@ -1,26 +1,33 @@
 import van from "vanjs-core/src/van"
 
 import { Navbar } from "./Navbar"
+import { PostDetails } from "./PostDetails"
 import { PostList } from "./PostList"
 import { type Route, route } from "./router"
 
 const { div, h2, main, meta, p, span, style, title } = van.tags
 
 const PLACEHOLDER_TITLES: Record<string, string> = {
-    postdetails: "Post details",
     account: "Account",
     favorites: "Favorites",
     settings: "Settings",
+}
+
+// Echo the identifier a recognized route carries, so the placeholder shows the
+// data the router parsed. An account may be addressed by id or username.
+function placeholderParams(route: Route): string[] {
+    if (route.type === "favorites") return [`id: ${route.id}`]
+    if (route.type === "account") {
+        return "uname" in route ? [`uname: ${route.uname}`] : [`id: ${route.id}`]
+    }
+    return []
 }
 
 // A stand-in for a route we recognize but haven't built yet. It echoes the
 // data the router parsed so the routing side is fully exercised.
 function RoutePlaceholder(route: Route) {
     const title = PLACEHOLDER_TITLES[route.type] ?? "Page"
-    const params =
-        route.type === "postdetails" || route.type === "account" || route.type === "favorites"
-            ? [`id: ${route.id}`]
-            : []
+    const params = placeholderParams(route)
 
     return div(
         { class: "flex flex-col items-center justify-center gap-3 py-24 text-center" },
@@ -57,6 +64,7 @@ function ArueApp() {
                 case "postlist":
                     return PostList()
                 case "postdetails":
+                    return PostDetails()
                 case "account":
                 case "favorites":
                 case "settings":

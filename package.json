@@ -4,7 +4,8 @@
     "scripts": {
         "format": "prettier --write .",
         "format:check": "prettier --check .",
-        "verify:tags": "node verify-tags.mts"
+        "verify:tags": "node verify-tags.mts",
+        "verify:post-details": "node verify-post-details.mts"
     },
     "devEngines": {
         "packageManager": {

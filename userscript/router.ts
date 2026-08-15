@@ -6,7 +6,10 @@ import van from "vanjs-core/src/van"
 export type Route =
     | { type: "postlist"; tags: string | undefined; pid: number }
     | { type: "postdetails"; id: number }
+    // An account can be addressed by numeric id or by username; the site
+    // resolves both. We keep whichever the URL carried.
     | { type: "account"; id: number }
+    | { type: "account"; uname: string }
     | { type: "favorites"; id: number }
     | { type: "settings" }
     | { type: "unknown" }
@@ -38,7 +41,10 @@ export function parseRoute(url: string): Route {
     }
     if (page === "account" && s === "profile") {
         const id = parseId(params.get("id"))
-        return id === undefined ? { type: "unknown" } : { type: "account", id }
+        if (id !== undefined) return { type: "account", id }
+        const uname = params.get("uname")
+        if (uname !== null && uname !== "") return { type: "account", uname }
+        return { type: "unknown" }
     }
     if (page === "favorites" && s === "view") {
         const id = parseId(params.get("id"))
@@ -64,7 +70,9 @@ export function routeToUrl(route: Route): string {
         case "postdetails":
             return `${BASE}?page=post&s=view&id=${route.id}`
         case "account":
-            return `${BASE}?page=account&s=profile&id=${route.id}`
+            return "uname" in route
+                ? `${BASE}?page=account&s=profile&uname=${encodeURIComponent(route.uname)}`
+                : `${BASE}?page=account&s=profile&id=${route.id}`
         case "favorites":
             return `${BASE}?page=favorites&s=view&id=${route.id}`
         case "settings":

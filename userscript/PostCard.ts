@@ -2,6 +2,7 @@ import van from "vanjs-core/src/van"
 
 import type { Post } from "./api/post-list"
 import clsx from "./clsx"
+import { setCardSpan } from "./masonry"
 
 const { a, img } = van.tags
 
@@ -22,6 +23,12 @@ export function PostCard(post: Post) {
             loading: "lazy",
             decoding: "async",
             class: clsx("block transition-transform duration-300 group-hover:scale-[1.03]"),
+            // Size the card's grid span once the image has loaded and the card
+            // reaches its final height. Fires for lazy and cached images alike.
+            onload: (e: Event) => {
+                const card = (e.currentTarget as HTMLImageElement).parentElement
+                if (card) setCardSpan(card)
+            },
         }),
     )
 }

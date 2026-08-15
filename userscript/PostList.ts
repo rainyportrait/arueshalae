@@ -3,25 +3,14 @@ import van from "vanjs-core/src/van"
 import { Pagination } from "./Pagination"
 import { PostCard } from "./PostCard"
 import clsx from "./clsx"
+import { MASONRY_GAP } from "./masonry"
 import { list, reloadList } from "./state"
 
 const { button, div, h2, p, span } = van.tags
 
-// A handful of placeholder heights so the skeleton mimics the masonry flow.
-const SKELETON_HEIGHTS = [
-    "h-40",
-    "h-64",
-    "h-32",
-    "h-56",
-    "h-48",
-    "h-60",
-    "h-44",
-    "h-52",
-    "h-36",
-    "h-64",
-    "h-40",
-    "h-56",
-]
+// Placeholder heights (px) so the skeleton mimics the masonry flow. Each item's
+// grid span is its height plus the row gap, exactly as real cards are sized.
+const SKELETON_HEIGHTS = [160, 256, 128, 224, 192, 240, 176, 208, 144, 256, 160, 224]
 
 function SkeletonGrid() {
     return div(
@@ -30,8 +19,9 @@ function SkeletonGrid() {
             div(
                 {
                     class: "masonry-item overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900",
+                    style: `grid-row-end: span ${height + MASONRY_GAP}`,
                 },
-                div({ class: clsx("skeleton w-full", height) }),
+                div({ class: "skeleton w-full", style: `height: ${height}px` }),
             ),
         ),
     )

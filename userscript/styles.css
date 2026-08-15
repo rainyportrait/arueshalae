@@ -30,21 +30,27 @@ body {
 /*
  * Masonry layout.
  *
- * Thumbnails keep their aspect ratio with the long side clamped to 250px, so
- * a fixed-size grid would leave letterbox gaps. CSS multi-column masonry packs
- * the variable-height cards instead. `column-width` is set just above the max
- * thumbnail width so columns stay tight and images nearly fill them.
+ * Thumbnails keep their aspect ratio with the long side clamped to 250px, so a
+ * fixed-size grid would leave letterbox gaps. We use a CSS grid with a 1px row
+ * track and give each card a `grid-row-end: span N`, where N is the measured
+ * card height plus the vertical gap (see masonry.ts). `grid-auto-flow` is the
+ * row default, so cards flow left-to-right then top-to-bottom. The horizontal
+ * gap is `column-gap`; the vertical gap is folded into each card's span, with
+ * `align-self: start` so a card doesn't stretch down into that gap. The span in
+ * CSS is a safe upper bound until each image reports its real height.
  */
 .masonry {
-    column-width: 252px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(252px, 1fr));
+    grid-auto-rows: 1px;
     column-gap: 16px;
 }
 
 .masonry-item {
     display: block;
     width: 100%;
-    margin-bottom: 16px;
-    break-inside: avoid;
+    align-self: start;
+    grid-row-end: span 268;
 }
 
 .masonry-item > img {

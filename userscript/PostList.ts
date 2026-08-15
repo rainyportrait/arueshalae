@@ -47,7 +47,7 @@ function TagListSkeleton() {
 function PostListLayout({ sidebar, main }: { sidebar: ChildDom; main: ChildDom }) {
     return div(
         { class: "flex gap-6" },
-        aside({ class: "hidden w-64 shrink-0 lg:block" }, sidebar),
+        aside({ class: "hidden w-64 shrink-0 sm:block" }, sidebar),
         div({ class: "min-w-0 flex-1" }, main),
     )
 }

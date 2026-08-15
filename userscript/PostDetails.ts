@@ -133,10 +133,12 @@ function MediaArea({
 }
 
 function LoadingState() {
+    // Matches the loaded layout: media first on mobile, sidebar below it;
+    // sidebar left on desktop.
     return div(
-        { class: "flex gap-6" },
+        { class: "flex flex-col gap-6 lg:flex-row" },
         aside(
-            { class: "hidden w-64 shrink-0 lg:block" },
+            { class: "order-last w-full shrink-0 lg:order-first lg:w-64" },
             div(
                 { class: "flex flex-col gap-2.5" },
                 Array.from({ length: 12 }).map((_, i) =>
@@ -145,7 +147,7 @@ function LoadingState() {
             ),
         ),
         div(
-            { class: "flex min-h-[60vh] min-w-0 flex-1 items-center justify-center" },
+            { class: "order-first flex min-h-[60vh] min-w-0 flex-1 items-center justify-center" },
             div({ class: "skeleton h-96 w-full max-w-xl rounded-xl" }),
         ),
     )
@@ -177,13 +179,18 @@ export function PostDetails() {
         if (state.status === "error") return ErrorState(state.error)
         // Fresh per post: the toggle resets whenever the details change.
         const showOriginal = van.state(false)
+        // Sidebar sits left of the media on desktop; on narrow screens it
+        // stacks below the media at full width.
         return div(
-            { class: "flex gap-6" },
+            { class: "flex flex-col gap-6 lg:flex-row" },
             aside(
-                { class: "hidden w-64 shrink-0 lg:block" },
+                { class: "order-last w-full shrink-0 lg:order-first lg:w-64" },
                 Sidebar({ post: state.post, showOriginal }),
             ),
-            div({ class: "min-w-0 flex-1" }, MediaArea({ post: state.post, showOriginal })),
+            div(
+                { class: "order-first min-w-0 flex-1" },
+                MediaArea({ post: state.post, showOriginal }),
+            ),
         )
     })
 }

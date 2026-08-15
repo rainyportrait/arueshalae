@@ -1,9 +1,10 @@
 import van from "vanjs-core/src/van"
 
+import { Link } from "./Link"
 import clsx from "./clsx"
 import { search, tags } from "./state"
 
-const { a, button, div, form, input, nav, span } = van.tags
+const { button, div, form, input, nav, span } = van.tags
 
 export function Navbar() {
     return nav(
@@ -14,7 +15,7 @@ export function Navbar() {
         },
         div(
             { class: "mx-auto flex w-full max-w-[2000px] items-center gap-3 px-4 py-3" },
-            a(
+            Link(
                 {
                     href: "/index.php?page=post&s=list",
                     class: "flex shrink-0 items-center gap-2",
@@ -43,7 +44,7 @@ export function Navbar() {
                     input({
                         name: "tagQuery",
                         type: "text",
-                        placeholder: "Search tags… (e.g. blonde_hair)",
+                        placeholder: "Search using tags (e.g. blonde_hair)",
                         value: () => tags.val ?? "",
                         "aria-label": "Search using tags",
                         class: clsx(
@@ -64,16 +65,6 @@ export function Navbar() {
                     },
                     "Search",
                 ),
-            ),
-            a(
-                {
-                    href: "/index.php?page=post&s=random",
-                    class: clsx(
-                        "hidden shrink-0 rounded-lg border border-zinc-800 px-3 py-2 text-sm text-zinc-300 sm:block",
-                        "transition-colors hover:border-zinc-700 hover:text-zinc-100",
-                    ),
-                },
-                "Random",
             ),
         ),
     )

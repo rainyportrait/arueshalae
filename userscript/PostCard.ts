@@ -1,13 +1,14 @@
 import van from "vanjs-core/src/van"
 
+import { Link } from "./Link"
 import type { Post } from "./api/post-list"
 import clsx from "./clsx"
 import { setCardSpan } from "./masonry"
 
-const { a, img } = van.tags
+const { img } = van.tags
 
 export function PostCard(post: Post) {
-    return a(
+    return Link(
         {
             href: post.link,
             class: clsx(

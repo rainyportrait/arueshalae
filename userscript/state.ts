@@ -1,27 +1,17 @@
 import van from "vanjs-core/src/van"
 
 import { type PostList, fetchPostList } from "./api/post-list"
+import { navigate, route } from "./router"
 
 // The rule34.xxx post list is paginated 42 posts per page (pid = 42 * (page - 1)).
 export const PAGE_SIZE = 42
 
-// Seed the query from the URL so the app respects the page it is injected into
-// (e.g. ?page=post&s=list&tags=blonde_hair&pid=42).
-function readInitialQuery(): { tags: string | undefined; pid: number | undefined } {
-    const params = new URLSearchParams(window.location.search)
-    const tagsParam = params.get("tags")
-    const pidParam = params.get("pid")
-    const pidNum = pidParam === null ? NaN : Number(pidParam)
-    return {
-        tags: tagsParam ?? undefined,
-        pid: pidParam !== null && Number.isFinite(pidNum) ? pidNum : undefined,
-    }
-}
-
-const initial = readInitialQuery()
-
-export const tags = van.state<string | undefined>(initial.tags)
-export const pid = van.state<number | undefined>(initial.pid)
+// The list query is derived from the route: only a postlist route carries
+// tags/pid. On any other route these fall back to "home" (no tags, page 0).
+export const tags = van.derive<string | undefined>(() =>
+    route.val.type === "postlist" ? route.val.tags : undefined,
+)
+export const pid = van.derive<number>(() => (route.val.type === "postlist" ? route.val.pid : 0))
 
 export type ListState =
     | { status: "loading" }
@@ -35,7 +25,7 @@ export const reloadTick = van.state(0)
 
 let requestSeq = 0
 
-function loadList(currentTags: string | undefined, currentPid: number | undefined): void {
+function loadList(currentTags: string | undefined, currentPid: number): void {
     const seq = ++requestSeq
     list.val = { status: "loading" }
 
@@ -57,9 +47,10 @@ function loadList(currentTags: string | undefined, currentPid: number | undefine
         })
 }
 
-// Re-fetch whenever the query (tags) or the page (pid) changes. Reading the
-// states inside the derive registers them as dependencies.
+// Re-fetch whenever the route (tags/pid) or reloadTick changes. Gated to
+// postlist so we don't fire a wasted fetch while sitting on another route.
 van.derive(() => {
+    if (route.val.type !== "postlist") return
     const currentTags = tags.val
     const currentPid = pid.val
     const tick = reloadTick.val
@@ -68,12 +59,13 @@ van.derive(() => {
 })
 
 export function search(newTags: string | undefined): void {
-    tags.val = newTags
-    pid.val = undefined
+    navigate({ type: "postlist", tags: newTags, pid: 0 })
 }
 
 export function goToPage(page: number): void {
-    pid.val = (page - 1) * PAGE_SIZE
+    const current = route.val
+    const currentTags = current.type === "postlist" ? current.tags : undefined
+    navigate({ type: "postlist", tags: currentTags, pid: (page - 1) * PAGE_SIZE })
 }
 
 export function reloadList(): void {

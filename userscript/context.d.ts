@@ -1,0 +1,22 @@
+// Greasemonkey GM.xmlHttpRequest
+declare namespace GM {
+    interface Response {
+        readonly responseHeaders: string
+        readonly response: Blob
+        readonly status: number
+    }
+
+    interface Request {
+        url: string
+        method: "GET"
+        responseType: "blob"
+    }
+}
+
+declare var unsafeWindow: Window
+
+declare var GM: {
+    xmlHttpRequest(details: GM.Request): Promise<GM.Response>
+}
+
+declare var TAILWIND_CSS: string

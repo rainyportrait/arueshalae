@@ -1,0 +1,28 @@
+{
+    "name": "arueshalae",
+    "version": "0.1.0",
+    "scripts": {
+        "format": "prettier --write .",
+        "format:check": "prettier --check ."
+    },
+    "devEngines": {
+        "packageManager": {
+            "name": "pnpm",
+            "version": "^11.5.0",
+            "onFail": "download"
+        }
+    },
+    "type": "module",
+    "devDependencies": {
+        "@tailwindcss/cli": "^4.3.3",
+        "@trivago/prettier-plugin-sort-imports": "^6.0.2",
+        "@types/node": "^26.2.0",
+        "esbuild": "^0.28.2",
+        "prettier": "^3.9.6",
+        "typescript": "^7.0.2"
+    },
+    "dependencies": {
+        "tailwindcss": "^4.3.3",
+        "vanjs-core": "^1.6.1"
+    }
+}

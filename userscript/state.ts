@@ -1,6 +1,7 @@
 import van from "vanjs-core/src/van"
 
 import { type PostList, fetchPostList } from "./api/post-list"
+import type { Tag } from "./api/tags"
 import { navigate, route } from "./router"
 
 // The rule34.xxx post list is paginated 42 posts per page (pid = 42 * (page - 1)).
@@ -16,7 +17,7 @@ export const pid = van.derive<number>(() => (route.val.type === "postlist" ? rou
 export type ListState =
     | { status: "loading" }
     | { status: "error"; error: string }
-    | { status: "ready"; posts: PostList["posts"]; lastPagePID: number }
+    | { status: "ready"; posts: PostList["posts"]; lastPagePID: number; tags: Tag[] }
 
 export const list = van.state<ListState>({ status: "loading" })
 
@@ -36,6 +37,7 @@ function loadList(currentTags: string | undefined, currentPid: number): void {
                 status: "ready",
                 posts: result.posts,
                 lastPagePID: result.lastPagePID,
+                tags: result.tags,
             }
         })
         .catch((error: unknown) => {

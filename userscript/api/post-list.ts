@@ -1,4 +1,5 @@
 import { fetchDocument } from "./network"
+import { type Tag, extractTags } from "./tags"
 
 export type Post = {
     id: number
@@ -9,15 +10,20 @@ export type Post = {
 export type PostList = {
     posts: Post[]
     lastPagePID: number
+    tags: Tag[]
 }
 
 export async function fetchPostList(tags?: string, pid?: number): Promise<PostList> {
     const url = `/index.php?page=post&s=list${tags ? `&tags=${tags}` : ""}${pid ? `&pid=${pid}` : ""}`
     const doc = await fetchDocument(url)
-    return extractPostList(doc, pid ?? 0)
+    const { posts, lastPagePID } = extractPostList(doc, pid ?? 0)
+    return { posts, lastPagePID, tags: extractTags(doc) }
 }
 
-function extractPostList(DOM: Document, currentPid: number): PostList {
+function extractPostList(
+    DOM: Document,
+    currentPid: number,
+): { posts: Post[]; lastPagePID: number } {
     const posts: Post[] = []
 
     for (const thumb of DOM.querySelectorAll(".image-list .thumb")) {

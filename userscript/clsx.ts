@@ -1,11 +1,5 @@
 type ClassValue =
-    | string
-    | number
-    | null
-    | undefined
-    | boolean
-    | ClassValue[]
-    | Record<string, unknown>
+    string | number | null | undefined | boolean | ClassValue[] | Record<string, unknown>
 
 function toVal(mix: ClassValue): string {
     let str = ""

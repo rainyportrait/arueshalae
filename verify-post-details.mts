@@ -20,44 +20,83 @@ await build({
 })
 const req = createRequire(import.meta.url)
 const { extractPostDetails } = req(outfile) as typeof import("./userscript/api/post-details.ts")
+type Post = ReturnType<typeof extractPostDetails>
 
-const html = readFileSync("examples/postdetails_image.html", "utf8")
-const { document } = parseHTML(html)
-const post = extractPostDetails(document, 18072125)
-
-console.log("=== postdetails_image.html ===")
-for (const [key, value] of Object.entries(post)) {
-    if (key === "tags") continue
-    console.log(`  ${key}:`, value)
+function extract(file: string, id: number): Post {
+    const { document } = parseHTML(readFileSync(file, "utf8"))
+    return extractPostDetails(document, id)
 }
-console.log(`  tags: ${post.tags.length}`)
 
-// Sanity checks against the known example values.
-const expected: Record<string, unknown> = {
-    title: "Cressida 2",
-    posted: "2026-07-11 10:28:26",
-    poster: "Tree-Bark",
-    rating: "Questionable",
-    score: 16,
-    width: 1000,
-    height: 1300,
-}
 let failures = 0
-for (const [key, want] of Object.entries(expected)) {
-    const got = post[key as keyof typeof post]
-    if (got !== want) {
-        console.log(`  MISMATCH ${key}: got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`)
-        failures++
+function check(label: string, ok: boolean, got?: unknown) {
+    if (!ok) failures++
+    console.log(`  ${ok ? "ok" : "FAIL"}  ${label}${ok ? "" : `  (got ${JSON.stringify(got)})`}`)
+}
+
+// --- image post ---
+console.log("=== postdetails_image.html ===")
+{
+    const post = extract("examples/postdetails_image.html", 18072125)
+    console.log(`  media: ${JSON.stringify(post.media)}`)
+    console.log(
+        `  title=${post.title} posted=${post.posted} poster=${post.poster} rating=${post.rating} score=${post.score} tags=${post.tags.length}`,
+    )
+    check("media.kind is image", post.media.kind === "image")
+    check(
+        "image src",
+        post.media.kind === "image" &&
+            post.media.src.includes("images/2875/69470f98afcc308c0958fd996a274722.png"),
+        post.media.src,
+    )
+    check(
+        "dimensions 1000x1300",
+        post.media.width === 1000 && post.media.height === 1300,
+        `${post.media.width}x${post.media.height}`,
+    )
+    check("title", post.title === "Cressida 2", post.title)
+    check("posted", post.posted === "2026-07-11 10:28:26", post.posted)
+    check("poster", post.poster === "Tree-Bark", post.poster)
+    check("rating", post.rating === "Questionable", post.rating)
+    check("score", post.score === 16, post.score)
+    check("sourceHref", post.sourceHref.includes("deviantart.com"), post.sourceHref)
+    check("posterHref", post.posterHref.includes("page=account"), post.posterHref)
+    check("tags", post.tags.length > 0, post.tags.length)
+}
+
+// --- video post ---
+console.log("\n=== postdetails_video.html ===")
+{
+    const post = extract("examples/postdetails_video.html", 14717755)
+    console.log(`  media: ${JSON.stringify(post.media)}`)
+    console.log(
+        `  title="${post.title}" posted=${post.posted} poster=${post.poster} rating=${post.rating} score=${post.score} tags=${post.tags.length}`,
+    )
+    check("media.kind is video", post.media.kind === "video")
+    if (post.media.kind === "video") {
+        check(
+            "video src (mp4)",
+            post.media.src.includes("cccf76f69354516872301f9e3ca1da28.mp4"),
+            post.media.src,
+        )
+        check(
+            "poster (jpg)",
+            post.media.poster.includes("cccf76f69354516872301f9e3ca1da28.jpg"),
+            post.media.poster,
+        )
     }
+    check(
+        "dimensions 700x874",
+        post.media.width === 700 && post.media.height === 874,
+        `${post.media.width}x${post.media.height}`,
+    )
+    check("title empty", post.title === "", post.title)
+    check("posted", post.posted === "2025-09-06 14:19:21", post.posted)
+    check("poster", post.poster === "RazielKain", post.poster)
+    check("rating", post.rating === "Explicit", post.rating)
+    check("score", post.score === 219, post.score)
+    check("sourceHref", post.sourceHref.includes("x.com/francisbrownGG"), post.sourceHref)
+    check("posterHref (uname)", post.posterHref.includes("uname=RazielKain"), post.posterHref)
+    check("tags", post.tags.length > 0, post.tags.length)
 }
-const checks = [
-    post.image.includes("images/2875/69470f98afcc308c0958fd996a274722.png"),
-    post.sourceHref.includes("deviantart.com"),
-    post.posterHref.includes("page=account"),
-    post.tags.length > 0,
-]
-if (checks.some((c) => !c)) {
-    console.log("  CHECK FAILED:", checks)
-    failures++
-}
-console.log(failures === 0 ? "  all checks passed" : `  ${failures} check(s) failed`)
+
+console.log(failures === 0 ? "\nALL PASS" : `\n${failures} check(s) FAILED`)

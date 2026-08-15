@@ -1,12 +1,17 @@
 import { fetchDocument } from "./network"
 import { type Tag, extractTags } from "./tags"
 
+// The post's main media. Video posts carry a poster thumbnail plus the video
+// source; image posts carry just the image. Dimensions come from the "Size:"
+// stat, which both kinds provide.
+export type PostMedia =
+    | { kind: "image"; src: string; width: number; height: number }
+    | { kind: "video"; src: string; poster: string; width: number; height: number }
+
 export type PostDetails = {
     id: number
     title: string
-    image: string
-    width: number
-    height: number
+    media: PostMedia
     posted: string
     poster: string
     posterHref: string
@@ -24,11 +29,6 @@ export async function fetchPostDetails(id: number): Promise<PostDetails> {
 }
 
 export function extractPostDetails(DOM: Document, id: number): PostDetails {
-    const img = DOM.querySelector("img#image")
-    const image = img?.getAttribute("src") ?? ""
-    const width = Number(img?.getAttribute("width") ?? 0) || 0
-    const height = Number(img?.getAttribute("height") ?? 0) || 0
-
     const title = (DOM.querySelector('input[name="title"]')?.getAttribute("value") ?? "").trim()
 
     const posterAnchor = statAnchor(DOM, "Posted:")
@@ -39,9 +39,7 @@ export function extractPostDetails(DOM: Document, id: number): PostDetails {
     return {
         id,
         title,
-        image,
-        width,
-        height,
+        media: extractMedia(DOM),
         posted: postedText(DOM),
         poster: posterAnchor?.text ?? "",
         posterHref: posterAnchor?.href ?? "",
@@ -51,6 +49,24 @@ export function extractPostDetails(DOM: Document, id: number): PostDetails {
         score,
         tags: extractTags(DOM),
     }
+}
+
+// The post's main media element: a <video> for video posts, otherwise the
+// <img#image>. Dimensions are read from the "Size:" stat, which both provide.
+function extractMedia(DOM: Document): PostMedia {
+    const { width, height } = statSize(DOM)
+    const video = DOM.querySelector("video#gelcomVideoPlayer")
+    if (video) {
+        return {
+            kind: "video",
+            src: video.querySelector("source")?.getAttribute("src") ?? "",
+            poster: video.getAttribute("poster") ?? "",
+            width,
+            height,
+        }
+    }
+    const img = DOM.querySelector("img#image")
+    return { kind: "image", src: img?.getAttribute("src") ?? "", width, height }
 }
 
 // The <li> in #stats whose text starts with the given label (e.g. "Posted:").
@@ -78,6 +94,12 @@ function statAnchor(DOM: Document, label: string): { href: string; text: string 
         href: a.getAttribute("href") ?? "",
         text: (a.textContent ?? "").replace(/\s+/g, " ").trim(),
     }
+}
+
+// "Size: 700x874" -> { width: 700, height: 874 }
+function statSize(DOM: Document): { width: number; height: number } {
+    const match = /(\d+)\s*[x\u00d7]\s*(\d+)/.exec(statText(DOM, "Size:"))
+    return match ? { width: Number(match[1]), height: Number(match[2]) } : { width: 0, height: 0 }
 }
 
 // "Posted: 2026-07-11 10:28:26 by Tree-Bark" -> "2026-07-11 10:28:26"

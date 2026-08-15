@@ -7,7 +7,7 @@ import type { PostDetails as PostDetailsData } from "./api/post-details"
 import clsx from "./clsx"
 import { details, reloadDetails } from "./state"
 
-const { a, aside, button, div, h2, h4, img, p, span } = van.tags
+const { a, aside, button, div, h2, h4, img, p, span, video } = van.tags
 
 function StatsSection({ post }: { post: PostDetailsData }) {
     const cells: ChildDom[] = []
@@ -27,7 +27,8 @@ function StatsSection({ post }: { post: PostDetailsData }) {
                 post.poster,
             ),
         )
-    if (post.width && post.height) push("Size", span({}, `${post.width} × ${post.height}`))
+    if (post.media.width && post.media.height)
+        push("Size", span({}, `${post.media.width} × ${post.media.height}`))
     if (post.sourceHref)
         push(
             "Source",
@@ -65,14 +66,27 @@ function Sidebar({ post }: { post: PostDetailsData }) {
     )
 }
 
-function ImageArea({ post }: { post: PostDetailsData }) {
+function MediaArea({ post }: { post: PostDetailsData }) {
+    const media = post.media
+    const element =
+        media.kind === "video"
+            ? video({
+                  src: media.src,
+                  poster: media.poster,
+                  controls: true,
+                  loop: true,
+                  muted: true,
+                  autoplay: true,
+                  class: "max-h-[80vh] w-auto max-w-full rounded-lg",
+              })
+            : img({
+                  src: media.src,
+                  alt: post.title ? `Post ${post.id}: ${post.title}` : `Post ${post.id}`,
+                  class: "max-h-[80vh] w-auto max-w-full rounded-lg",
+              })
     return div(
         { class: "flex min-h-[60vh] flex-col items-center justify-center gap-4" },
-        img({
-            src: post.image,
-            alt: post.title ? `Post ${post.id}: ${post.title}` : `Post ${post.id}`,
-            class: "max-h-[80vh] w-auto max-w-full rounded-lg",
-        }),
+        element,
         post.title
             ? h2({ class: "text-center text-lg font-medium text-zinc-200" }, post.title)
             : null,
@@ -125,7 +139,7 @@ export function PostDetails() {
         return div(
             { class: "flex gap-6" },
             aside({ class: "hidden w-64 shrink-0 lg:block" }, Sidebar({ post: state.post })),
-            div({ class: "min-w-0 flex-1" }, ImageArea({ post: state.post })),
+            div({ class: "min-w-0 flex-1" }, MediaArea({ post: state.post })),
         )
     })
 }

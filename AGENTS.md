@@ -28,5 +28,11 @@ Built with TypeScript, [van.js](https://vanjs.org/) (`vanjs-core`), and Tailwind
 - vanjs prop types do **not** accept `undefined`; pass concrete defaults instead of optional
   `undefined`.
 - `van.add(dom, ...children)` accepts arrays (`ChildDom[]`).
+- A **live node** (a function passed to `van.add` or as a child) must always return a connected DOM
+  node, **never `null`**. `bind()` stores the returned node as the binding's `_dom`, and on the next
+  state change `updateDoms()` runs `keepConnected`, which drops any binding whose `_dom` isn't
+  connected. Returning `null` (e.g. a conditional "nothing to show") leaves `_dom` null, so the
+  binding is silently discarded and the node never re-renders. Return a zero-footprint placeholder
+  like `document.createComment("")` instead (see `CaptchaModal` in `App.ts`).
 - There are no lifecycle hooks. To run code after an element exists, attach a native handler (e.g.
   `onload` on an `<img>`; vanjs wires `on*` props via `addEventListener`).

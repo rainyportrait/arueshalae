@@ -3,9 +3,10 @@ import van from "vanjs-core/src/van"
 import { Navbar } from "./Navbar"
 import { PostDetails } from "./PostDetails"
 import { PostList } from "./PostList"
+import { captchaUrl } from "./captcha"
 import { type Route, route } from "./router"
 
-const { div, h2, main, meta, p, span, style, title } = van.tags
+const { div, h2, iframe, main, meta, p, span, style, title } = van.tags
 
 const PLACEHOLDER_TITLES: Record<string, string> = {
     account: "Account",
@@ -76,6 +77,26 @@ function ArueApp() {
     )
 }
 
+// The bot-challenge modal. While a request has hit a challenge, `captchaUrl`
+// holds the URL that triggered it; we load it in a same-origin iframe so the
+// real challenge widget renders and the user can solve it. The userscript also
+// runs inside that iframe and signals the parent once it clears (see
+// captcha.ts), which closes the modal and lets the gated requests retry.
+function CaptchaModal() {
+    return () => {
+        const url = captchaUrl.val
+        // van.js drops a live binding whose node isn't connected to the DOM
+        // (keepConnected in van.js), so returning null would permanently kill
+        // reactivity. Return a zero-footprint comment to stay connected while
+        // no challenge is active.
+        if (!url) return document.createComment("arue-captcha")
+        return div(
+            { class: "fixed inset-0 z-50 flex items-center justify-center bg-black/50" },
+            iframe({ src: url, class: "bg-white rounded-lg m-2 h-75" }),
+        )
+    }
+}
+
 function ArueHead() {
     return [
         title("Rule34.xxx - Arueshalae"),
@@ -90,4 +111,5 @@ export function initApp() {
 
     document.body.innerHTML = ""
     van.add(document.body, ArueApp())
+    van.add(document.body, CaptchaModal())
 }

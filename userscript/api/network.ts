@@ -1,9 +1,33 @@
-async function baseFetchDocument(url: string): Promise<Document> {
-    const response = await fetch(url)
-    if (response.status !== 200) {
+import { solveCaptcha } from "../captcha"
+
+// A bot challenge is returned as a 4xx whose body carries a marker word. We
+// detect it on the response body so it works for any resource type.
+function isChallengeBody(body: string): boolean {
+    return body.toLowerCase().includes("captcha")
+}
+
+// Fetch a URL, transparently solving a bot challenge (a 4xx challenge page) if
+// the first response is one, and return a successful (200) Response. The 200
+// body is left unread so the caller can parse it as text/JSON. Used for every
+// `fetch`-based request path.
+export async function fetchCleared(url: string): Promise<Response> {
+    for (;;) {
+        const response = await fetch(url)
+        if (response.status === 200) return response
+        if (
+            response.status >= 400 &&
+            response.status < 500 &&
+            isChallengeBody(await response.text())
+        ) {
+            await solveCaptcha(url)
+            continue // the challenge cookie is set; retry now succeeds
+        }
         throw new Error(`${url} returned status ${response.status}`)
     }
+}
 
+async function baseFetchDocument(url: string): Promise<Document> {
+    const response = await fetchCleared(url)
     const body = await response.text()
     return new DOMParser().parseFromString(body, "text/html")
 }
@@ -17,24 +41,42 @@ export async function fetchImage(url: string): Promise<Blob> {
 }
 
 async function baseFetchImage(url: string): Promise<Blob> {
-    return new Promise((resolve, reject) => {
+    const result: any = await new Promise((resolve, reject) => {
         const gmOptions: any = {
             url,
             method: "GET",
             responseType: "blob",
-            onload: async (result: any) => {
-                if (result.status === 200) {
-                    resolve(result.response)
-                } else {
-                    reject(new Error(`Image fetch failed: ${result.status}`))
-                }
-            },
-            onerror: (result: any) => {
-                reject(result.error || new Error("Network error"))
+            onload: resolve,
+            onerror: (r: any) => {
+                reject(r.error || new Error("Network error"))
             },
         }
         GM.xmlHttpRequest(gmOptions)
     })
+
+    if (result.status === 200) return result.response
+
+    if (
+        result.status >= 400 &&
+        result.status < 500 &&
+        isChallengeBody(await blobText(result.response))
+    ) {
+        await solveCaptcha(url)
+        return baseFetchImage(url) // retry once the challenge is cleared
+    }
+    throw new Error(`Image fetch failed: ${result.status}`)
+}
+
+// Read a GM blob response as text (empty string when it isn't a readable Blob).
+async function blobText(blob: unknown): Promise<string> {
+    if (blob instanceof Blob) {
+        try {
+            return await blob.text()
+        } catch {
+            return ""
+        }
+    }
+    return ""
 }
 
 // Retry helper with exponential backoff

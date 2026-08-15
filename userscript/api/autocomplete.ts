@@ -1,3 +1,4 @@
+import { fetchCleared } from "./network"
 import type { TagType } from "./tags"
 
 export type AutocompleteSuggestion = {
@@ -19,10 +20,7 @@ const KNOWN_TYPES: ReadonlySet<string> = new Set([
 // and `type` drives the per-type color. Unknown types fall back to `general`.
 export async function fetchAutocomplete(query: string): Promise<AutocompleteSuggestion[]> {
     const url = `/public/autocomplete.php?q=${encodeURIComponent(query)}`
-    const response = await fetch(url)
-    if (response.status !== 200) {
-        throw new Error(`${url} returned status ${response.status}`)
-    }
+    const response = await fetchCleared(url)
     const data: Array<{ label: string; value: string; type: string }> = await response.json()
     return data
         .filter((item) => typeof item.value === "string" && item.value !== "")

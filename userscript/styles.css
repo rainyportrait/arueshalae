@@ -1,1 +1,77 @@
 @import "tailwindcss";
+
+:root {
+    color-scheme: dark;
+}
+
+html,
+body {
+    min-height: 100%;
+    background-color: #09090b;
+    color: #f4f4f5;
+}
+
+/* Subtle, theme-matched scrollbar. */
+::-webkit-scrollbar {
+    width: 5px;
+    height: 10px;
+}
+::-webkit-scrollbar-track {
+    background: #09090b;
+}
+::-webkit-scrollbar-thumb {
+    background: #27272a;
+    border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #3f3f46;
+}
+
+/*
+ * Masonry layout.
+ *
+ * Thumbnails keep their aspect ratio with the long side clamped to 250px, so
+ * a fixed-size grid would leave letterbox gaps. CSS multi-column masonry packs
+ * the variable-height cards instead. `column-width` is set just above the max
+ * thumbnail width so columns stay tight and images nearly fill them.
+ */
+.masonry {
+    column-width: 252px;
+    column-gap: 16px;
+}
+
+.masonry-item {
+    display: block;
+    width: 100%;
+    margin-bottom: 16px;
+    break-inside: avoid;
+}
+
+.masonry-item > img {
+    display: block;
+    margin: 0 auto;
+    width: auto;
+    height: auto;
+    max-width: 250px;
+    max-height: 250px;
+}
+
+/* Shimmering skeleton placeholder. */
+.skeleton {
+    position: relative;
+    overflow: hidden;
+    background-color: #18181b;
+}
+.skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
+    animation: skeleton-shimmer 1.6s infinite;
+}
+@keyframes skeleton-shimmer {
+    100% {
+        transform: translateX(100%);
+    }
+}

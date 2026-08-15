@@ -3,9 +3,28 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import process from "node:process"
 
+import { icons } from "@iconify-json/lucide"
+import { getIconsCSS } from "@iconify/utils"
 import esbuild from "esbuild"
 
 const version = process.argv[2] ?? "dev"
+
+// Lucide icons rendered as CSS masks, mirroring the blog's lib/icons.js. Add an
+// icon name here to include it in the generated stylesheet.
+const iconNames = ["search"]
+
+function buildIconStyles(): string {
+    return getIconsCSS(icons, iconNames, {
+        mode: "mask",
+        commonSelector: "[icon-name]",
+        iconSelector: '[icon-name="{name}"]',
+        overrideSelector: '[icon-name][icon-name="{name}"]',
+        format: "expanded",
+        rules: {
+            "vertical-align": "-0.125em",
+        },
+    })
+}
 
 // esbuild-plugin-inline-import (c) 2020 A Beautiful Site, LLC
 // https://github.com/claviska/esbuild-plugin-inline-import/blob/master/LICENSE.md
@@ -52,7 +71,10 @@ function inlineImportPlugin() {
 async function buildStyles() {
     return new Promise<void>((resolve, reject) => {
         exec(
-            "pnpx @tailwindcss/cli build userscript/styles.css -o target/userscript/tailwind.css",
+            // NOTE: use `--input`/`--output`, NOT `build ... -o`.
+            // The `build` subcommand silently drops custom (non-utility) CSS
+            // from the entry file, which would break the masonry/skeleton styles.
+            "pnpx @tailwindcss/cli --input userscript/styles.css --output target/userscript/tailwind.css",
             (err: Error | null) => {
                 if (err) reject(err)
                 else resolve()
@@ -65,9 +87,9 @@ async function buildStyles() {
 async function runBuild() {
     await fs.mkdir("target", { recursive: true })
     await buildStyles()
-    const tailwindStyles = (await fs.readFile("target/userscript/tailwind.css", "utf8"))
-        .replace(/\\/g, "\\\\")
-        .replace(/`/g, "\\`")
+    const tailwindCss = await fs.readFile("target/userscript/tailwind.css", "utf8")
+    const iconCss = buildIconStyles()
+    const tailwindStyles = `${tailwindCss}\n${iconCss}`.replace(/\\/g, "\\\\").replace(/`/g, "\\`")
 
     esbuild
         .build({

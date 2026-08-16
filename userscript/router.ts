@@ -7,7 +7,7 @@ import { positiveInt } from "./api/parse.ts"
 // union. Anything we don't recognize explicitly is `unknown` (rendered as 404).
 export type Route =
     | { type: "postlist"; tags: string | undefined; pid: number }
-    | { type: "postdetails"; id: number }
+    | { type: "postdetails"; id: number; tags: string | undefined }
     // An account can be addressed by numeric id or by username; the site
     // resolves both. We keep whichever the URL carried.
     | { type: "account"; id: number }
@@ -33,7 +33,11 @@ export function parseRoute(url: string): Route {
     }
     if (page === "post" && s === "view") {
         const id = positiveInt(params.get("id"))
-        return id === null ? { type: "unknown" } : { type: "postdetails", id }
+        // The site appends the active search query to post links so it can be
+        // restored when navigating back; keep it on the route.
+        return id === null
+            ? { type: "unknown" }
+            : { type: "postdetails", id, tags: params.get("tags") ?? undefined }
     }
     if (page === "account" && s === "profile") {
         const id = positiveInt(params.get("id"))
@@ -68,8 +72,11 @@ export function routeToUrl(route: Route): string {
             if (route.pid > 0) url += `&pid=${route.pid}`
             return url
         }
-        case "postdetails":
-            return `${BASE}?page=post&s=view&id=${route.id}`
+        case "postdetails": {
+            let url = `${BASE}?page=post&s=view&id=${route.id}`
+            if (route.tags) url += `&tags=${encodeURIComponent(route.tags)}`
+            return url
+        }
         case "account":
             return "uname" in route
                 ? `${BASE}?page=account&s=profile&uname=${encodeURIComponent(route.uname)}`

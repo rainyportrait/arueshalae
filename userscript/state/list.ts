@@ -8,11 +8,15 @@ import { type Loadable, createLoader } from "./load.ts"
 // The rule34.xxx post list is paginated 42 posts per page (pid = 42 * (page - 1)).
 export const PAGE_SIZE = 42
 
-// The list query is derived from the route: only a postlist route carries
-// tags/pid. On any other route these fall back to "home" (no tags, page 0).
-export const tags = van.derive<string | undefined>(() =>
-    route.val.type === "postlist" ? route.val.tags : undefined,
-)
+// The search query is derived from the route: a postlist route carries it
+// directly, and a postdetails route carries it as the query the post was
+// found under (the site appends it to post links). On any other route it
+// falls back to "home" (no tags). `pid` is postlist-only and falls back to 0.
+export const tags = van.derive<string | undefined>(() => {
+    const r = route.val
+    if (r.type === "postlist" || r.type === "postdetails") return r.tags
+    return undefined
+})
 export const pid = van.derive<number>(() => (route.val.type === "postlist" ? route.val.pid : 0))
 
 type ListReady = {

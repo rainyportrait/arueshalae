@@ -1,13 +1,14 @@
-import van from "vanjs-core/src/van"
-import type { ChildDom, State } from "vanjs-core/src/van"
+import van from "vanjs-core"
+import type { ChildDom, State } from "vanjs-core"
 
-import { Link } from "./Link"
-import { TagList } from "./TagList"
-import type { PostDetails as PostDetailsData } from "./api/post-details"
-import clsx from "./clsx"
-import { details, reloadDetails } from "./state"
+import { CenteredState } from "./CenteredState.ts"
+import { Link } from "./Link.ts"
+import { TagList } from "./TagList.ts"
+import type { PostDetails as PostDetailsData } from "./api/post-details.ts"
+import clsx from "./clsx.ts"
+import { details, reloadDetails } from "./state/details.ts"
 
-const { a, aside, button, div, h2, h4, img, p, span, video } = van.tags
+const { a, aside, button, div, h2, h4, img, span, video } = van.tags
 
 function StatsSection({ post }: { post: PostDetailsData }) {
     const cells: ChildDom[] = []
@@ -154,22 +155,12 @@ function LoadingState() {
 }
 
 function ErrorState(message: string) {
-    return div(
-        { class: "flex flex-col items-center justify-center gap-2 py-24 text-center" },
-        span({ class: "text-4xl" }, "⚠️"),
-        h2({ class: "mt-2 text-lg font-medium text-zinc-200" }, "Couldn't load post"),
-        p({ class: "max-w-md px-4 text-sm text-zinc-500" }, message),
-        button(
-            {
-                class: clsx(
-                    "mt-3 rounded-lg bg-rose-500 px-4 py-2 text-sm font-medium text-white",
-                    "transition-colors hover:bg-rose-400",
-                ),
-                onclick: () => reloadDetails(),
-            },
-            "Try again",
-        ),
-    )
+    return CenteredState({
+        icon: "⚠️",
+        title: "Couldn't load post",
+        message,
+        action: { label: "Try again", onclick: reloadDetails },
+    })
 }
 
 export function PostDetails() {

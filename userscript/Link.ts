@@ -1,7 +1,7 @@
-import van from "vanjs-core/src/van"
-import type { ChildDom, Props } from "vanjs-core/src/van"
+import van from "vanjs-core"
+import type { ChildDom, Props } from "vanjs-core"
 
-import { navigate, parseRoute } from "./router"
+import { navigate, parseRoute } from "./router.ts"
 
 const { a } = van.tags
 

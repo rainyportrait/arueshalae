@@ -1,4 +1,6 @@
-import van from "vanjs-core/src/van"
+import van from "vanjs-core"
+
+import { positiveInt } from "./api/parse.ts"
 
 // A route is a parsed view of the current URL. The rule34.xxx URL scheme
 // discriminates on the (page, s) query pair; we map that onto a discriminated
@@ -17,13 +19,6 @@ export type Route =
 
 const BASE = "/index.php"
 
-// Parse a positive integer id; undefined when absent or not a positive integer.
-function parseId(value: string | null): number | undefined {
-    if (value === null) return undefined
-    const n = Number(value)
-    return Number.isInteger(n) && n > 0 ? n : undefined
-}
-
 // Total URL -> Route parser. Accepts a relative or absolute URL.
 export function parseRoute(url: string): Route {
     const params = new URL(url, window.location.origin).searchParams
@@ -37,19 +32,19 @@ export function parseRoute(url: string): Route {
         return { type: "postlist", tags: params.get("tags") ?? undefined, pid }
     }
     if (page === "post" && s === "view") {
-        const id = parseId(params.get("id"))
-        return id === undefined ? { type: "unknown" } : { type: "postdetails", id }
+        const id = positiveInt(params.get("id"))
+        return id === null ? { type: "unknown" } : { type: "postdetails", id }
     }
     if (page === "account" && s === "profile") {
-        const id = parseId(params.get("id"))
-        if (id !== undefined) return { type: "account", id }
+        const id = positiveInt(params.get("id"))
+        if (id !== null) return { type: "account", id }
         const uname = params.get("uname")
         if (uname !== null && uname !== "") return { type: "account", uname }
         return { type: "unknown" }
     }
     if (page === "favorites" && s === "view") {
-        const id = parseId(params.get("id"))
-        return id === undefined ? { type: "unknown" } : { type: "favorites", id }
+        const id = positiveInt(params.get("id"))
+        return id === null ? { type: "unknown" } : { type: "favorites", id }
     }
     if (page === "account" && s === "options") {
         return { type: "settings" }

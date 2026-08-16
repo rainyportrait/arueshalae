@@ -1,14 +1,14 @@
-import van from "vanjs-core/src/van"
-import type { ChildDom } from "vanjs-core/src/van"
+import van from "vanjs-core"
+import type { ChildDom } from "vanjs-core"
 
-import { Pagination } from "./Pagination"
-import { PostCard } from "./PostCard"
-import { TagList } from "./TagList"
-import clsx from "./clsx"
-import { MASONRY_GAP } from "./masonry"
-import { list, reloadList } from "./state"
+import { CenteredState } from "./CenteredState.ts"
+import { Pagination } from "./Pagination.ts"
+import { PostCard } from "./PostCard.ts"
+import { TagList } from "./TagList.ts"
+import { MASONRY_GAP } from "./masonry.ts"
+import { list, reloadList } from "./state/list.ts"
 
-const { aside, button, div, h2, p, span } = van.tags
+const { aside, div } = van.tags
 
 // Placeholder heights (px) so the skeleton mimics the masonry flow. Each item's
 // grid span is its height plus the row gap, exactly as real cards are sized.
@@ -53,31 +53,20 @@ function PostListLayout({ sidebar, main }: { sidebar: ChildDom; main: ChildDom }
 }
 
 function EmptyState() {
-    return div(
-        { class: "flex flex-col items-center justify-center gap-2 py-24 text-center" },
-        span({ class: "text-4xl" }, "🔍"),
-        h2({ class: "mt-2 text-lg font-medium text-zinc-200" }, "No posts found"),
-        p({ class: "text-sm text-zinc-500" }, "Try a different search or check your tags."),
-    )
+    return CenteredState({
+        icon: "🔍",
+        title: "No posts found",
+        message: "Try a different search or check your tags.",
+    })
 }
 
 function ErrorState(message: string) {
-    return div(
-        { class: "flex flex-col items-center justify-center gap-2 py-24 text-center" },
-        span({ class: "text-4xl" }, "⚠️"),
-        h2({ class: "mt-2 text-lg font-medium text-zinc-200" }, "Couldn't load posts"),
-        p({ class: "max-w-md px-4 text-sm text-zinc-500" }, message),
-        button(
-            {
-                class: clsx(
-                    "mt-3 rounded-lg bg-rose-500 px-4 py-2 text-sm font-medium text-white",
-                    "transition-colors hover:bg-rose-400",
-                ),
-                onclick: () => reloadList(),
-            },
-            "Try again",
-        ),
-    )
+    return CenteredState({
+        icon: "⚠️",
+        title: "Couldn't load posts",
+        message,
+        action: { label: "Try again", onclick: reloadList },
+    })
 }
 
 export function PostList() {

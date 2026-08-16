@@ -1,5 +1,6 @@
-import { fetchDocument } from "./network"
-import { type Tag, extractTags } from "./tags"
+import { fetchDocument } from "./network.ts"
+import { positiveInt, queryParam } from "./parse.ts"
+import { type Tag, extractTags } from "./tags.ts"
 
 export type Post = {
     id: number
@@ -42,9 +43,7 @@ export function extractPosts(container: ParentNode): Post[] {
 
 // Read the post id out of a post-view href (`…&id=N`); 0 when absent.
 function parsePostIdFromHref(href: string): number {
-    const id = parseQueryParam(href, "id")
-    const n = Number(id)
-    return id !== null && Number.isInteger(n) && n > 0 ? n : 0
+    return positiveInt(queryParam(href, "id")) ?? 0
 }
 
 function extractPostList(
@@ -63,7 +62,7 @@ function extractPostList(
     let lastPagePID = currentPid
     if (lastPageLink) {
         const href = lastPageLink.getAttribute("href") ?? ""
-        const pid = parseQueryParam(href, "pid")
+        const pid = queryParam(href, "pid")
         const parsed = Number(pid)
         if (pid !== null && Number.isFinite(parsed)) {
             lastPagePID = parsed
@@ -71,10 +70,4 @@ function extractPostList(
     }
 
     return { posts, lastPagePID }
-}
-
-function parseQueryParam(href: string, key: string): string | null {
-    const queryIndex = href.indexOf("?")
-    if (queryIndex === -1) return null
-    return new URLSearchParams(href.slice(queryIndex + 1)).get(key)
 }

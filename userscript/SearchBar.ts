@@ -1,9 +1,9 @@
-import van from "vanjs-core/src/van"
+import van from "vanjs-core"
 
-import { TAG_META } from "./TagList"
-import { type AutocompleteSuggestion, fetchAutocomplete } from "./api/autocomplete"
-import clsx from "./clsx"
-import { search, tags } from "./state"
+import { TAG_META } from "./TagList.ts"
+import { type AutocompleteSuggestion, fetchAutocomplete } from "./api/autocomplete.ts"
+import clsx from "./clsx.ts"
+import { search, tags } from "./state/list.ts"
 
 const { button, div, form, input, span } = van.tags
 

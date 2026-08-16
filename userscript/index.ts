@@ -1,12 +1,12 @@
-import van from "vanjs-core/src/van"
-
-import { initApp } from "./App"
+import { initApp } from "./App.ts"
 import {
     isChallengePage,
     isInIframe,
     listenForCaptchaSolved,
     signalCaptchaResolved,
-} from "./captcha"
+    styleChallengePage,
+} from "./captcha.ts"
+import { initHead } from "./head.ts"
 
 // Three-way boot. The userscript matches the site's origin, so it also runs on
 // the challenge page and inside the modal iframe. We handle each case:
@@ -16,29 +16,11 @@ import {
 //     in our modal iframe; tell the parent so it can retry its requests.
 //   - Otherwise: a normal top-level page; run the app.
 if (isChallengePage()) {
-    // Prevent "flashbang" by bright background.
-    document.body.style.background = "#09090b"
-    document.body.style.color = "#fff"
-
-    // Hide the default Rule34.xxx info.
-    const defaultInfo = document.querySelector<HTMLDivElement>('div:has(img[alt="Rule 34"])')
-    if (defaultInfo) defaultInfo.style.display = "none"
-
-    // Remove unnecessary whitespace created by two empty <p> elements.
-    document.querySelectorAll("p").forEach((p) => (p.style.display = "none"))
-
-    // Add custom Arueshalae information.
-    const { div, h1, p } = van.tags
-    document.body.prepend(
-        div(
-            { style: "padding: 2ch; text-align: center;" },
-            h1("Arueshalae"),
-            p("Please complete the Captcha below to continue."),
-        ),
-    )
+    styleChallengePage()
 } else if (isInIframe()) {
     signalCaptchaResolved()
 } else {
     listenForCaptchaSolved()
+    initHead()
     initApp()
 }

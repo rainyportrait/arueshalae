@@ -1,8 +1,8 @@
-import van from "vanjs-core/src/van"
+import van from "vanjs-core"
 
-import { Link } from "./Link"
-import type { Tag, TagType } from "./api/tags"
-import clsx from "./clsx"
+import { Link } from "./Link.ts"
+import type { Tag, TagType } from "./api/tags.ts"
+import clsx from "./clsx.ts"
 
 const { div, h4, span } = van.tags
 

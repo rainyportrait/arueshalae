@@ -1,3 +1,5 @@
+import { parseCount, queryParam } from "./parse.ts"
+
 export type TagType = "copyright" | "character" | "artist" | "general" | "metadata"
 
 export type Tag = {
@@ -7,7 +9,8 @@ export type Tag = {
     count: number
 }
 
-const KNOWN_TYPES: ReadonlySet<string> = new Set([
+// Exported so the autocomplete can validate its `type` field the same way.
+export const KNOWN_TYPES: ReadonlySet<string> = new Set([
     "copyright",
     "character",
     "artist",
@@ -38,20 +41,9 @@ export function extractTags(DOM: Document): Tag[] {
         if (name === "") continue
 
         const href = anchor.getAttribute("href") ?? ""
-        const slug = parseQueryParam(href, "tags") ?? name.toLowerCase().replace(/\s+/g, "_")
+        const slug = queryParam(href, "tags") ?? name.toLowerCase().replace(/\s+/g, "_")
         const count = parseCount(li.querySelector("span.tag-count")?.textContent ?? "")
         tags.push({ name, slug, type, count })
     }
     return tags
-}
-
-function parseCount(raw: string): number {
-    const digits = raw.replace(/[^\d]/g, "")
-    return digits === "" ? 0 : Number(digits)
-}
-
-function parseQueryParam(href: string, key: string): string | null {
-    const queryIndex = href.indexOf("?")
-    if (queryIndex === -1) return null
-    return new URLSearchParams(href.slice(queryIndex + 1)).get(key)
 }

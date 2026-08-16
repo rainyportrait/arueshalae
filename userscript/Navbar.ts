@@ -1,11 +1,11 @@
-import van from "vanjs-core/src/van"
-import type { ChildDom } from "vanjs-core/src/van"
+import van from "vanjs-core"
+import type { ChildDom } from "vanjs-core"
 
-import { Link } from "./Link"
-import { SearchBar } from "./SearchBar"
-import clsx from "./clsx"
-import { route, routeToUrl } from "./router"
-import { auth, logout, userInfo } from "./state"
+import { Link } from "./Link.ts"
+import { SearchBar } from "./SearchBar.ts"
+import clsx from "./clsx.ts"
+import { route, routeToUrl } from "./router.ts"
+import { auth, logout, userInfo } from "./state/auth.ts"
 
 const { button, div, nav, span } = van.tags
 

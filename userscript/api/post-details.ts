@@ -1,5 +1,5 @@
-import { fetchDocument } from "./network"
-import { type Tag, extractTags } from "./tags"
+import { fetchDocument } from "./network.ts"
+import { type Tag, extractTags } from "./tags.ts"
 
 // The post's main media. Video posts carry a poster thumbnail plus the video
 // source; image posts carry the displayed image plus the "Original image"

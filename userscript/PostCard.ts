@@ -1,9 +1,9 @@
-import van from "vanjs-core/src/van"
+import van from "vanjs-core"
 
-import { Link } from "./Link"
-import type { Post } from "./api/post-list"
-import clsx from "./clsx"
-import { setCardSpan } from "./masonry"
+import { Link } from "./Link.ts"
+import type { Post } from "./api/post-list.ts"
+import clsx from "./clsx.ts"
+import { setCardSpan } from "./masonry.ts"
 
 const { img } = van.tags
 

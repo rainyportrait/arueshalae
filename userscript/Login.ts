@@ -1,7 +1,7 @@
-import van from "vanjs-core/src/van"
+import van from "vanjs-core"
 
-import clsx from "./clsx"
-import { login } from "./state"
+import clsx from "./clsx.ts"
+import { login } from "./state/auth.ts"
 
 const { button, div, form, h1, input, label, p, span } = van.tags
 

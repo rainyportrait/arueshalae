@@ -1,29 +1,12 @@
 // Verify the auth parsing/extraction logic against the sample HTML in
-// examples/*.html. The source uses extensionless relative imports that Node's
-// ESM resolver can't handle, so bundle the modules with esbuild (as the real
-// build does) and require the result before running the checks.
-import { mkdtempSync, readFileSync } from "node:fs"
-import { createRequire } from "node:module"
-import { tmpdir } from "node:os"
-import { join } from "node:path"
+// examples/*.html. Node's native TS type stripping loads the source directly
+// (all relative imports carry explicit .ts extensions).
+import { readFileSync } from "node:fs"
 
-import { build } from "esbuild"
 import { parseHTML } from "linkedom"
 
-const dir = mkdtempSync(join(tmpdir(), "arueshalae-auth-"))
-const req = createRequire(import.meta.url)
-
-async function bundle(entry: string, name: string): Promise<string> {
-    const outfile = join(dir, name)
-    await build({ entryPoints: [entry], bundle: true, format: "cjs", platform: "node", outfile })
-    return outfile
-}
-
-const authOut = await bundle("userscript/api/auth.ts", "auth.cjs")
-const listOut = await bundle("userscript/api/post-list.ts", "list.cjs")
-
-const auth = req(authOut) as typeof import("./userscript/api/auth.ts")
-const list = req(listOut) as typeof import("./userscript/api/post-list.ts")
+import * as auth from "./userscript/api/auth.ts"
+import * as list from "./userscript/api/post-list.ts"
 
 function doc(file: string) {
     return parseHTML(readFileSync(file, "utf8")).document

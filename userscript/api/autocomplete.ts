@@ -1,19 +1,11 @@
-import { fetchCleared } from "./network"
-import type { TagType } from "./tags"
+import { fetchCleared } from "./network.ts"
+import { KNOWN_TYPES, type TagType } from "./tags.ts"
 
 export type AutocompleteSuggestion = {
     label: string
     value: string
     type: TagType
 }
-
-const KNOWN_TYPES: ReadonlySet<string> = new Set([
-    "copyright",
-    "character",
-    "artist",
-    "general",
-    "metadata",
-])
 
 // The autocomplete endpoint returns a JSON array of { label, value, type }.
 // `label` already includes the count, `value` is the canonical tag to insert,

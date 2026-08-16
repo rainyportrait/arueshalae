@@ -1,5 +1,6 @@
-import { fetchDocument } from "./network"
-import { type Post, extractPosts } from "./post-list"
+import { fetchDocument } from "./network.ts"
+import { parseCount, positiveInt, queryParam } from "./parse.ts"
+import { type Post, extractPosts } from "./post-list.ts"
 
 // A user's profile view: their stats and recent activity. The profile page
 // (`page=favorites&s=view&id=N`) shows any user `N`, so the logged-in user's
@@ -34,20 +35,20 @@ export function parseUserIdFromAccountHome(doc: Document): number | null {
 
 export type LoginResponse = { ok: true; userId: number } | { ok: false; error: string }
 
-// POST the credentials to the site's login endpoint. On success the site
-// responds with the account home document (which carries the user id); on
-// failure it returns the login form again, still at the login URL, with an
-// error message. Because the form and the failure page share a URL, only the
-// body can distinguish them — we reuse the same "is this the logged-in home
-// page?" check from init via `parseUserIdFromAccountHome`.
+// POST the credentials to the site's login endpoint, going through the
+// network layer like every other request (retry + transparent challenge
+// solving). On success the site responds with the account home document
+// (which carries the user id); on failure it returns the login form again,
+// still at the login URL, with an error message. Because the form and the
+// failure page share a URL, only the body can distinguish them — we reuse the
+// same "is this the logged-in home page?" check from init via
+// `parseUserIdFromAccountHome`.
 export async function login(username: string, password: string): Promise<LoginResponse> {
-    const body = new URLSearchParams({ user: username, pass: password, submit: "Log in" })
-    const response = await fetch("/index.php?page=account&s=login&code=00", {
+    const doc = await fetchDocument("/index.php?page=account&s=login&code=00", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: body.toString(),
+        body: new URLSearchParams({ user: username, pass: password, submit: "Log in" }).toString(),
     })
-    const doc = new DOMParser().parseFromString(await response.text(), "text/html")
     const userId = parseUserIdFromAccountHome(doc)
     if (userId !== null) return { ok: true, userId }
     return { ok: false, error: parseLoginError(doc) }
@@ -112,16 +113,6 @@ function recentPosts(doc: Document, heading: string): Post[] {
     return []
 }
 
-function parseCount(raw: string): number {
-    const digits = raw.replace(/[^\d]/g, "")
-    return digits === "" ? 0 : Number(digits)
-}
-
 function parseIdFromHref(href: string): number | null {
-    const queryIndex = href.indexOf("?")
-    if (queryIndex === -1) return null
-    const id = new URLSearchParams(href.slice(queryIndex + 1)).get("id")
-    if (id === null) return null
-    const n = Number(id)
-    return Number.isInteger(n) && n > 0 ? n : null
+    return positiveInt(queryParam(href, "id"))
 }

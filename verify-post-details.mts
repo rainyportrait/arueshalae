@@ -1,25 +1,12 @@
-// The source uses extensionless relative imports that Node's ESM resolver
-// can't handle, so bundle the module with esbuild (as the real build does) and
-// require the result before running the checks.
-import { mkdtempSync, readFileSync } from "node:fs"
-import { createRequire } from "node:module"
-import { tmpdir } from "node:os"
-import { join } from "node:path"
+// Verify the post-details parsing logic against the sample HTML in
+// examples/*.html. Node's native TS type stripping loads the source directly
+// (all relative imports carry explicit .ts extensions).
+import { readFileSync } from "node:fs"
 
-import { build } from "esbuild"
 import { parseHTML } from "linkedom"
 
-const dir = mkdtempSync(join(tmpdir(), "arueshalae-pd-"))
-const outfile = join(dir, "bundle.cjs")
-await build({
-    entryPoints: ["userscript/api/post-details.ts"],
-    bundle: true,
-    format: "cjs",
-    platform: "node",
-    outfile,
-})
-const req = createRequire(import.meta.url)
-const { extractPostDetails } = req(outfile) as typeof import("./userscript/api/post-details.ts")
+import { extractPostDetails } from "./userscript/api/post-details.ts"
+
 type Post = ReturnType<typeof extractPostDetails>
 
 function extract(file: string, id: number): Post {

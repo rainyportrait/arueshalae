@@ -1,9 +1,9 @@
-import van from "vanjs-core/src/van"
+import van from "vanjs-core"
 
-import { Link } from "./Link"
-import clsx from "./clsx"
-import { routeToUrl } from "./router"
-import { PAGE_SIZE, list, pid, tags } from "./state"
+import { Link } from "./Link.ts"
+import clsx from "./clsx.ts"
+import { routeToUrl } from "./router.ts"
+import { PAGE_SIZE, list, pid, tags } from "./state/list.ts"
 
 const { div, nav, span } = van.tags
 
@@ -70,8 +70,7 @@ function PageItem({ page, label, title = label, disabled = false, active = false
 export function Pagination() {
     return nav({ class: "mt-10 flex justify-center pb-4", "aria-label": "Pagination" }, () => {
         const state = list.val
-        const currentPid = pid.val ?? 0
-        const currentPage = Math.floor(currentPid / PAGE_SIZE) + 1
+        const currentPage = Math.floor(pid.val / PAGE_SIZE) + 1
         const totalPages =
             state.status === "ready"
                 ? Math.max(1, Math.round(state.lastPagePID / PAGE_SIZE) + 1)

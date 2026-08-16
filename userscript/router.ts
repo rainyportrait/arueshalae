@@ -133,6 +133,14 @@ export function navigate(next: Route): void {
     route.val = next
 }
 
+// Replace the current URL and route without adding a history entry. Used for
+// normalization redirects where the current URL is an alias or invalid for the
+// current state (the bare site root, the login route while authenticated).
+export function redirect(next: Route): void {
+    window.history.replaceState(null, "", routeToUrl(next))
+    route.val = next
+}
+
 // Browser back/forward: the URL has already changed, just re-parse it.
 window.addEventListener("popstate", () => {
     route.val = parseRoute(window.location.href)

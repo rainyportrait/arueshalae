@@ -17,17 +17,15 @@ export type UserProfile = {
 
 // --- Auth detection -------------------------------------------------------
 
-// Detect the logged-in user id from the account home page by positive match:
-// the page carries a "» My Profile" link whose href is
-// `…?page=favorites&s=view&id=N`. The logged-out page simply lacks that link,
-// so "no link ⇒ guest" falls out for free — we never key off the "You are not
-// logged in." wording.
-export function parseUserIdFromAccountHome(doc: Document): number | null {
-    for (const a of doc.querySelectorAll("a")) {
-        const text = (a.textContent ?? "").replace(/\s+/g, " ").trim()
-        if (!text.includes("My Profile")) continue
-        const id = parseIdFromHref(a.getAttribute("href") ?? "")
-        if (id !== null) return id
+// The site sets a JavaScript-readable `user_id` cookie on login; it lives and
+// dies with the session (removed on logout). Returns the logged-in user id
+// from a raw cookie string, or null when the cookie is absent or malformed.
+export function parseUserIdFromCookie(cookie: string): number | null {
+    for (const part of cookie.split(";")) {
+        const eq = part.indexOf("=")
+        if (eq === -1) continue
+        if (part.slice(0, eq).trim() !== "user_id") continue
+        return positiveInt(part.slice(eq + 1).trim())
     }
     return null
 }
@@ -38,19 +36,20 @@ export type LoginResponse = { ok: true; userId: number } | { ok: false; error: s
 
 // POST the credentials to the site's login endpoint, going through the
 // network layer like every other request (retry + transparent challenge
-// solving). On success the site responds with the account home document
-// (which carries the user id); on failure it returns the login form again,
-// still at the login URL, with an error message. Because the form and the
-// failure page share a URL, only the body can distinguish them — we reuse the
-// same "is this the logged-in home page?" check from init via
-// `parseUserIdFromAccountHome`.
+// solving). Success is detected via the `user_id` cookie: the browser applies
+// the response's Set-Cookie before this request resolves, so a cookie read
+// afterwards reflects the attempt and doubles as the user id. A stale cookie
+// can't masquerade as a fresh login — the login route is unreachable while
+// authenticated (see the guard in state/auth.ts), so a logged-in user never
+// submits this form. On failure the cookie is absent and the response (the
+// login form again, still at the login URL) carries the error message.
 export async function login(username: string, password: string): Promise<LoginResponse> {
     const doc = await fetchDocument("/index.php?page=account&s=login&code=00", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({ user: username, pass: password, submit: "Log in" }).toString(),
     })
-    const userId = parseUserIdFromAccountHome(doc)
+    const userId = parseUserIdFromCookie(document.cookie)
     if (userId !== null) return { ok: true, userId }
     return { ok: false, error: parseLoginError(doc) }
 }
@@ -126,10 +125,6 @@ function recentPosts(doc: Document, heading: string): Post[] {
         return list ? extractPosts(list) : []
     }
     return []
-}
-
-function parseIdFromHref(href: string): number | null {
-    return positiveInt(queryParam(href, "id"))
 }
 
 // The profile table carries the numeric user id in several link hrefs (e.g. the

@@ -4,20 +4,36 @@ import {
     type UserProfile,
     login as apiLogin,
     fetchUserProfile,
-    parseUserIdFromAccountHome,
+    parseUserIdFromCookie,
 } from "../api/auth.ts"
-import { fetchDocument } from "../api/network.ts"
-import { navigate, returnTo } from "../router.ts"
+import { navigate, redirect, returnTo, route } from "../router.ts"
 import { type Loadable, createLoader } from "./load.ts"
 
 // Are we logged in, and if so who (by id)? `userId` is the signal that
 // establishes authentication; nothing else lives here.
 export type AuthState =
-    | { status: "unknown" } // before init has checked
     | { status: "guest" } // not logged in
     | { status: "authenticated"; userId: number }
 
-export const auth = van.state<AuthState>({ status: "unknown" })
+// The site sets a JavaScript-readable `user_id` cookie on login (it lives and
+// dies with the session), so the auth state is known synchronously from the
+// cookie — no request needed.
+function authFromCookie(): AuthState {
+    const userId = parseUserIdFromCookie(document.cookie)
+    return userId === null ? { status: "guest" } : { status: "authenticated", userId }
+}
+
+export const auth = van.state<AuthState>(authFromCookie())
+
+// The login route is only meaningful for guests. An authenticated user can
+// still land on it — typed URL, or back/forward onto a pre-login history
+// entry — so bounce them to the post list. The bounce replaces (not pushes)
+// the URL, so back/forward cannot ping-pong between the two.
+van.derive(() => {
+    if (auth.val.status === "authenticated" && route.val.type === "login") {
+        redirect({ type: "postlist", tags: undefined, pid: 0 })
+    }
+})
 
 // The enriched profile data, which presupposes authentication. Follows the same
 // discriminated-union pattern as the post list/details state, with an "idle"
@@ -25,18 +41,6 @@ export const auth = van.state<AuthState>({ status: "unknown" })
 export type UserInfoState = Loadable<{ profile: UserProfile }, { status: "idle" }>
 
 export const userInfo = van.state<UserInfoState>({ status: "idle" })
-
-// Establish auth on init: fetch the account home page and detect the logged-in
-// user id by positive match. A failure leaves us as guest (the app still works
-// for anonymous browsing).
-fetchDocument("/index.php?page=account&s=home")
-    .then((doc) => {
-        const userId = parseUserIdFromAccountHome(doc)
-        auth.val = userId === null ? { status: "guest" } : { status: "authenticated", userId }
-    })
-    .catch(() => {
-        auth.val = { status: "guest" }
-    })
 
 // Once authenticated, fetch the profile (username, favorites count, ...) and
 // hold it in `userInfo`. Fires once per authenticated user: guarded so it
@@ -65,10 +69,15 @@ export type LoginOutcome = { ok: true } | { ok: false; error: string }
 export async function login(username: string, password: string): Promise<LoginOutcome> {
     const result = await apiLogin(username, password)
     if (result.ok) {
-        auth.val = { status: "authenticated", userId: result.userId }
+        // Leave the login route *before* marking the user authenticated: the
+        // login-route guard above runs synchronously on the auth change and
+        // would otherwise rewrite the login history entry a tick before this
+        // navigation, so "back" would land on the post list instead of the
+        // pre-login route.
         const dest = returnTo.val ?? { type: "postlist", tags: undefined, pid: 0 }
         returnTo.val = null
         navigate(dest)
+        auth.val = { status: "authenticated", userId: result.userId }
         return { ok: true }
     }
     return { ok: false, error: result.error }

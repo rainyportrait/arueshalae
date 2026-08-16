@@ -85,15 +85,11 @@ function UserMenu(): HTMLDivElement {
                 clsx(
                     "flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1.5",
                     "text-sm text-zinc-200 transition-colors",
-                    auth.val.status === "unknown"
-                        ? "cursor-default opacity-60"
-                        : "hover:bg-zinc-800/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40",
+                    "hover:bg-zinc-800/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40",
                 ),
             "aria-haspopup": "menu",
             "aria-expanded": () => open.val,
-            disabled: () => auth.val.status === "unknown",
             onclick: () => {
-                if (auth.val.status === "unknown") return
                 open.val = !open.val
             },
             onkeydown: (e: KeyboardEvent) => {
@@ -123,7 +119,6 @@ function UserMenu(): HTMLDivElement {
     const menu = (): Node => {
         if (!open.val) return document.createComment("")
         const a = auth.val
-        if (a.status === "unknown") return document.createComment("")
 
         const items: ChildDom[] = []
         if (a.status === "guest") {

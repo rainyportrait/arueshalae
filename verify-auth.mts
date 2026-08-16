@@ -18,16 +18,17 @@ function check(label: string, ok: boolean, got?: unknown) {
     console.log(`  ${ok ? "ok" : "FAIL"}  ${label}${ok ? "" : `  (got ${JSON.stringify(got)})`}`)
 }
 
-// --- parseUserIdFromAccountHome -------------------------------------------
-console.log("=== account-home.html (logged in) ===")
+// --- parseUserIdFromCookie --------------------------------------------------
 {
-    const id = auth.parseUserIdFromAccountHome(doc("examples/account-home.html"))
+    const id = auth.parseUserIdFromCookie("user_id=92046; rule34_session=abc123")
     check("detects user id 92046", id === 92046, id)
-}
-console.log("\n=== account-not-logged-in.html (logged out) ===")
-{
-    const id = auth.parseUserIdFromAccountHome(doc("examples/account-not-logged-in.html"))
-    check("no user id (guest)", id === null, id)
+    check("absent cookie is null", auth.parseUserIdFromCookie("rule34_session=abc123") === null)
+    check("empty cookie is null", auth.parseUserIdFromCookie("") === null)
+    check("malformed value is null", auth.parseUserIdFromCookie("user_id=abc") === null)
+    check(
+        "whitespace tolerated",
+        auth.parseUserIdFromCookie("  user_id = 92046 ; x = 1 ") === 92046,
+    )
 }
 
 // --- parseLoginError -------------------------------------------------------

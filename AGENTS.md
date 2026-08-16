@@ -4,6 +4,8 @@ A userscript that replaces the default rule34.xxx UI with a custom Van.js UI.
 
 Built with TypeScript, [van.js](https://vanjs.org/) (`vanjs-core`), and Tailwind CSS v4.
 
+The source files can be found in `./userscript/`.
+
 ## Build & dev loop
 
 - `node build-userscript.ts` to build the userscript end to end with tailwindcss and esbuild.

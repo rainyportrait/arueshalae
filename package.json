@@ -5,7 +5,8 @@
         "format": "prettier --write .",
         "format:check": "prettier --check .",
         "verify:tags": "node verify-tags.mts",
-        "verify:post-details": "node verify-post-details.mts"
+        "verify:post-details": "node verify-post-details.mts",
+        "verify:auth": "node verify-auth.mts"
     },
     "devEngines": {
         "packageManager": {

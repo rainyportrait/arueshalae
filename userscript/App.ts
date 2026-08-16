@@ -1,5 +1,6 @@
 import van from "vanjs-core/src/van"
 
+import { Login } from "./Login"
 import { Navbar } from "./Navbar"
 import { PostDetails } from "./PostDetails"
 import { PostList } from "./PostList"
@@ -66,6 +67,8 @@ function ArueApp() {
                     return PostList()
                 case "postdetails":
                     return PostDetails()
+                case "login":
+                    return Login()
                 case "account":
                 case "favorites":
                 case "settings":

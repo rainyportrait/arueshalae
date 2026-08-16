@@ -12,6 +12,7 @@ export type Route =
     | { type: "account"; uname: string }
     | { type: "favorites"; id: number }
     | { type: "settings" }
+    | { type: "login" }
     | { type: "unknown" }
 
 const BASE = "/index.php"
@@ -53,6 +54,11 @@ export function parseRoute(url: string): Route {
     if (page === "account" && s === "options") {
         return { type: "settings" }
     }
+    // The `code` value is ignored for routing; the login page always maps onto
+    // the site's real login URL (which requires `code=00`).
+    if (page === "account" && s === "login") {
+        return { type: "login" }
+    }
     return { type: "unknown" }
 }
 
@@ -77,6 +83,8 @@ export function routeToUrl(route: Route): string {
             return `${BASE}?page=favorites&s=view&id=${route.id}`
         case "settings":
             return `${BASE}?page=account&s=options`
+        case "login":
+            return `${BASE}?page=account&s=login&code=00`
         case "unknown":
             // Never navigated to; a no-op fallback.
             return window.location.href
@@ -92,12 +100,22 @@ if (window.location.pathname === "/" && window.location.search === "") {
 
 export const route = van.state<Route>(parseRoute(window.location.href))
 
+// The route to return to after a successful login: a snapshot of the route we
+// were on the moment we navigated *to* the login route. Null when we landed on
+// the login page via a direct full-page load (no prior SPA route), in which
+// case the login flow falls back to the post list. Lives here (not in the auth
+// state) because it is captured inside `navigate` below.
+export const returnTo = van.state<Route | null>(null)
+
 // SPA navigation: push the new URL onto the history and update the route. The
 // guard avoids pushing a redundant history entry when the URL is unchanged.
 export function navigate(next: Route): void {
     const url = routeToUrl(next)
     if (url === window.location.pathname + window.location.search) return
     window.history.pushState(null, "", url)
+    // Snapshot the current route when heading to login, so the login flow can
+    // bring the user back here.
+    if (next.type === "login") returnTo.val = route.val
     route.val = next
 }
 

@@ -20,23 +20,40 @@ export async function fetchPostList(tags?: string, pid?: number): Promise<PostLi
     return { posts, lastPagePID, tags: extractTags(doc) }
 }
 
+// Extract the posts from a container of `.thumb` items, sharing one per-thumb
+// mapping across the post list and the profile page. Those two pages place the
+// post id differently — on the list it is on the `<a>` (`<a id="p…">`), on the
+// profile it is on the `<span class="thumb" id="p…">` and the anchor has no id.
+// The id is always present in the anchor's href (`…&id=N`), so we read it from
+// there: one source of truth for both shapes.
+export function extractPosts(container: ParentNode): Post[] {
+    const posts: Post[] = []
+    for (const thumb of container.querySelectorAll(".thumb")) {
+        const anchor = thumb.querySelector("a")
+        const img = thumb.querySelector("img")
+        if (!anchor || !img) continue
+
+        const link = anchor.getAttribute("href") ?? ""
+        const thumbnail = img.getAttribute("src") ?? ""
+        posts.push({ id: parsePostIdFromHref(link), link, thumbnail })
+    }
+    return posts
+}
+
+// Read the post id out of a post-view href (`…&id=N`); 0 when absent.
+function parsePostIdFromHref(href: string): number {
+    const id = parseQueryParam(href, "id")
+    const n = Number(id)
+    return id !== null && Number.isInteger(n) && n > 0 ? n : 0
+}
+
 function extractPostList(
     DOM: Document,
     currentPid: number,
 ): { posts: Post[]; lastPagePID: number } {
     const posts: Post[] = []
-
-    for (const thumb of DOM.querySelectorAll(".image-list .thumb")) {
-        const anchor = thumb.querySelector("a")
-        const img = thumb.querySelector("img")
-        if (!anchor || !img) continue
-
-        const anchorId = anchor.getAttribute("id") ?? ""
-        const id = Number(anchorId.slice(1))
-        const link = anchor.getAttribute("href") ?? ""
-        const thumbnail = img.getAttribute("src") ?? ""
-
-        posts.push({ id, link, thumbnail })
+    for (const imageList of DOM.querySelectorAll(".image-list")) {
+        posts.push(...extractPosts(imageList))
     }
 
     const lastPageLink = DOM.querySelector('a[alt="last page"]')

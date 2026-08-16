@@ -4,6 +4,7 @@ import { PostGrid } from "./PostGrid.ts"
 import { routeToUrl } from "./router.ts"
 import {
     FAVORITES_PAGE_SIZE,
+    type FavoritesData,
     favorites,
     favoritesId,
     favoritesPid,
@@ -18,10 +19,7 @@ export function Favorites() {
         return PostGrid({
             state,
             currentPage: Math.floor(favoritesPid.val / FAVORITES_PAGE_SIZE) + 1,
-            totalPages:
-                state.status === "ready"
-                    ? Math.max(1, Math.round(state.lastPagePID / FAVORITES_PAGE_SIZE) + 1)
-                    : 1,
+            totalPages: state.status === "ready" ? totalPages(state) : 1,
             pageHref: (page) =>
                 routeToUrl({
                     type: "favorites",
@@ -37,4 +35,12 @@ export function Favorites() {
             onRetry: reloadFavorites,
         })
     })
+}
+
+// Prefer the profile's favorites count; fall back to the site's last-page
+// link when the count is unavailable (0).
+function totalPages(state: FavoritesData): number {
+    if (state.favoritesCount > 0)
+        return Math.max(1, Math.ceil(state.favoritesCount / FAVORITES_PAGE_SIZE))
+    return Math.max(1, Math.round(state.lastPagePID / FAVORITES_PAGE_SIZE) + 1)
 }

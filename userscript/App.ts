@@ -1,5 +1,6 @@
 import van from "vanjs-core"
 
+import { Favorites } from "./Favorites.ts"
 import { Login } from "./Login.ts"
 import { Navbar } from "./Navbar.ts"
 import { NotFound, RoutePlaceholder } from "./Placeholders.ts"
@@ -23,8 +24,9 @@ function ArueApp() {
                     return PostDetails()
                 case "login":
                     return Login()
-                case "account":
                 case "favorites":
+                    return Favorites()
+                case "account":
                 case "settings":
                     return RoutePlaceholder(r)
                 case "unknown":

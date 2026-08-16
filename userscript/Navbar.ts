@@ -160,7 +160,7 @@ function UserMenu(): HTMLDivElement {
                 ),
                 Link(
                     {
-                        href: routeToUrl({ type: "favorites", id: a.userId }),
+                        href: routeToUrl({ type: "favorites", id: a.userId, pid: 0 }),
                         role: "menuitem",
                         class: MENU_ITEM_CLASS,
                     },

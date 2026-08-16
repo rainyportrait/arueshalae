@@ -7,14 +7,12 @@ const { div } = van.tags
 
 const PLACEHOLDER_TITLES: Record<string, string> = {
     account: "Account",
-    favorites: "Favorites",
     settings: "Settings",
 }
 
 // Echo the identifier a recognized route carries, so the placeholder shows the
 // data the router parsed. An account may be addressed by id or username.
 function placeholderParams(route: Route): string[] {
-    if (route.type === "favorites") return [`id: ${route.id}`]
     if (route.type === "account") {
         return "uname" in route ? [`uname: ${route.uname}`] : [`id: ${route.id}`]
     }

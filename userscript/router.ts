@@ -12,12 +12,18 @@ export type Route =
     // resolves both. We keep whichever the URL carried.
     | { type: "account"; id: number }
     | { type: "account"; uname: string }
-    | { type: "favorites"; id: number }
+    | { type: "favorites"; id: number; pid: number }
     | { type: "settings" }
     | { type: "login" }
     | { type: "unknown" }
 
 const BASE = "/index.php"
+
+// The page offset from a `pid` query parameter; 0 when absent or invalid.
+function pidParam(raw: string | null): number {
+    const n = raw === null ? 0 : Number(raw)
+    return Number.isFinite(n) && n > 0 ? Math.trunc(n) : 0
+}
 
 // Total URL -> Route parser. Accepts a relative or absolute URL.
 export function parseRoute(url: string): Route {
@@ -26,10 +32,11 @@ export function parseRoute(url: string): Route {
     const s = params.get("s")
 
     if (page === "post" && s === "list") {
-        const pidRaw = params.get("pid")
-        const pidNum = pidRaw === null ? 0 : Number(pidRaw)
-        const pid = Number.isFinite(pidNum) && pidNum > 0 ? Math.trunc(pidNum) : 0
-        return { type: "postlist", tags: params.get("tags") ?? undefined, pid }
+        return {
+            type: "postlist",
+            tags: params.get("tags") ?? undefined,
+            pid: pidParam(params.get("pid")),
+        }
     }
     if (page === "post" && s === "view") {
         const id = positiveInt(params.get("id"))
@@ -48,7 +55,9 @@ export function parseRoute(url: string): Route {
     }
     if (page === "favorites" && s === "view") {
         const id = positiveInt(params.get("id"))
-        return id === null ? { type: "unknown" } : { type: "favorites", id }
+        return id === null
+            ? { type: "unknown" }
+            : { type: "favorites", id, pid: pidParam(params.get("pid")) }
     }
     if (page === "account" && s === "options") {
         return { type: "settings" }
@@ -81,8 +90,11 @@ export function routeToUrl(route: Route): string {
             return "uname" in route
                 ? `${BASE}?page=account&s=profile&uname=${encodeURIComponent(route.uname)}`
                 : `${BASE}?page=account&s=profile&id=${route.id}`
-        case "favorites":
-            return `${BASE}?page=favorites&s=view&id=${route.id}`
+        case "favorites": {
+            let url = `${BASE}?page=favorites&s=view&id=${route.id}`
+            if (route.pid > 0) url += `&pid=${route.pid}`
+            return url
+        }
         case "settings":
             return `${BASE}?page=account&s=options`
         case "login":

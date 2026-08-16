@@ -70,10 +70,23 @@ export function parseLoginError(doc: Document): string {
 
 // --- Profile --------------------------------------------------------------
 
-// Fetch and parse the profile view for a user id.
-export async function fetchUserProfile(userId: number): Promise<UserProfile> {
-    const doc = await fetchDocument(`/index.php?page=account&s=profile&id=${userId}`)
+// A profile can be addressed by numeric id or by username; the site resolves
+// both, so we keep whichever the URL carried (the account route serializes to
+// exactly the profile page).
+export type ProfileRef = { id: number } | { uname: string }
+
+// Fetch and parse the profile view for a user, addressed by id or username.
+export async function fetchProfile(ref: ProfileRef): Promise<UserProfile> {
+    const url =
+        "id" in ref
+            ? `/index.php?page=account&s=profile&id=${ref.id}`
+            : `/index.php?page=account&s=profile&uname=${encodeURIComponent(ref.uname)}`
+    const doc = await fetchDocument(url)
     return extractUserProfile(doc)
+}
+
+export async function fetchUserProfile(userId: number): Promise<UserProfile> {
+    return fetchProfile({ id: userId })
 }
 
 export function extractUserProfile(doc: Document): UserProfile {

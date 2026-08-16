@@ -1,11 +1,14 @@
 import { fetchDocument } from "./network.ts"
 import { positiveInt, queryParam } from "./parse.ts"
-import { type Tag, extractTags } from "./tags.ts"
+import { type Tag, extractTags, normalizeTags } from "./tags.ts"
 
 export type Post = {
     id: number
     link: string
     thumbnail: string
+    // The post's full tag list, parsed from the thumbnail's `alt` text. Empty
+    // when the thumb exposes none (e.g. some profile/favorites shapes).
+    tags: string[]
 }
 
 export type PostList = {
@@ -36,9 +39,23 @@ export function extractPosts(container: ParentNode): Post[] {
 
         const link = anchor.getAttribute("href") ?? ""
         const thumbnail = img.getAttribute("src") ?? ""
-        posts.push({ id: parsePostIdFromHref(link), link, thumbnail })
+        posts.push({
+            id: parsePostIdFromHref(link),
+            link,
+            thumbnail,
+            tags: parsePostTags(img),
+        })
     }
     return posts
+}
+
+// Parse the post's full tag list out of the thumbnail's `title` (reliable on
+// every surface — on favorites `alt` is a placeholder, "image_thumb"; on the
+// post list the list is also mirrored in `alt`). We normalize to match how the
+// blacklist is stored, then drop the `:`-bearing metadata tokens the site
+// appends (`score:0`, `rating:explicit`, `user:…`).
+function parsePostTags(img: Element): string[] {
+    return normalizeTags(img.getAttribute("title") ?? "").filter((tag) => !tag.includes(":"))
 }
 
 // Read the post id out of a post-view href (`…&id=N`); 0 when absent.

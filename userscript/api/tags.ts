@@ -18,6 +18,23 @@ export const KNOWN_TYPES: ReadonlySet<string> = new Set([
     "metadata",
 ])
 
+// Normalize a raw, whitespace-separated string of tags into a clean list: trim
+// + lowercase each token, drop empties, and dedupe (first-seen order). This is
+// the shared core behind the search query (which rejoins the result into a
+// string) and a post's tag list (kept as an array; the caller applies any
+// extra filtering, e.g. dropping metadata tokens).
+export function normalizeTags(raw: string): string[] {
+    const seen = new Set<string>()
+    const tags: string[] = []
+    for (const part of raw.split(/\s+/)) {
+        const token = part.trim().toLowerCase()
+        if (token === "" || seen.has(token)) continue
+        seen.add(token)
+        tags.push(token)
+    }
+    return tags
+}
+
 // Parse the tag sidebar (`<ul id="tag-sidebar">`), present on both the post
 // list and post details pages in the same shape. Each `<li class="tag-type-*">`
 // is one tag; the `<li><h6>…</h6></li>` entries are category headers and are

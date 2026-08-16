@@ -7,6 +7,7 @@ import { TagList } from "./TagList.ts"
 import type { PostDetails as PostDetailsData } from "./api/post-details.ts"
 import clsx from "./clsx.ts"
 import { details, reloadDetails } from "./state/details.ts"
+import { preferOriginal } from "./state/settings.ts"
 
 const { a, aside, button, div, h2, h4, img, span, video } = van.tags
 
@@ -168,8 +169,9 @@ export function PostDetails() {
         const state = details.val
         if (state.status === "loading") return LoadingState()
         if (state.status === "error") return ErrorState(state.error)
-        // Fresh per post: the toggle resets whenever the details change.
-        const showOriginal = van.state(false)
+        // Fresh per post: the toggle resets whenever the details change, but
+        // starts from the user's "load original right away" setting.
+        const showOriginal = van.state(preferOriginal.val)
         // Sidebar sits left of the media on desktop; on narrow screens it
         // stacks below the media at full width.
         return div(

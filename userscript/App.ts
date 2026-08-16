@@ -4,9 +4,10 @@ import { Account } from "./Account.ts"
 import { Favorites } from "./Favorites.ts"
 import { Login } from "./Login.ts"
 import { Navbar } from "./Navbar.ts"
-import { NotFound, RoutePlaceholder } from "./Placeholders.ts"
+import { NotFound } from "./Placeholders.ts"
 import { PostDetails } from "./PostDetails.ts"
 import { PostList } from "./PostList.ts"
+import { Settings } from "./Settings.ts"
 import { CaptchaModal } from "./captcha.ts"
 import { route } from "./router.ts"
 
@@ -30,7 +31,7 @@ function ArueApp() {
                 case "account":
                     return Account()
                 case "settings":
-                    return RoutePlaceholder(r)
+                    return Settings()
                 case "unknown":
                     return NotFound()
             }

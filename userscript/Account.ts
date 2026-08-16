@@ -1,13 +1,15 @@
 import van from "vanjs-core"
 
 import { CenteredState } from "./CenteredState.ts"
+import { Link } from "./Link.ts"
 import { PostCard } from "./PostCard.ts"
 import type { UserProfile } from "./api/auth.ts"
 import type { Post } from "./api/post-list.ts"
 import { MASONRY_GAP } from "./masonry.ts"
+import { routeToUrl } from "./router.ts"
 import { profile, reloadProfile } from "./state/account.ts"
 
-const { div, h2, h3, p } = van.tags
+const { div, h2, p } = van.tags
 
 // "2014-11-12" -> "November 12, 2014"; the raw string when it doesn't parse as
 // a date. The `T00:00:00` pins it to local midnight so negative time zones
@@ -22,20 +24,42 @@ function formatJoinDate(raw: string): string {
     }).format(date)
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
-    return div(
-        { class: "rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3" },
-        div({ class: "text-2xl font-semibold tabular-nums text-zinc-100" }, value.toLocaleString()),
-        div({ class: "mt-0.5 text-xs font-medium uppercase tracking-wider text-zinc-500" }, label),
-    )
-}
-
-// A "Recent …" section: a heading over a masonry grid of the (few) posts, or a
-// muted note when the user has none.
-function RecentSection({ title, posts }: { title: string; posts: Post[] }) {
+// A topic section: a header (count + label on the left, a "View all" link on
+// the right) over a masonry grid of the recent items — so a topic's link,
+// count, and recents live together instead of being scattered across the page.
+// Borderless on purpose: the PostCards below are already cards, so wrapping
+// them in another bordered box read as cards-within-cards. A null href
+// (favorites, when the numeric id is unavailable) hides the link.
+function TopicPanel({
+    title,
+    count,
+    href,
+    posts,
+}: {
+    title: string
+    count: number
+    href: string | null
+    posts: Post[]
+}) {
     return div(
         { class: "flex flex-col gap-3" },
-        h3({ class: "text-sm font-semibold uppercase tracking-wider text-zinc-400" }, title),
+        div(
+            { class: "flex items-center justify-between gap-3" },
+            div(
+                { class: "flex items-baseline gap-2" },
+                div(
+                    { class: "text-2xl font-semibold tabular-nums text-zinc-100" },
+                    count.toLocaleString(),
+                ),
+                div({ class: "text-xs font-medium uppercase tracking-wider text-zinc-500" }, title),
+            ),
+            href === null
+                ? document.createComment("")
+                : Link(
+                      { href, class: "text-sm font-medium text-rose-400 hover:text-rose-300" },
+                      "View all",
+                  ),
+        ),
         posts.length === 0
             ? p(
                   {
@@ -52,30 +76,45 @@ function RecentSection({ title, posts }: { title: string; posts: Post[] }) {
 
 function ProfileView({ data }: { data: UserProfile }) {
     return div(
-        { class: "mx-auto flex w-full max-w-5xl flex-col gap-8" },
+        { class: "mx-auto flex w-full max-w-5xl flex-col gap-6" },
         // Identity
         div(
             { class: "flex flex-col gap-1" },
             h2({ class: "text-3xl font-semibold tracking-tight text-zinc-100" }, data.username),
             p({ class: "text-sm text-zinc-500" }, `Member since ${formatJoinDate(data.joinDate)}`),
         ),
-        // Stats
-        div(
-            { class: "grid grid-cols-2 gap-3" },
-            Stat({ label: "Posts", value: data.posts }),
-            Stat({ label: "Favorites", value: data.favorites }),
-        ),
-        RecentSection({ title: "Recent Favorites", posts: data.recentFavorites }),
-        RecentSection({ title: "Recent Uploads", posts: data.recentUploads }),
+        // One section per topic: the count, the "View all" link, and the recent
+        // items are grouped together. The favorites link needs the numeric id,
+        // which is only present when the profile page exposed it.
+        TopicPanel({
+            title: "Posts",
+            count: data.posts,
+            href: routeToUrl({ type: "postlist", tags: `user:${data.username}`, pid: 0 }),
+            posts: data.recentUploads,
+        }),
+        TopicPanel({
+            title: "Favorites",
+            count: data.favorites,
+            href: data.id > 0 ? routeToUrl({ type: "favorites", id: data.id, pid: 0 }) : null,
+            posts: data.recentFavorites,
+        }),
     )
 }
 
-// One "recent" section of the skeleton. A factory (not a shared node) so each
+// One topic section of the skeleton. A factory (not a shared node) so each
 // call yields a fresh element — a DOM node can't be parented twice.
-function recentSkeleton() {
+function panelSkeleton() {
     return div(
         { class: "flex flex-col gap-3" },
-        div({ class: "skeleton h-4 w-32 rounded" }),
+        div(
+            { class: "flex items-center justify-between gap-3" },
+            div(
+                { class: "flex items-baseline gap-2" },
+                div({ class: "skeleton h-6 w-16 rounded" }),
+                div({ class: "skeleton h-3 w-20 rounded" }),
+            ),
+            div({ class: "skeleton h-4 w-16 rounded" }),
+        ),
         div(
             { class: "masonry" },
             Array.from({ length: 5 }).map(() =>
@@ -91,23 +130,18 @@ function recentSkeleton() {
     )
 }
 
-// Skeleton mirroring the loaded layout: identity, two stat cards, two recent
-// sections.
+// Skeleton mirroring the loaded layout: identity, then one topic section each
+// for Posts and Favorites.
 function LoadingSkeleton() {
     return div(
-        { class: "mx-auto flex w-full max-w-5xl flex-col gap-8" },
+        { class: "mx-auto flex w-full max-w-5xl flex-col gap-6" },
         div(
             { class: "flex flex-col gap-2" },
             div({ class: "skeleton h-8 w-48 rounded" }),
             div({ class: "skeleton h-4 w-36 rounded" }),
         ),
-        div(
-            { class: "grid grid-cols-2 gap-3" },
-            div({ class: "skeleton h-20 rounded-xl" }),
-            div({ class: "skeleton h-20 rounded-xl" }),
-        ),
-        recentSkeleton(),
-        recentSkeleton(),
+        panelSkeleton(),
+        panelSkeleton(),
     )
 }
 

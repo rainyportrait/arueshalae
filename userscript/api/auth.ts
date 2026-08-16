@@ -6,6 +6,7 @@ import { type Post, extractPosts } from "./post-list.ts"
 // (`page=favorites&s=view&id=N`) shows any user `N`, so the logged-in user's
 // info and a future profile page share this one shape and parser.
 export type UserProfile = {
+    id: number // numeric id from the profile page's favorites link; 0 when absent
     username: string // the first <h2> inside #content
     joinDate: string // raw "2014-11-12"; the UI formats it
     posts: number
@@ -94,6 +95,7 @@ export function extractUserProfile(doc: Document): UserProfile {
         .replace(/\s+/g, " ")
         .trim()
     return {
+        id: profileId(doc) ?? 0,
         username,
         joinDate: (statCell(doc, "Join Date")?.textContent ?? "").replace(/\s+/g, " ").trim(),
         posts: parseCount(statCell(doc, "Posts")?.textContent ?? ""),
@@ -128,4 +130,12 @@ function recentPosts(doc: Document, heading: string): Post[] {
 
 function parseIdFromHref(href: string): number | null {
     return positiveInt(queryParam(href, "id"))
+}
+
+// The profile table carries the numeric user id in several link hrefs (e.g. the
+// "Favorites" row: `…?page=favorites&s=view&id=N`); the favorites page needs
+// exactly that id, so we pull it from there.
+function profileId(doc: Document): number | null {
+    const a = doc.querySelector<HTMLAnchorElement>('a[href*="page=favorites"][href*="s=view"]')
+    return a === null ? null : positiveInt(queryParam(a.getAttribute("href") ?? "", "id"))
 }

@@ -48,6 +48,7 @@ console.log("\n=== userprofile.html (profile view) ===")
     console.log(
         `  recentFavorites=${profile.recentFavorites.length} recentUploads=${profile.recentUploads.length}`,
     )
+    check("id is 92046", profile.id === 92046, profile.id)
     check("username is Krwn", profile.username === "Krwn", profile.username)
     check("joinDate is 2014-11-12", profile.joinDate === "2014-11-12", profile.joinDate)
     check("posts is 34", profile.posts === 34, profile.posts)

@@ -10,7 +10,7 @@ const version = process.argv[2] ?? "dev"
 
 // Lucide icons rendered as CSS masks, mirroring the blog's lib/icons.js. Add an
 // icon name here to include it in the generated stylesheet.
-const iconNames = ["search", "user"]
+const iconNames = ["search", "user", "chevron-down", "heart", "cog", "log-in", "log-out"]
 
 function buildIconStyles(): string {
     return getIconsCSS(icons, iconNames, {

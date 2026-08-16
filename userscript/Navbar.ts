@@ -10,9 +10,13 @@ import { auth, logout, userInfo } from "./state/auth.ts"
 const { button, div, nav, span } = van.tags
 
 const MENU_ITEM_CLASS = clsx(
-    "block w-full px-3 py-2 text-left text-sm text-zinc-200",
+    "flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-zinc-200 cursor-pointer",
     "hover:bg-zinc-800/60 focus:bg-zinc-800/60 focus:outline-none",
 )
+
+function MenuItemIcon({ name }: { name: string }): HTMLSpanElement {
+    return span({ "icon-name": name, class: "shrink-0 text-zinc-400" })
+}
 
 // A click-to-toggle user menu (no hover). Clicking the trigger opens it,
 // clicking the trigger again or clicking outside closes it, with basic keyboard
@@ -79,11 +83,11 @@ function UserMenu(): HTMLDivElement {
             type: "button",
             class: () =>
                 clsx(
-                    "flex items-center gap-2 rounded-lg border border-transparent px-2.5 py-1.5",
+                    "flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1.5",
                     "text-sm text-zinc-200 transition-colors",
                     auth.val.status === "unknown"
                         ? "cursor-default opacity-60"
-                        : "hover:bg-zinc-800/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40",
+                        : "hover:bg-zinc-800/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40",
                 ),
             "aria-haspopup": "menu",
             "aria-expanded": () => open.val,
@@ -109,6 +113,11 @@ function UserMenu(): HTMLDivElement {
                 ? span({ class: "max-w-40 truncate" }, ui.profile.username)
                 : document.createComment("")
         },
+        // The chevron signals that this opens a menu; it flips while open.
+        span({
+            "icon-name": "chevron-down",
+            class: () => clsx("text-zinc-400 transition-transform", open.val && "rotate-180"),
+        }),
     )
 
     const menu = (): Node => {
@@ -125,6 +134,7 @@ function UserMenu(): HTMLDivElement {
                         role: "menuitem",
                         class: MENU_ITEM_CLASS,
                     },
+                    MenuItemIcon({ name: "log-in" }),
                     "Login",
                 ),
                 Link(
@@ -133,6 +143,7 @@ function UserMenu(): HTMLDivElement {
                         role: "menuitem",
                         class: MENU_ITEM_CLASS,
                     },
+                    MenuItemIcon({ name: "cog" }),
                     "Settings",
                 ),
             )
@@ -144,6 +155,7 @@ function UserMenu(): HTMLDivElement {
                         role: "menuitem",
                         class: MENU_ITEM_CLASS,
                     },
+                    MenuItemIcon({ name: "user" }),
                     "Profile",
                 ),
                 Link(
@@ -152,6 +164,7 @@ function UserMenu(): HTMLDivElement {
                         role: "menuitem",
                         class: MENU_ITEM_CLASS,
                     },
+                    MenuItemIcon({ name: "heart" }),
                     favoritesLabel(),
                 ),
                 Link(
@@ -160,6 +173,7 @@ function UserMenu(): HTMLDivElement {
                         role: "menuitem",
                         class: MENU_ITEM_CLASS,
                     },
+                    MenuItemIcon({ name: "cog" }),
                     "Settings",
                 ),
                 // A divider visually sets Logout apart from the navigation items.
@@ -174,6 +188,7 @@ function UserMenu(): HTMLDivElement {
                             logout()
                         },
                     },
+                    MenuItemIcon({ name: "log-out" }),
                     "Logout",
                 ),
             )

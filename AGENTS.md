@@ -19,6 +19,16 @@ Built with TypeScript, [van.js](https://vanjs.org/) (`vanjs-core`), and Tailwind
   `pnpm exec prettier --check .`.
 - **esbuild does not type-check.** Run `pnpx tsc --noEmit` to verify types.
 
+## Commit messages
+
+- Conventional-commit type prefix without a scope: `feat:`, `fix:`, `refactor:`, `chore:`, `docs:`,
+  `style:`.
+- Subject line: imperative, lowercase, no trailing period. Describe the change as a whole, not the
+  mechanics ("add the favorites page, reusing the post grid and pagination").
+- Small changes: subject line only.
+- Larger changes: a prose body explaining the _why_ and how it works, followed by a bullet list of
+  the touched files as `- path: what changed` (see the authentication commit for the shape).
+
 ## van.js patterns
 
 - `van.derive(f)` runs `f` immediately, stores its return value in `.val`, and re-runs `f` when any

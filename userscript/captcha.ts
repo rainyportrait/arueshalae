@@ -5,7 +5,7 @@ import van from "vanjs-core/src/van"
 // body carries marker words. Refine these for the site's specific provider —
 // they are the only site-specific part of the whole pattern.
 const CHALLENGE_URL_TOKEN = "__cf_chl_rt_tk"
-const CHALLENGE_BODY_MARKERS = ["captcha", "turnstile"]
+const CHALLENGE_BODY_MARKERS = ["please enter the captcha to continue to rule34.xxx"]
 
 // The sentinel the solved iframe posts to the top window.
 const CAPTCHA_SOLVED = "CAPTCHA_SOLVED"

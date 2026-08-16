@@ -32,8 +32,11 @@ export const list = van.state<ListState>({ status: "loading" })
 // Bumped to force a re-fetch (used by the error state's "Try again" button).
 export const reloadTick = van.state(0)
 
+// Read rawVal (not val): this closure runs inside the trigger derive below,
+// and a tracked read would make that derive depend on tags/pid, re-running
+// (and re-fetching) a second time when they change alongside the route.
 const loadList = createLoader<ListReady, void>(list, () =>
-    fetchPostList(tags.val, pid.val).then((result) => ({
+    fetchPostList(tags.rawVal, pid.rawVal).then((result) => ({
         posts: result.posts,
         lastPagePID: result.lastPagePID,
         tags: result.tags,

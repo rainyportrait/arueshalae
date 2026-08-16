@@ -1,11 +1,12 @@
 import van from "vanjs-core"
 
 import { PostGrid } from "./PostGrid.ts"
+import type { Favorites } from "./api/favorites.ts"
 import { routeToUrl } from "./router.ts"
 import {
     FAVORITES_PAGE_SIZE,
-    type FavoritesData,
     favorites,
+    favoritesCount,
     favoritesId,
     favoritesPid,
     reloadFavorites,
@@ -16,10 +17,11 @@ const { div } = van.tags
 export function Favorites() {
     return div({ class: "min-h-[60vh]" }, () => {
         const state = favorites.val
+        const count = favoritesCount.val
         return PostGrid({
             state,
             currentPage: Math.floor(favoritesPid.val / FAVORITES_PAGE_SIZE) + 1,
-            totalPages: state.status === "ready" ? totalPages(state) : 1,
+            totalPages: state.status === "ready" ? totalPages(state, count) : 1,
             pageHref: (page) =>
                 routeToUrl({
                     type: "favorites",
@@ -39,8 +41,7 @@ export function Favorites() {
 
 // Prefer the profile's favorites count; fall back to the site's last-page
 // link when the count is unavailable (0).
-function totalPages(state: FavoritesData): number {
-    if (state.favoritesCount > 0)
-        return Math.max(1, Math.ceil(state.favoritesCount / FAVORITES_PAGE_SIZE))
+function totalPages(state: Favorites, count: number): number {
+    if (count > 0) return Math.max(1, Math.ceil(count / FAVORITES_PAGE_SIZE))
     return Math.max(1, Math.round(state.lastPagePID / FAVORITES_PAGE_SIZE) + 1)
 }

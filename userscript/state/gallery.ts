@@ -22,6 +22,12 @@ export type GalleryState = Loadable<Gallery>
 
 export const gallery = van.state<GalleryState>({ status: "loading" })
 
+// Focus mode: hides the app navbar and the post's metadata sidebar so the
+// gallery fills the screen. Only meaningful on a gallery post (a postdetails
+// route with an origin); the derive below force-turns it off the moment the
+// route leaves one, so it never survives leaving the gallery.
+export const galleryFocus = van.state(false)
+
 type PostDetailsRoute = Extract<Route, { type: "postdetails" }>
 
 // Out-of-order protection for the origin-page load (fast steps, searches).
@@ -42,6 +48,14 @@ van.derive(() => {
     const r = route.val
     if (r.type !== "postdetails" || r.origin === undefined) return
     loadOrigin(r.origin)
+})
+
+// Focus mode only exists in a gallery: turn it off whenever the route is not a
+// gallery post. Reads only `route`, so the write back to `galleryFocus` never
+// re-triggers this derive.
+van.derive(() => {
+    const r = route.val
+    if (r.type !== "postdetails" || r.origin === undefined) galleryFocus.val = false
 })
 
 function loadOrigin(origin: PostOrigin): void {

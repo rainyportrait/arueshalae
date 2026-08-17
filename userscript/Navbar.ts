@@ -6,6 +6,7 @@ import { SearchBar } from "./SearchBar.ts"
 import clsx from "./clsx.ts"
 import { route, routeToUrl } from "./router.ts"
 import { auth, logout, userInfo } from "./state/auth.ts"
+import { galleryFocus } from "./state/gallery.ts"
 
 const { button, div, nav, span } = van.tags
 
@@ -215,9 +216,14 @@ function UserMenu(): HTMLDivElement {
 export function Navbar() {
     return nav(
         {
-            class: clsx(
-                "sticky top-0 z-50 border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur",
-            ),
+            // Focus mode hides the whole bar. `display: none` (not unmounting)
+            // keeps the search box and user menu mounted so their state
+            // survives a toggle.
+            class: () =>
+                clsx(
+                    "sticky top-0 z-50 border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur",
+                    galleryFocus.val && "hidden",
+                ),
         },
         div(
             { class: clsx("mx-auto flex w-full max-w-[2000px] items-center gap-3 px-4 py-3") },

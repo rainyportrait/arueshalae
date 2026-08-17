@@ -9,7 +9,7 @@ import type { PostDetails as PostDetailsData } from "./api/post-details.ts"
 import clsx from "./clsx.ts"
 import { type PostOrigin, postHref, route } from "./router.ts"
 import { details, reloadDetails } from "./state/details.ts"
-import { canStep, gallery, reloadGallery, step } from "./state/gallery.ts"
+import { canStep, gallery, galleryFocus, reloadGallery, step } from "./state/gallery.ts"
 import { preferOriginal } from "./state/settings.ts"
 
 const { a, aside, button, div, h4, img, span, video } = van.tags
@@ -157,6 +157,33 @@ function GalleryArrow({ dir }: { dir: 1 | -1 }) {
     }
 }
 
+// Toggles focus mode: hides the app navbar and the post's metadata sidebar so
+// the gallery fills the screen. Lives in the filmstrip header (the part of the
+// gallery that stays visible in focus mode) so the user can always exit.
+function FocusButton() {
+    return button(
+        {
+            type: "button",
+            class: () =>
+                clsx(
+                    "flex h-6 w-6 shrink-0 items-center justify-center rounded-md border transition-colors",
+                    galleryFocus.val
+                        ? "border-zinc-500 bg-zinc-700 text-zinc-100"
+                        : "border-zinc-800 text-zinc-500 hover:bg-zinc-800/60 hover:text-zinc-200",
+                ),
+            title: () => (galleryFocus.val ? "Exit focus mode" : "Focus mode: hide navigation"),
+            onclick: () => {
+                galleryFocus.val = !galleryFocus.val
+            },
+        },
+        () =>
+            span({
+                "icon-name": galleryFocus.val ? "minimize" : "maximize",
+                class: clsx("text-sm"),
+            }),
+    )
+}
+
 // The gallery filmstrip: the collection's loaded posts as thumbnails, with a
 // position counter. The strip grows as boundary steps load more pages.
 function Filmstrip({ origin, activeId }: { origin: PostOrigin; activeId: number }) {
@@ -190,12 +217,16 @@ function Filmstrip({ origin, activeId }: { origin: PostOrigin; activeId: number 
                     { class: clsx("text-xs font-semibold tracking-wider text-zinc-500 uppercase") },
                     "Gallery",
                 ),
-                index === -1
-                    ? document.createComment("")
-                    : span(
-                          { class: clsx("text-xs text-zinc-500 tabular-nums") },
-                          `${index + 1} / ${posts.length}`,
-                      ),
+                div(
+                    { class: clsx("flex items-center gap-2") },
+                    index === -1
+                        ? document.createComment("")
+                        : span(
+                              { class: clsx("text-xs text-zinc-500 tabular-nums") },
+                              `${index + 1} / ${posts.length}`,
+                          ),
+                    FocusButton(),
+                ),
             ),
             div(
                 { class: clsx("flex gap-1.5 overflow-x-auto pb-1") },
@@ -296,7 +327,15 @@ export function PostDetails() {
         return div(
             { class: clsx("flex flex-col gap-6 lg:flex-row") },
             aside(
-                { class: clsx("order-last w-full shrink-0 lg:order-first lg:w-64") },
+                {
+                    // Focus mode hides the metadata sidebar so the media fills
+                    // the row; `display: none` keeps it mounted.
+                    class: () =>
+                        clsx(
+                            "order-last w-full shrink-0 lg:order-first lg:w-64",
+                            galleryFocus.val && "hidden",
+                        ),
+                },
                 Sidebar({ post: state.post, showOriginal }),
             ),
             div(

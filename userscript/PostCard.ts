@@ -4,13 +4,28 @@ import { Link } from "./Link.ts"
 import type { Post } from "./api/post-list.ts"
 import clsx from "./clsx.ts"
 import { setCardSpan } from "./masonry.ts"
+import { postHref, route } from "./router.ts"
 
 const { img } = van.tags
+
+// On the post list and favorites routes the post link carries the gallery
+// origin (which collection it came from and from which page), so the details
+// page can offer navigation to the adjacent posts. Any other surface (e.g.
+// the profile page) keeps the site's bare link. Evaluated at render time, so
+// it follows the route: the grid re-renders whenever it changes.
+function cardHref(post: Post): string {
+    const r = route.val
+    if (r.type === "postlist")
+        return postHref(post.link, { kind: "list", tags: r.tags, pid: r.pid })
+    if (r.type === "favorites")
+        return postHref(post.link, { kind: "favorites", uid: r.id, pid: r.pid })
+    return post.link
+}
 
 export function PostCard(post: Post) {
     return Link(
         {
-            href: post.link,
+            href: cardHref(post),
             class: clsx(
                 "masonry-item group",
                 "block w-full overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900",

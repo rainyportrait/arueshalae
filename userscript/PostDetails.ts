@@ -7,10 +7,12 @@ import { TagList } from "./TagList.ts"
 import { Toggle } from "./Toggle.ts"
 import type { PostDetails as PostDetailsData } from "./api/post-details.ts"
 import clsx from "./clsx.ts"
+import { type PostOrigin, postHref, route } from "./router.ts"
 import { details, reloadDetails } from "./state/details.ts"
+import { canStep, gallery, pageLoads, reloadGallery, step } from "./state/gallery.ts"
 import { preferOriginal } from "./state/settings.ts"
 
-const { a, aside, div, h4, img, span, video } = van.tags
+const { a, aside, button, div, h4, img, span, video } = van.tags
 
 function StatsSection({ post }: { post: PostDetailsData }) {
     const cells: ChildDom[] = []
@@ -132,6 +134,114 @@ function MediaArea({
     return div({ class: clsx("flex min-h-[60vh] items-center justify-center") }, element)
 }
 
+// One side of the gallery: a live node returning a chevron button. Disabled
+// (and inert) when there is no post in that direction.
+function GalleryArrow({ dir }: { dir: 1 | -1 }) {
+    return () => {
+        const enabled = canStep(dir)
+        return button(
+            {
+                type: "button",
+                class: clsx(
+                    "pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-zinc-700",
+                    "bg-zinc-900/80 text-lg text-zinc-200 backdrop-blur transition-colors",
+                    enabled ? "cursor-pointer hover:bg-zinc-800" : "cursor-default opacity-30",
+                ),
+                title: dir === 1 ? "Next post (→)" : "Previous post (←)",
+                onclick: () => {
+                    if (enabled) step(dir)
+                },
+            },
+            span({ "icon-name": dir === 1 ? "chevron-right" : "chevron-left" }),
+        )
+    }
+}
+
+// The gallery filmstrip: the collection's loaded posts as thumbnails, with a
+// position counter. The strip grows as boundary steps load more pages.
+function Filmstrip({ origin, activeId }: { origin: PostOrigin; activeId: number }) {
+    return div({ class: clsx("flex flex-col gap-1.5") }, () => {
+        // Read pageLoads so the strip re-renders while a boundary page loads
+        // and once it lands.
+        void pageLoads.val
+        const g = gallery.val
+        if (g.status === "loading") return div({ class: clsx("skeleton h-14 rounded-lg") })
+        if (g.status === "error") {
+            return div(
+                {
+                    class: clsx(
+                        "flex items-center gap-3 rounded-lg border border-zinc-800 px-3 py-2 text-sm text-zinc-400",
+                    ),
+                },
+                `Couldn't load nearby posts: ${g.error}`,
+                button(
+                    {
+                        type: "button",
+                        class: clsx("text-zinc-200 underline"),
+                        onclick: reloadGallery,
+                    },
+                    "Try again",
+                ),
+            )
+        }
+        const posts = g.pages.flatMap((p) => p.posts)
+        const index = posts.findIndex((p) => p.id === activeId)
+        return div(
+            div(
+                { class: clsx("flex items-center justify-between px-0.5") },
+                span(
+                    { class: clsx("text-xs font-semibold tracking-wider text-zinc-500 uppercase") },
+                    "Gallery",
+                ),
+                index === -1
+                    ? document.createComment("")
+                    : span(
+                          { class: clsx("text-xs text-zinc-500 tabular-nums") },
+                          `${index + 1} / ${posts.length}`,
+                      ),
+            ),
+            div(
+                { class: clsx("flex gap-1.5 overflow-x-auto pb-1") },
+                posts.map((post) =>
+                    Link(
+                        {
+                            href: postHref(post.link, origin),
+                            class: clsx(
+                                "shrink-0 overflow-hidden rounded-md border transition-opacity",
+                                post.id === activeId
+                                    ? "border-zinc-200 opacity-100"
+                                    : "border-transparent opacity-50 hover:opacity-100",
+                            ),
+                            title: `Post #${post.id}`,
+                            ...(post.id === activeId ? { "data-gallery-active": "true" } : {}),
+                        },
+                        img({
+                            src: post.thumbnail,
+                            alt: `Post ${post.id}`,
+                            loading: "lazy",
+                            class: clsx("h-12 w-16 object-cover"),
+                        }),
+                    ),
+                ),
+            ),
+            // Scroll the active thumb into view after each render.
+            () => {
+                queueMicrotask(() => {
+                    const active = document.querySelector<HTMLAnchorElement>(
+                        '[data-gallery-active="true"]',
+                    )
+                    active?.scrollIntoView({
+                        behavior: "smooth",
+                        block: "nearest",
+                        inline: "center",
+                    })
+                })
+                return document.createComment("")
+            },
+        )
+    })
+}
+
 function LoadingState() {
     // Matches the loaded layout: media first on mobile, sidebar below it;
     // sidebar left on desktop.
@@ -177,6 +287,10 @@ export function PostDetails() {
         // Fresh per post: the toggle resets whenever the details change, but
         // starts from the user's "load original right away" setting.
         const showOriginal = van.state(preferOriginal.val)
+        // The gallery (arrows + filmstrip) shows when the post was opened
+        // from a list or favorites page — the origin rides on the URL.
+        const r = route.val
+        const origin = r.type === "postdetails" ? r.origin : undefined
         // Sidebar sits left of the media on desktop; on narrow screens it
         // stacks below the media at full width.
         return div(
@@ -187,7 +301,26 @@ export function PostDetails() {
             ),
             div(
                 { class: clsx("order-first min-w-0 flex-1") },
-                MediaArea({ post: state.post, showOriginal }),
+                origin !== undefined
+                    ? [
+                          div(
+                              { class: clsx("relative") },
+                              MediaArea({ post: state.post, showOriginal }),
+                              // A live node must return one connected node, so
+                              // each arrow is a live node in this static overlay.
+                              div(
+                                  {
+                                      class: clsx(
+                                          "pointer-events-none absolute inset-0 flex items-center justify-between px-2",
+                                      ),
+                                  },
+                                  GalleryArrow({ dir: -1 }),
+                                  GalleryArrow({ dir: 1 }),
+                              ),
+                          ),
+                          Filmstrip({ origin, activeId: state.post.id }),
+                      ]
+                    : MediaArea({ post: state.post, showOriginal }),
             ),
         )
     })

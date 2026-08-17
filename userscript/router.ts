@@ -2,12 +2,21 @@ import van from "vanjs-core"
 
 import { positiveInt } from "./api/parse.ts"
 
+// Where a post was opened from: a post list search (or the home feed, whose
+// tags are undefined) or a user's favorites page. Rides on the post's URL so
+// the post details page can offer gallery navigation to the adjacent posts.
+// Absent (undefined) when the post was opened without a list context
+// (profile page, direct link).
+export type PostOrigin =
+    | { kind: "list"; tags: string | undefined; pid: number }
+    | { kind: "favorites"; uid: number; pid: number }
+
 // A route is a parsed view of the current URL. The rule34.xxx URL scheme
 // discriminates on the (page, s) query pair; we map that onto a discriminated
 // union. Anything we don't recognize explicitly is `unknown` (rendered as 404).
 export type Route =
     | { type: "postlist"; tags: string | undefined; pid: number }
-    | { type: "postdetails"; id: number; tags: string | undefined }
+    | { type: "postdetails"; id: number; tags: string | undefined; origin: PostOrigin | undefined }
     // An account can be addressed by numeric id or by username; the site
     // resolves both. We keep whichever the URL carried.
     | { type: "account"; id: number }
@@ -16,6 +25,33 @@ export type Route =
     | { type: "settings" }
     | { type: "login" }
     | { type: "unknown" }
+
+// The gallery context a post link carries. `from=favorites&uid=N` marks a
+// post opened from a favorites page (whose site links carry no search
+// query); otherwise a `pid` parameter marks a post opened from a list — the
+// site only uses `pid` on list pages, so its presence is unambiguous.
+function parsePostOrigin(
+    params: URLSearchParams,
+    tags: string | undefined,
+): PostOrigin | undefined {
+    if (params.get("from") === "favorites") {
+        const uid = positiveInt(params.get("uid"))
+        return uid === null
+            ? undefined
+            : { kind: "favorites", uid, pid: pidParam(params.get("pid")) }
+    }
+    if (params.has("pid")) return { kind: "list", tags, pid: pidParam(params.get("pid")) }
+    return undefined
+}
+
+// A post view URL for a list post: the site link (which carries the search
+// query on search results) plus the origin parameters.
+export function postHref(link: string, origin: PostOrigin): string {
+    let url = link
+    if (origin.kind === "favorites") url += `&from=favorites&uid=${origin.uid}`
+    url += `&pid=${origin.pid}`
+    return url
+}
 
 const BASE = "/index.php"
 
@@ -40,11 +76,12 @@ export function parseRoute(url: string): Route {
     }
     if (page === "post" && s === "view") {
         const id = positiveInt(params.get("id"))
+        const tags = params.get("tags") ?? undefined
         // The site appends the active search query to post links so it can be
         // restored when navigating back; keep it on the route.
         return id === null
             ? { type: "unknown" }
-            : { type: "postdetails", id, tags: params.get("tags") ?? undefined }
+            : { type: "postdetails", id, tags, origin: parsePostOrigin(params, tags) }
     }
     if (page === "account" && s === "profile") {
         const id = positiveInt(params.get("id"))
@@ -84,6 +121,11 @@ export function routeToUrl(route: Route): string {
         case "postdetails": {
             let url = `${BASE}?page=post&s=view&id=${route.id}`
             if (route.tags) url += `&tags=${encodeURIComponent(route.tags)}`
+            const origin = route.origin
+            if (origin) {
+                if (origin.kind === "favorites") url += `&from=favorites&uid=${origin.uid}`
+                url += `&pid=${origin.pid}`
+            }
             return url
         }
         case "account":

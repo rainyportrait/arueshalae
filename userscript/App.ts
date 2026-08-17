@@ -18,7 +18,7 @@ function ArueApp() {
     return div(
         { class: clsx("flex min-h-screen flex-col bg-zinc-950 text-zinc-100") },
         Navbar(),
-        main({ class: clsx("mx-auto w-full max-w-[2000px] flex-1 px-4 py-6") }, () => {
+        main({ class: clsx("mx-auto w-full flex-1 px-4 py-6") }, () => {
             const r = route.val
             switch (r.type) {
                 case "postlist":

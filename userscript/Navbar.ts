@@ -226,7 +226,7 @@ export function Navbar() {
                 ),
         },
         div(
-            { class: clsx("mx-auto flex w-full max-w-[2000px] items-center gap-3 px-4 py-3") },
+            { class: clsx("mx-auto flex w-full items-center gap-3 px-4 py-3") },
             Link(
                 {
                     href: "/index.php?page=post&s=list",

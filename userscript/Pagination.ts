@@ -2,20 +2,27 @@ import van from "vanjs-core"
 
 import { Link } from "./Link.ts"
 import clsx from "./clsx.ts"
+import { navigate, parseRoute } from "./router.ts"
 
-const { div, nav, span } = van.tags
+const { div, form, input, nav, span } = van.tags
 
-type PageItem = number | "ellipsis"
+type PageItem =
+    | { kind: "page"; page: number }
+    // A run of pages too far from the current one to render as buttons; the
+    // min/max is the range this gap covers (used as a hint for the jump input).
+    | { kind: "gap"; min: number; max: number }
 
 function pageItems(current: number, total: number): PageItem[] {
-    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
-    const items: PageItem[] = [1]
+    if (total <= 7) {
+        return Array.from({ length: total }, (_, i) => ({ kind: "page" as const, page: i + 1 }))
+    }
+    const items: PageItem[] = [{ kind: "page", page: 1 }]
     const left = Math.max(2, current - 1)
     const right = Math.min(total - 1, current + 1)
-    if (left > 2) items.push("ellipsis")
-    for (let page = left; page <= right; page++) items.push(page)
-    if (right < total - 1) items.push("ellipsis")
-    items.push(total)
+    if (left > 2) items.push({ kind: "gap", min: 2, max: left - 1 })
+    for (let page = left; page <= right; page++) items.push({ kind: "page", page })
+    if (right < total - 1) items.push({ kind: "gap", min: right + 1, max: total - 1 })
+    items.push({ kind: "page", page: total })
     return items
 }
 
@@ -59,6 +66,46 @@ function PageItem({ href, label, title = label, disabled = false, active = false
     )
 }
 
+interface PageJumpProps {
+    // The range of pages the gap this input stands in for covers. Suggested
+    // in the title; the input itself accepts any valid page.
+    min: number
+    max: number
+    totalPages: number
+    pageHref: (page: number) => string
+}
+
+// Stands in for a collapsed range of pages: type a page number and press
+// Enter to jump there. Navigates SPA-style when the target is a known route
+// (mirroring Link), and falls back to a full navigation otherwise.
+function PageJump({ min, max, totalPages, pageHref }: PageJumpProps) {
+    return form(
+        {
+            class: "flex items-center",
+            onsubmit: (e: SubmitEvent) => {
+                e.preventDefault()
+                const el = e.currentTarget as HTMLFormElement
+                const raw = Number((el.elements.namedItem("page") as HTMLInputElement).value)
+                if (!Number.isFinite(raw)) return
+                const page = Math.min(totalPages, Math.max(1, Math.trunc(raw)))
+                const href = pageHref(page)
+                const next = parseRoute(href)
+                if (next.type === "unknown") window.location.assign(href)
+                else navigate(next)
+            },
+        },
+        input({
+            type: "number",
+            name: "page",
+            min: 1,
+            max: totalPages,
+            placeholder: "…",
+            title: `Type a page number and press Enter (this gap covers ${min}–${max})`,
+            class: "w-7 rounded-lg border border-transparent bg-transparent px-2 py-1.5 text-center text-sm tabular-nums placeholder:text-zinc-600 hover:border-zinc-700 hover:bg-zinc-900 focus:border-rose-500 focus:bg-zinc-900 focus:outline-none focus:w-14 transition-all",
+        }),
+    )
+}
+
 export interface PaginationProps {
     currentPage: number
     totalPages: number
@@ -89,13 +136,18 @@ export function Pagination({ currentPage, totalPages, pageHref }: PaginationProp
                 disabled: currentPage <= 1,
             }),
             ...pageItems(currentPage, totalPages).map((item) =>
-                item === "ellipsis"
-                    ? span({ class: clsx("px-1 text-zinc-600") }, "…")
+                item.kind === "gap"
+                    ? PageJump({
+                          min: item.min,
+                          max: item.max,
+                          totalPages,
+                          pageHref,
+                      })
                     : PageItem({
-                          href: pageHref(item),
-                          label: String(item),
-                          title: `Page ${item}`,
-                          active: item === currentPage,
+                          href: pageHref(item.page),
+                          label: String(item.page),
+                          title: `Page ${item.page}`,
+                          active: item.page === currentPage,
                       }),
             ),
             PageItem({

@@ -81,3 +81,13 @@ body {
         transform: translateX(100%);
     }
 }
+
+/* Hide the native number-input spin buttons (used by the Pagination jump input). */
+input[type="number"] {
+    appearance: textfield;
+}
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}

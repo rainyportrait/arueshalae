@@ -19,7 +19,7 @@ function TagPill({ tag }: { tag: string }) {
         {
             class: clsx(
                 "flex items-center gap-1 rounded-full border border-zinc-700 bg-zinc-800/60",
-                "py-1 pl-3 pr-1.5 text-sm text-zinc-200",
+                "py-1 pr-1.5 pl-3 text-sm text-zinc-200",
             ),
         },
         tag,
@@ -68,27 +68,32 @@ export function Settings() {
     }
 
     return div(
-        { class: "mx-auto flex w-full max-w-3xl flex-col gap-8" },
+        { class: clsx("mx-auto flex w-full max-w-3xl flex-col gap-8") },
         div(
-            { class: "flex flex-col gap-1" },
-            h1({ class: "text-3xl font-semibold tracking-tight text-zinc-100" }, "Settings"),
-            p({ class: "text-sm text-zinc-500" }, "Saved to this browser; no login required."),
+            { class: clsx("flex flex-col gap-1") },
+            h1({ class: clsx("text-3xl font-semibold tracking-tight text-zinc-100") }, "Settings"),
+            p(
+                { class: clsx("text-sm text-zinc-500") },
+                "Saved to this browser; no login required.",
+            ),
         ),
 
         section(
             {
-                class: "flex flex-col gap-4 rounded-xl border border-zinc-800 bg-zinc-900/40 p-5",
+                class: clsx(
+                    "flex flex-col gap-4 rounded-xl border border-zinc-800 bg-zinc-900/40 p-5",
+                ),
             },
             div(
-                { class: "flex flex-col gap-1" },
-                h2({ class: "text-lg font-semibold text-zinc-100" }, "Tag blacklist"),
+                { class: clsx("flex flex-col gap-1") },
+                h2({ class: clsx("text-lg font-semibold text-zinc-100") }, "Tag blacklist"),
                 p(
-                    { class: "text-sm text-zinc-500" },
+                    { class: clsx("text-sm text-zinc-500") },
                     "Posts carrying any of these tags are hidden from the post list. Favorites and other pages are unaffected.",
                 ),
             ),
             div(
-                { class: "flex items-center gap-2" },
+                { class: clsx("flex items-center gap-2") },
                 AutocompleteInput({
                     placeholder: "Add a tag (e.g. ai_generated)",
                     ariaLabel: "Add a tag to the blacklist",
@@ -112,9 +117,9 @@ export function Settings() {
             () => {
                 const tags = tagBlacklist.val
                 if (tags.length === 0)
-                    return p({ class: "text-sm text-zinc-600" }, "No tags blacklisted yet.")
+                    return p({ class: clsx("text-sm text-zinc-600") }, "No tags blacklisted yet.")
                 return div(
-                    { class: "flex flex-wrap gap-2" },
+                    { class: clsx("flex flex-wrap gap-2") },
                     tags.map((tag) => TagPill({ tag })),
                 )
             },
@@ -122,12 +127,14 @@ export function Settings() {
 
         section(
             {
-                class: "flex flex-col gap-4 rounded-xl border border-zinc-800 bg-zinc-900/40 p-5",
+                class: clsx(
+                    "flex flex-col gap-4 rounded-xl border border-zinc-800 bg-zinc-900/40 p-5",
+                ),
             },
             div(
-                { class: "flex flex-col gap-1" },
-                h2({ class: "text-lg font-semibold text-zinc-100" }, "Image quality"),
-                p({ class: "text-sm text-zinc-500" }, "How post images are loaded."),
+                { class: clsx("flex flex-col gap-1") },
+                h2({ class: clsx("text-lg font-semibold text-zinc-100") }, "Image quality"),
+                p({ class: clsx("text-sm text-zinc-500") }, "How post images are loaded."),
             ),
             Toggle({
                 label: "Load original image right away",

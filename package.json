@@ -26,6 +26,7 @@
         "esbuild": "^0.28.2",
         "linkedom": "0.18.13",
         "prettier": "^3.9.6",
+        "prettier-plugin-tailwindcss": "^0.8.1",
         "typescript": "^7.0.2"
     },
     "dependencies": {

@@ -9,15 +9,16 @@ import { PostDetails } from "./PostDetails.ts"
 import { PostList } from "./PostList.ts"
 import { Settings } from "./Settings.ts"
 import { CaptchaModal } from "./captcha.ts"
+import clsx from "./clsx.ts"
 import { route } from "./router.ts"
 
 const { div, main } = van.tags
 
 function ArueApp() {
     return div(
-        { class: "flex min-h-screen flex-col bg-zinc-950 text-zinc-100" },
+        { class: clsx("flex min-h-screen flex-col bg-zinc-950 text-zinc-100") },
         Navbar(),
-        main({ class: "mx-auto w-full max-w-[2000px] flex-1 px-4 py-6" }, () => {
+        main({ class: clsx("mx-auto w-full max-w-[2000px] flex-1 px-4 py-6") }, () => {
             const r = route.val
             switch (r.type) {
                 case "postlist":

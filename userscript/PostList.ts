@@ -17,9 +17,9 @@ const TAG_SKELETON_WIDTHS = ["80%", "65%", "90%", "55%", "70%", "45%", "85%", "6
 
 function TagListSkeleton() {
     return div(
-        { class: "flex flex-col gap-2.5" },
+        { class: clsx("flex flex-col gap-2.5") },
         TAG_SKELETON_WIDTHS.map((width) =>
-            div({ class: "skeleton h-4 rounded", style: `width: ${width}` }),
+            div({ class: clsx("skeleton h-4 rounded"), style: `width: ${width}` }),
         ),
     )
 }
@@ -51,14 +51,14 @@ function HiddenPostsToggle({ count }: { count: number }): ChildDom {
 // grid takes the full width.
 function PostListLayout({ sidebar, main }: { sidebar: ChildDom; main: ChildDom }) {
     return div(
-        { class: "flex gap-6" },
-        aside({ class: "hidden w-64 shrink-0 sm:block" }, sidebar),
-        div({ class: "min-w-0 flex-1" }, main),
+        { class: clsx("flex gap-6") },
+        aside({ class: clsx("hidden w-64 shrink-0 sm:block") }, sidebar),
+        div({ class: clsx("min-w-0 flex-1") }, main),
     )
 }
 
 export function PostList() {
-    return div({ class: "min-h-[60vh]" }, () => {
+    return div({ class: clsx("min-h-[60vh]") }, () => {
         const state = list.val
         // Apply the tag blacklist to the ready page: split into the posts to
         // show and how many are hidden. Off the ready state there is nothing to
@@ -110,7 +110,7 @@ export function PostList() {
                 sidebar:
                     state.status === "ready"
                         ? div(
-                              { class: "flex flex-col gap-6" },
+                              { class: clsx("flex flex-col gap-6") },
                               HiddenPostsToggle({ count: hidden }),
                               TagList({ tags: state.tags }),
                           )

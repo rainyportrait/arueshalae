@@ -35,7 +35,7 @@ export function SearchBar() {
 
     return form(
         {
-            class: "flex min-w-0 flex-1 items-center gap-2",
+            class: clsx("flex min-w-0 flex-1 items-center gap-2"),
             role: "search",
             // The Search button submits the form; Enter in the field is routed
             // through onEnter (the autocomplete intercepts it). Both land here.

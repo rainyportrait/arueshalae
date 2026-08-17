@@ -10,12 +10,12 @@ import { auth, logout, userInfo } from "./state/auth.ts"
 const { button, div, nav, span } = van.tags
 
 const MENU_ITEM_CLASS = clsx(
-    "flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-zinc-200 cursor-pointer",
+    "flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-sm text-zinc-200",
     "hover:bg-zinc-800/60 focus:bg-zinc-800/60 focus:outline-none",
 )
 
 function MenuItemIcon({ name }: { name: string }): HTMLSpanElement {
-    return span({ "icon-name": name, class: "shrink-0 text-zinc-400" })
+    return span({ "icon-name": name, class: clsx("shrink-0 text-zinc-400") })
 }
 
 // A click-to-toggle user menu (no hover). Clicking the trigger opens it,
@@ -100,13 +100,13 @@ function UserMenu(): HTMLDivElement {
                 }
             },
         },
-        span({ "icon-name": "user", class: "text-lg text-zinc-400" }),
+        span({ "icon-name": "user", class: clsx("text-lg text-zinc-400") }),
         // The username appears only when the profile is ready, so the trigger
         // doesn't grow/shrink as the name arrives (just the icon meanwhile).
         () => {
             const ui = userInfo.val
             return ui.status === "ready"
-                ? span({ class: "max-w-40 truncate" }, ui.profile.username)
+                ? span({ class: clsx("max-w-40 truncate") }, ui.profile.username)
                 : document.createComment("")
         },
         // The chevron signals that this opens a menu; it flips while open.
@@ -172,7 +172,7 @@ function UserMenu(): HTMLDivElement {
                     "Settings",
                 ),
                 // A divider visually sets Logout apart from the navigation items.
-                div({ role: "separator", class: "my-1 border-t border-zinc-800" }),
+                div({ role: "separator", class: clsx("my-1 border-t border-zinc-800") }),
                 button(
                     {
                         type: "button",
@@ -193,7 +193,7 @@ function UserMenu(): HTMLDivElement {
             {
                 role: "menu",
                 class: clsx(
-                    "absolute right-0 top-full z-50 mt-2 min-w-44",
+                    "absolute top-full right-0 z-50 mt-2 min-w-44",
                     "rounded-lg border border-zinc-800 bg-zinc-900 py-1 shadow-lg",
                 ),
             },
@@ -208,7 +208,7 @@ function UserMenu(): HTMLDivElement {
         return ui.status === "ready" ? `Favorites (${ui.profile.favorites})` : "Favorites"
     }
 
-    container = div({ class: "relative flex items-center" }, trigger, menu)
+    container = div({ class: clsx("relative flex items-center") }, trigger, menu)
     return container
 }
 
@@ -220,15 +220,18 @@ export function Navbar() {
             ),
         },
         div(
-            { class: "mx-auto flex w-full max-w-[2000px] items-center gap-3 px-4 py-3" },
+            { class: clsx("mx-auto flex w-full max-w-[2000px] items-center gap-3 px-4 py-3") },
             Link(
                 {
                     href: "/index.php?page=post&s=list",
-                    class: "flex shrink-0 items-center gap-2",
+                    class: clsx("flex shrink-0 items-center gap-2"),
                     "aria-label": "Arueshalae home",
                 },
-                span({ class: "text-sm leading-none text-rose-500" }, "◆"),
-                span({ class: "text-lg font-semibold tracking-tight text-zinc-100" }, "Arueshalae"),
+                span({ class: clsx("text-sm leading-none text-rose-500") }, "◆"),
+                span(
+                    { class: clsx("text-lg font-semibold tracking-tight text-zinc-100") },
+                    "Arueshalae",
+                ),
             ),
             SearchBar(),
             UserMenu(),

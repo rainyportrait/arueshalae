@@ -49,7 +49,7 @@ function TagLink({ tag }: { tag: Tag }) {
         span({ class: clsx("min-w-0 truncate text-sm", TAG_META[tag.type].color) }, tag.name),
         span(
             {
-                class: "ml-auto shrink-0 text-xs tabular-nums text-zinc-500",
+                class: clsx("ml-auto shrink-0 text-xs text-zinc-500 tabular-nums"),
             },
             tag.count.toLocaleString(),
         ),
@@ -68,12 +68,12 @@ function TagGroup({ type, tags }: { type: TagType; tags: Tag[] }) {
     return () => {
         const isCollapsed = interactive && collapsed.val
         return div(
-            { class: "flex flex-col gap-1" },
+            { class: clsx("flex flex-col gap-1") },
             button(
                 {
                     class: clsx(
-                        "flex justify-between gap-1 text-xs font-semibold uppercase tracking-wider text-zinc-500",
-                        "not-disabled:cursor-pointer select-none transition-colors not-disabled:hover:text-zinc-300",
+                        "flex justify-between gap-1 text-xs font-semibold tracking-wider text-zinc-500 uppercase",
+                        "transition-colors select-none not-disabled:cursor-pointer not-disabled:hover:text-zinc-300",
                     ),
                     disabled: !interactive,
                     onclick: () => (collapsed.val = !collapsed.val),
@@ -98,7 +98,7 @@ function TagGroup({ type, tags }: { type: TagType; tags: Tag[] }) {
             // The tag block is indented as a whole (hover highlights included),
             // so it reads as nested under the heading rather than flush with it.
             div(
-                { class: "flex flex-col gap-2" },
+                { class: clsx("flex flex-col gap-2") },
                 isCollapsed
                     ? [
                           TagLink({ tag: tags[0] }),
@@ -106,7 +106,9 @@ function TagGroup({ type, tags }: { type: TagType; tags: Tag[] }) {
                               ? [
                                     button(
                                         {
-                                            class: "text-xs text-zinc-500 text-left cursor-pointer select-none transition-colors not-disabled:hover:text-zinc-300 px-2",
+                                            class: clsx(
+                                                "cursor-pointer px-2 text-left text-xs text-zinc-500 transition-colors select-none not-disabled:hover:text-zinc-300",
+                                            ),
                                             onclick: () => (collapsed.val = !collapsed.val),
                                         },
                                         `${tags.length - 1} more ${tags.length - 1 === 1 ? "tag" : "tags"}`,
@@ -126,7 +128,7 @@ function TagGroup({ type, tags }: { type: TagType; tags: Tag[] }) {
 export function TagList({ tags }: { tags: Tag[] }) {
     if (tags.length === 0) return div()
     return div(
-        { class: "flex flex-col gap-4" },
+        { class: clsx("flex flex-col gap-4") },
         groupByType(tags).map(([type, group]) => TagGroup({ type, tags: group })),
     )
 }

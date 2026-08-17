@@ -73,9 +73,9 @@ export function Pagination({ currentPage, totalPages, pageHref }: PaginationProp
     if (totalPages <= 1) return div()
 
     return nav(
-        { class: "mt-10 flex justify-center pb-4", "aria-label": "Pagination" },
+        { class: clsx("mt-10 flex justify-center pb-4"), "aria-label": "Pagination" },
         div(
-            { class: "flex flex-wrap items-center justify-center gap-1.5" },
+            { class: clsx("flex flex-wrap items-center justify-center gap-1.5") },
             PageItem({
                 href: pageHref(1),
                 label: "«",
@@ -90,7 +90,7 @@ export function Pagination({ currentPage, totalPages, pageHref }: PaginationProp
             }),
             ...pageItems(currentPage, totalPages).map((item) =>
                 item === "ellipsis"
-                    ? span({ class: "px-1 text-zinc-600" }, "…")
+                    ? span({ class: clsx("px-1 text-zinc-600") }, "…")
                     : PageItem({
                           href: pageHref(item),
                           label: String(item),

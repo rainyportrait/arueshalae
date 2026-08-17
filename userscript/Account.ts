@@ -5,6 +5,7 @@ import { Link } from "./Link.ts"
 import { PostCard } from "./PostCard.ts"
 import type { UserProfile } from "./api/auth.ts"
 import type { Post } from "./api/post-list.ts"
+import clsx from "./clsx.ts"
 import { MASONRY_GAP } from "./masonry.ts"
 import { routeToUrl } from "./router.ts"
 import { profile, reloadProfile } from "./state/account.ts"
@@ -42,33 +43,41 @@ function TopicPanel({
     posts: Post[]
 }) {
     return div(
-        { class: "flex flex-col gap-3" },
+        { class: clsx("flex flex-col gap-3") },
         div(
-            { class: "flex items-center justify-between gap-3" },
+            { class: clsx("flex items-center justify-between gap-3") },
             div(
-                { class: "flex items-baseline gap-2" },
+                { class: clsx("flex items-baseline gap-2") },
                 div(
-                    { class: "text-2xl font-semibold tabular-nums text-zinc-100" },
+                    { class: clsx("text-2xl font-semibold text-zinc-100 tabular-nums") },
                     count.toLocaleString(),
                 ),
-                div({ class: "text-xs font-medium uppercase tracking-wider text-zinc-500" }, title),
+                div(
+                    { class: clsx("text-xs font-medium tracking-wider text-zinc-500 uppercase") },
+                    title,
+                ),
             ),
             href === null
                 ? document.createComment("")
                 : Link(
-                      { href, class: "text-sm font-medium text-rose-400 hover:text-rose-300" },
+                      {
+                          href,
+                          class: clsx("text-sm font-medium text-rose-400 hover:text-rose-300"),
+                      },
                       "View all",
                   ),
         ),
         posts.length === 0
             ? p(
                   {
-                      class: "rounded-lg border border-dashed border-zinc-800 px-4 py-6 text-center text-sm text-zinc-600",
+                      class: clsx(
+                          "rounded-lg border border-dashed border-zinc-800 px-4 py-6 text-center text-sm text-zinc-600",
+                      ),
                   },
                   "Nothing here yet.",
               )
             : div(
-                  { class: "masonry" },
+                  { class: clsx("masonry") },
                   posts.map((post) => PostCard(post)),
               ),
     )
@@ -76,12 +85,18 @@ function TopicPanel({
 
 function ProfileView({ data }: { data: UserProfile }) {
     return div(
-        { class: "mx-auto flex w-full max-w-5xl flex-col gap-6" },
+        { class: clsx("mx-auto flex w-full max-w-5xl flex-col gap-6") },
         // Identity
         div(
-            { class: "flex flex-col gap-1" },
-            h2({ class: "text-3xl font-semibold tracking-tight text-zinc-100" }, data.username),
-            p({ class: "text-sm text-zinc-500" }, `Member since ${formatJoinDate(data.joinDate)}`),
+            { class: clsx("flex flex-col gap-1") },
+            h2(
+                { class: clsx("text-3xl font-semibold tracking-tight text-zinc-100") },
+                data.username,
+            ),
+            p(
+                { class: clsx("text-sm text-zinc-500") },
+                `Member since ${formatJoinDate(data.joinDate)}`,
+            ),
         ),
         // One section per topic: the count, the "View all" link, and the recent
         // items are grouped together. The favorites link needs the numeric id,
@@ -105,25 +120,27 @@ function ProfileView({ data }: { data: UserProfile }) {
 // call yields a fresh element — a DOM node can't be parented twice.
 function panelSkeleton() {
     return div(
-        { class: "flex flex-col gap-3" },
+        { class: clsx("flex flex-col gap-3") },
         div(
-            { class: "flex items-center justify-between gap-3" },
+            { class: clsx("flex items-center justify-between gap-3") },
             div(
-                { class: "flex items-baseline gap-2" },
-                div({ class: "skeleton h-6 w-16 rounded" }),
-                div({ class: "skeleton h-3 w-20 rounded" }),
+                { class: clsx("flex items-baseline gap-2") },
+                div({ class: clsx("skeleton h-6 w-16 rounded") }),
+                div({ class: clsx("skeleton h-3 w-20 rounded") }),
             ),
-            div({ class: "skeleton h-4 w-16 rounded" }),
+            div({ class: clsx("skeleton h-4 w-16 rounded") }),
         ),
         div(
-            { class: "masonry" },
+            { class: clsx("masonry") },
             Array.from({ length: 5 }).map(() =>
                 div(
                     {
-                        class: "masonry-item overflow-hidden rounded-xl border border-zinc-800",
+                        class: clsx(
+                            "masonry-item overflow-hidden rounded-xl border border-zinc-800",
+                        ),
                         style: `grid-row-end: span ${250 + MASONRY_GAP}`,
                     },
-                    div({ class: "skeleton w-full", style: "height: 250px" }),
+                    div({ class: clsx("skeleton w-full"), style: "height: 250px" }),
                 ),
             ),
         ),
@@ -134,11 +151,11 @@ function panelSkeleton() {
 // for Posts and Favorites.
 function LoadingSkeleton() {
     return div(
-        { class: "mx-auto flex w-full max-w-5xl flex-col gap-6" },
+        { class: clsx("mx-auto flex w-full max-w-5xl flex-col gap-6") },
         div(
-            { class: "flex flex-col gap-2" },
-            div({ class: "skeleton h-8 w-48 rounded" }),
-            div({ class: "skeleton h-4 w-36 rounded" }),
+            { class: clsx("flex flex-col gap-2") },
+            div({ class: clsx("skeleton h-8 w-48 rounded") }),
+            div({ class: clsx("skeleton h-4 w-36 rounded") }),
         ),
         panelSkeleton(),
         panelSkeleton(),
@@ -146,7 +163,7 @@ function LoadingSkeleton() {
 }
 
 export function Account() {
-    return div({ class: "min-h-[60vh]" }, () => {
+    return div({ class: clsx("min-h-[60vh]") }, () => {
         const state = profile.val
         if (state.status === "loading") return LoadingSkeleton()
         if (state.status === "error") {

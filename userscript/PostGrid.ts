@@ -4,6 +4,7 @@ import { CenteredState } from "./CenteredState.ts"
 import { Pagination } from "./Pagination.ts"
 import { PostCard } from "./PostCard.ts"
 import { type Post } from "./api/post-list.ts"
+import clsx from "./clsx.ts"
 import { MASONRY_GAP } from "./masonry.ts"
 import { type Loadable } from "./state/load.ts"
 
@@ -15,14 +16,16 @@ const SKELETON_HEIGHTS = [160, 256, 128, 224, 192, 240, 176, 208, 144, 256, 160,
 
 function SkeletonGrid() {
     return div(
-        { class: "masonry" },
+        { class: clsx("masonry") },
         SKELETON_HEIGHTS.map((height) =>
             div(
                 {
-                    class: "masonry-item overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900",
+                    class: clsx(
+                        "masonry-item overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900",
+                    ),
                     style: `grid-row-end: span ${height + MASONRY_GAP}`,
                 },
-                div({ class: "skeleton w-full", style: `height: ${height}px` }),
+                div({ class: clsx("skeleton w-full"), style: `height: ${height}px` }),
             ),
         ),
     )
@@ -65,9 +68,9 @@ export function PostGrid({
     if (state.posts.length === 0) return CenteredState(empty)
 
     return div(
-        { class: "flex flex-col" },
+        { class: clsx("flex flex-col") },
         div(
-            { class: "masonry" },
+            { class: clsx("masonry") },
             state.posts.map((post) => PostCard(post)),
         ),
         Pagination({ currentPage, totalPages, pageHref }),

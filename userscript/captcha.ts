@@ -1,5 +1,7 @@
 import van from "vanjs-core"
 
+import clsx from "./clsx.ts"
+
 // Heuristics for recognizing a bot-challenge page (Cloudflare / Turnstile).
 // The provider puts a token in the challenge URL's query string and the page
 // body carries marker words. Refine these for the site's specific provider —
@@ -115,8 +117,8 @@ export function CaptchaModal() {
         // no challenge is active.
         if (!url) return document.createComment("arue-captcha")
         return div(
-            { class: "fixed inset-0 z-50 flex items-center justify-center bg-black/50" },
-            iframe({ src: url, class: "bg-white rounded-lg m-2 h-75" }),
+            { class: clsx("fixed inset-0 z-50 flex items-center justify-center bg-black/50") },
+            iframe({ src: url, class: clsx("m-2 h-75 rounded-lg bg-white") }),
         )
     }
 }

@@ -6,6 +6,7 @@ import { Link } from "./Link.ts"
 import { TagList } from "./TagList.ts"
 import { Toggle } from "./Toggle.ts"
 import type { PostDetails as PostDetailsData } from "./api/post-details.ts"
+import clsx from "./clsx.ts"
 import { details, reloadDetails } from "./state/details.ts"
 import { preferOriginal } from "./state/settings.ts"
 
@@ -15,18 +16,21 @@ function StatsSection({ post }: { post: PostDetailsData }) {
     const cells: ChildDom[] = []
     const push = (label: string, value: ChildDom) => {
         cells.push(
-            span({ class: "text-zinc-500" }, label),
-            div({ class: "min-w-0 text-right" }, value),
+            span({ class: clsx("text-zinc-500") }, label),
+            div({ class: clsx("min-w-0 text-right") }, value),
         )
     }
-    push("Id", span({ class: "tabular-nums" }, `#${post.id}`))
-    if (post.title) push("Title", span({ class: "wrap-break-word" }, post.title))
-    if (post.posted) push("Posted", span({ class: "truncate" }, post.posted))
+    push("Id", span({ class: clsx("tabular-nums") }, `#${post.id}`))
+    if (post.title) push("Title", span({ class: clsx("wrap-break-word") }, post.title))
+    if (post.posted) push("Posted", span({ class: clsx("truncate") }, post.posted))
     if (post.poster)
         push(
             "by",
             Link(
-                { href: post.posterHref, class: "truncate text-rose-300 hover:text-rose-200" },
+                {
+                    href: post.posterHref,
+                    class: clsx("truncate text-rose-300 hover:text-rose-200"),
+                },
                 post.poster,
             ),
         )
@@ -40,24 +44,26 @@ function StatsSection({ post }: { post: PostDetailsData }) {
                     href: post.sourceHref,
                     target: "_blank",
                     rel: "noopener noreferrer",
-                    class: "break-all text-cyan-300 hover:text-cyan-200",
+                    class: clsx("break-all text-cyan-300 hover:text-cyan-200"),
                     title: post.source,
                 },
                 post.source,
             ),
         )
     if (post.rating) push("Rating", span({}, post.rating))
-    push("Score", span({ class: "tabular-nums" }, String(post.score)))
+    push("Score", span({ class: clsx("tabular-nums") }, String(post.score)))
 
     return div(
-        { class: "flex flex-col gap-1" },
+        { class: clsx("flex flex-col gap-1") },
         h4(
             {
-                class: "px-1.5 pb-0.5 text-xs font-semibold uppercase tracking-wider text-zinc-500",
+                class: clsx(
+                    "px-1.5 pb-0.5 text-xs font-semibold tracking-wider text-zinc-500 uppercase",
+                ),
             },
             "Metadata",
         ),
-        div({ class: "grid grid-cols-[auto_1fr] gap-x-3 gap-y-2.5 px-1.5 text-sm" }, cells),
+        div({ class: clsx("grid grid-cols-[auto_1fr] gap-x-3 gap-y-2.5 px-1.5 text-sm") }, cells),
     )
 }
 
@@ -77,7 +83,7 @@ function OriginalImageToggle({
     if (media.kind !== "image" || !media.originalImage || media.originalImage === media.src)
         return null
     return div(
-        { class: "rounded-xl border border-zinc-800 bg-zinc-900/40 p-4" },
+        { class: clsx("rounded-xl border border-zinc-800 bg-zinc-900/40 p-4") },
         Toggle({
             label: "Original image",
             description: "Show the full-resolution image instead of the sample.",
@@ -89,7 +95,7 @@ function OriginalImageToggle({
 
 function Sidebar({ post, showOriginal }: { post: PostDetailsData; showOriginal: State<boolean> }) {
     return div(
-        { class: "flex flex-col gap-6" },
+        { class: clsx("flex flex-col gap-6") },
         OriginalImageToggle({ post, showOriginal }),
         StatsSection({ post }),
         TagList({ tags: post.tags }),
@@ -113,7 +119,7 @@ function MediaArea({
                   loop: true,
                   muted: true,
                   autoplay: true,
-                  class: "max-h-[80vh] w-auto max-w-full rounded-lg",
+                  class: clsx("max-h-[80vh] w-auto max-w-full rounded-lg"),
               })
             : img({
                   // Function prop: re-runs when showOriginal changes, swapping
@@ -121,28 +127,35 @@ function MediaArea({
                   src: () =>
                       showOriginal.val && media.originalImage ? media.originalImage : media.src,
                   alt: post.title ? `Post ${post.id}: ${post.title}` : `Post ${post.id}`,
-                  class: "max-h-[80vh] w-auto max-w-full rounded-lg",
+                  class: clsx("max-h-[80vh] w-auto max-w-full rounded-lg"),
               })
-    return div({ class: "flex min-h-[60vh] items-center justify-center" }, element)
+    return div({ class: clsx("flex min-h-[60vh] items-center justify-center") }, element)
 }
 
 function LoadingState() {
     // Matches the loaded layout: media first on mobile, sidebar below it;
     // sidebar left on desktop.
     return div(
-        { class: "flex flex-col gap-6 lg:flex-row" },
+        { class: clsx("flex flex-col gap-6 lg:flex-row") },
         aside(
-            { class: "order-last w-full shrink-0 lg:order-first lg:w-64" },
+            { class: clsx("order-last w-full shrink-0 lg:order-first lg:w-64") },
             div(
-                { class: "flex flex-col gap-2.5" },
+                { class: clsx("flex flex-col gap-2.5") },
                 Array.from({ length: 12 }).map((_, i) =>
-                    div({ class: "skeleton h-4 rounded", style: `width: ${90 - (i % 4) * 15}%` }),
+                    div({
+                        class: clsx("skeleton h-4 rounded"),
+                        style: `width: ${90 - (i % 4) * 15}%`,
+                    }),
                 ),
             ),
         ),
         div(
-            { class: "order-first flex min-h-[60vh] min-w-0 flex-1 items-center justify-center" },
-            div({ class: "skeleton h-96 w-full max-w-xl rounded-xl" }),
+            {
+                class: clsx(
+                    "order-first flex min-h-[60vh] min-w-0 flex-1 items-center justify-center",
+                ),
+            },
+            div({ class: clsx("skeleton h-96 w-full max-w-xl rounded-xl") }),
         ),
     )
 }
@@ -157,7 +170,7 @@ function ErrorState(message: string) {
 }
 
 export function PostDetails() {
-    return div({ class: "min-h-[60vh]" }, () => {
+    return div({ class: clsx("min-h-[60vh]") }, () => {
         const state = details.val
         if (state.status === "loading") return LoadingState()
         if (state.status === "error") return ErrorState(state.error)
@@ -167,13 +180,13 @@ export function PostDetails() {
         // Sidebar sits left of the media on desktop; on narrow screens it
         // stacks below the media at full width.
         return div(
-            { class: "flex flex-col gap-6 lg:flex-row" },
+            { class: clsx("flex flex-col gap-6 lg:flex-row") },
             aside(
-                { class: "order-last w-full shrink-0 lg:order-first lg:w-64" },
+                { class: clsx("order-last w-full shrink-0 lg:order-first lg:w-64") },
                 Sidebar({ post: state.post, showOriginal }),
             ),
             div(
-                { class: "order-first min-w-0 flex-1" },
+                { class: clsx("order-first min-w-0 flex-1") },
                 MediaArea({ post: state.post, showOriginal }),
             ),
         )

@@ -62,7 +62,7 @@ export function AutocompleteInput({
         class: clsx(
             "w-full rounded-lg border border-zinc-800 bg-zinc-900 py-2 pr-3",
             icon ? "pl-9" : "pl-3",
-            "text-sm text-zinc-100 placeholder:text-zinc-500 lowercase",
+            "text-sm text-zinc-100 lowercase placeholder:text-zinc-500",
             "transition-colors focus:border-rose-500/60 focus:outline-none",
             "focus:ring-2 focus:ring-rose-500/20",
             inputClass,
@@ -192,7 +192,7 @@ export function AutocompleteInput({
         return div(
             {
                 class: clsx(
-                    "absolute left-0 right-0 top-full z-50 mt-1 max-h-80 overflow-y-auto",
+                    "absolute top-full right-0 left-0 z-50 mt-1 max-h-80 overflow-y-auto",
                     "rounded-lg border border-zinc-800 bg-zinc-900 py-1 shadow-lg",
                 ),
                 role: "listbox",
@@ -222,11 +222,13 @@ export function AutocompleteInput({
     }
 
     return div(
-        { class: "relative min-w-0 flex-1" },
+        { class: clsx("relative min-w-0 flex-1") },
         icon
             ? span({
                   "icon-name": icon,
-                  class: "pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-base text-zinc-500",
+                  class: clsx(
+                      "pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-base text-zinc-500",
+                  ),
                   "aria-hidden": "true",
               })
             : null,

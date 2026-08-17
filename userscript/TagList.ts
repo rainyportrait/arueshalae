@@ -4,7 +4,7 @@ import { Link } from "./Link.ts"
 import type { Tag, TagType } from "./api/tags.ts"
 import clsx from "./clsx.ts"
 
-const { div, h4, span } = van.tags
+const { div, button, span } = van.tags
 
 type TagMeta = { label: string; color: string }
 
@@ -42,7 +42,7 @@ function TagLink({ tag }: { tag: Tag }) {
             href: `/index.php?page=post&s=list&tags=${encodeURIComponent(tag.slug)}`,
             title: tag.slug,
             class: clsx(
-                "-mx-1.5 flex items-baseline gap-2 rounded px-1.5 py-1",
+                "flex items-baseline gap-2 rounded px-2 py-1",
                 "transition-colors hover:bg-zinc-800/60",
             ),
         },
@@ -56,23 +56,77 @@ function TagLink({ tag }: { tag: Tag }) {
     )
 }
 
+// One tag-type group with a clickable heading that toggles collapse. Collapsed,
+// it shows the first tag plus a count of the hidden ones.
+function TagGroup({ type, tags }: { type: TagType; tags: Tag[] }) {
+    const collapsed = van.state(false)
+    // A single-tag group can't collapse, so its heading stays inert (no cursor,
+    // hover, or chevron) to avoid dead affordances.
+    const interactive = tags.length > 1
+    // Live node: re-runs when `collapsed` changes (or the parent re-renders),
+    // swapping between the collapsed and expanded markup.
+    return () => {
+        const isCollapsed = interactive && collapsed.val
+        return div(
+            { class: "flex flex-col gap-1" },
+            button(
+                {
+                    class: clsx(
+                        "flex justify-between gap-1 text-xs font-semibold uppercase tracking-wider text-zinc-500",
+                        "not-disabled:cursor-pointer select-none transition-colors not-disabled:hover:text-zinc-300",
+                    ),
+                    disabled: !interactive,
+                    onclick: () => (collapsed.val = !collapsed.val),
+                },
+                TAG_META[type].label,
+                // `false` isn't a valid child (it renders as "false"), so
+                // build the children list conditionally.
+                ...(interactive
+                    ? [
+                          span({
+                              "icon-name": "chevron-down",
+                              // Same convention as the Navbar menu: points down
+                              // while collapsed, flips up while expanded.
+                              class: clsx(
+                                  "text-zinc-400 transition-transform",
+                                  !isCollapsed && "rotate-180",
+                              ),
+                          }),
+                      ]
+                    : []),
+            ),
+            // The tag block is indented as a whole (hover highlights included),
+            // so it reads as nested under the heading rather than flush with it.
+            div(
+                { class: "flex flex-col gap-2" },
+                isCollapsed
+                    ? [
+                          TagLink({ tag: tags[0] }),
+                          ...(tags.length > 1
+                              ? [
+                                    button(
+                                        {
+                                            class: "text-xs text-zinc-500 text-left cursor-pointer select-none transition-colors not-disabled:hover:text-zinc-300 px-2",
+                                            onclick: () => (collapsed.val = !collapsed.val),
+                                        },
+                                        `${tags.length - 1} more ${tags.length - 1 === 1 ? "tag" : "tags"}`,
+                                    ),
+                                ]
+                              : []),
+                      ]
+                    : tags.map((tag) => TagLink({ tag })),
+            ),
+        )
+    }
+}
+
 // Reusable, presentational tag list. Takes a flat list of tags and renders them
 // grouped by type, each as a link that searches for that single tag.
+// Groups are collapsible via their heading (see `TagGroup`).
 export function TagList({ tags }: { tags: Tag[] }) {
     if (tags.length === 0) return div()
     return div(
         { class: "flex flex-col gap-4" },
-        groupByType(tags).map(([type, group]) =>
-            div(
-                { class: "flex flex-col gap-1" },
-                h4(
-                    {
-                        class: "px-1.5 pb-0.5 text-xs font-semibold uppercase tracking-wider text-zinc-500",
-                    },
-                    TAG_META[type].label,
-                ),
-                group.map((tag) => TagLink({ tag })),
-            ),
-        ),
+        groupByType(tags).map(([type, group]) => TagGroup({ type, tags: group })),
     )
 }

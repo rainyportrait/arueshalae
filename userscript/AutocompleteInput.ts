@@ -209,10 +209,12 @@ export function AutocompleteInput({
                         "aria-selected": i === hi,
                         // Keep the input focused on mousedown so the click can
                         // land (otherwise blur would dismiss us first).
+                        // Deliberately no onmouseenter: the highlight is
+                        // keyboard-driven only, so passing the cursor over the
+                        // dropdown can't make Tab/Enter accept an unwanted tag
+                        // (hover:bg above gives visual feedback without
+                        // changing the selection).
                         onmousedown: (e: MouseEvent) => e.preventDefault(),
-                        onmouseenter: () => {
-                            highlighted.val = i
-                        },
                         onclick: () => accept(i),
                     },
                     s.label,

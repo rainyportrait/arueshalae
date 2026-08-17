@@ -3,6 +3,7 @@ import van from "vanjs-core"
 import { TAG_META } from "./TagList.ts"
 import { type AutocompleteSuggestion, fetchAutocomplete } from "./api/autocomplete.ts"
 import clsx from "./clsx.ts"
+import { tagBlacklist } from "./state/settings.ts"
 
 const { div, input, span } = van.tags
 
@@ -155,9 +156,12 @@ export function AutocompleteInput({
             fetchAutocomplete(query)
                 .then((items) => {
                     if (seq !== fetchSeq) return
-                    suggestions.val = items
+                    // Never suggest tags the user has blacklisted (exact
+                    // match, same convention as `filterByBlacklist`).
+                    const blocked = new Set(tagBlacklist.val)
+                    suggestions.val = items.filter((s) => !blocked.has(s.value))
                     highlighted.val = -1
-                    visible.val = items.length > 0
+                    visible.val = suggestions.val.length > 0
                 })
                 .catch(() => {
                     /* transient autocomplete failure: keep whatever is shown */

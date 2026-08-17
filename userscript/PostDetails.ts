@@ -9,7 +9,7 @@ import type { PostDetails as PostDetailsData } from "./api/post-details.ts"
 import { details, reloadDetails } from "./state/details.ts"
 import { preferOriginal } from "./state/settings.ts"
 
-const { a, aside, div, h2, h4, img, span, video } = van.tags
+const { a, aside, div, h4, img, span, video } = van.tags
 
 function StatsSection({ post }: { post: PostDetailsData }) {
     const cells: ChildDom[] = []
@@ -20,6 +20,7 @@ function StatsSection({ post }: { post: PostDetailsData }) {
         )
     }
     push("Id", span({ class: "tabular-nums" }, `#${post.id}`))
+    if (post.title) push("Title", span({ class: "wrap-break-word" }, post.title))
     if (post.posted) push("Posted", span({ class: "truncate" }, post.posted))
     if (post.poster)
         push(
@@ -54,9 +55,9 @@ function StatsSection({ post }: { post: PostDetailsData }) {
             {
                 class: "px-1.5 pb-0.5 text-xs font-semibold uppercase tracking-wider text-zinc-500",
             },
-            "Statistics",
+            "Metadata",
         ),
-        div({ class: "grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 px-1.5 text-sm" }, cells),
+        div({ class: "grid grid-cols-[auto_1fr] gap-x-3 gap-y-2.5 px-1.5 text-sm" }, cells),
     )
 }
 
@@ -122,13 +123,7 @@ function MediaArea({
                   alt: post.title ? `Post ${post.id}: ${post.title}` : `Post ${post.id}`,
                   class: "max-h-[80vh] w-auto max-w-full rounded-lg",
               })
-    return div(
-        { class: "flex min-h-[60vh] flex-col items-center justify-center gap-4" },
-        element,
-        post.title
-            ? h2({ class: "text-center text-lg font-medium text-zinc-200" }, post.title)
-            : null,
-    )
+    return div({ class: "flex min-h-[60vh] items-center justify-center" }, element)
 }
 
 function LoadingState() {

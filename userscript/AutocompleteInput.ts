@@ -30,6 +30,10 @@ export interface AutocompleteInputProps {
     // caller can read or rewrite its value (e.g. to reflect a normalized
     // query back into the field).
     inputRef?: { current: HTMLInputElement | null }
+    // If provided, a function to re-sync the ghost-text overlay after the
+    // caller rewrote the input's value programmatically (which fires no
+    // native events). Must be called after any external value mutation.
+    resyncRef?: { current: (() => void) | null }
 }
 
 // A tag-autocomplete text input: debounced suggestions as you type, keyboard
@@ -37,6 +41,12 @@ export interface AutocompleteInputProps {
 // replaced, leaving the rest of the query intact). Shared by the navbar search
 // bar and the settings tag blacklist; the two differ only in what they do on
 // accept/enter, which is delegated to the callbacks.
+//
+// The typed text is rendered by a transparent-text input mirrored by a
+// ghost-text overlay (same metrics, absolutely positioned on top), so the
+// highlighted suggestion's remainder can be shown inline in a muted color.
+// The overlay only re-renders on state changes or a `bump()` from the
+// input's events, which is what keeps it in sync with caret movement.
 export function AutocompleteInput({
     placeholder,
     ariaLabel,
@@ -45,10 +55,17 @@ export function AutocompleteInput({
     onAccept,
     onEnter,
     inputRef,
+    resyncRef,
 }: AutocompleteInputProps): HTMLDivElement {
     const suggestions = van.state<AutocompleteSuggestion[]>([])
     const highlighted = van.state<number>(-1)
     const visible = van.state(false)
+    // Non-value revision counter: bump it whenever the input's text, caret,
+    // or scroll position may have changed outside of a state update.
+    const rev = van.state(0)
+    function bump(): void {
+        rev.val++
+    }
 
     let debounceTimer: ReturnType<typeof setTimeout> | undefined
     // Monotonically increasing id for in-flight requests; a response is only
@@ -62,17 +79,43 @@ export function AutocompleteInput({
         class: clsx(
             "w-full rounded-lg border border-zinc-800 bg-zinc-900 py-2 pr-3",
             icon ? "pl-9" : "pl-3",
-            "text-sm text-zinc-100 lowercase placeholder:text-zinc-500",
+            // The visible text is drawn by the ghost overlay; the input only
+            // contributes the caret (and the placeholder, which the overlay
+            // leaves uncovered while the value is empty).
+            "text-sm text-transparent lowercase caret-zinc-100 placeholder:text-zinc-500",
             "transition-colors focus:border-rose-500/60 focus:outline-none",
             "focus:ring-2 focus:ring-rose-500/20",
             inputClass,
         ),
         oninput: onInput,
         onkeydown: onKeydown,
+        // Caret moves that don't change the value (arrows, Home/End, click)
+        // need the overlay re-rendered and the fragment re-queried.
+        onkeyup: (e: KeyboardEvent) => {
+            bump()
+            // Horizontal moves change the fragment; Up/Down only navigate the
+            // open dropdown and must not trigger a re-fetch (which would reset
+            // the highlight).
+            if (
+                e.key === "ArrowLeft" ||
+                e.key === "ArrowRight" ||
+                e.key === "Home" ||
+                e.key === "End"
+            )
+                refreshSuggestions()
+        },
+        onclick: () => {
+            bump()
+            refreshSuggestions()
+        },
         onblur: dismiss,
     })
 
     if (inputRef) inputRef.current = inputEl
+    if (resyncRef) resyncRef.current = bump
+    // The input scrolls horizontally when the value overflows; keep the
+    // overlay's text scrolled to match.
+    inputEl.addEventListener("scroll", bump)
 
     function dismiss(): void {
         visible.val = false
@@ -82,18 +125,21 @@ export function AutocompleteInput({
 
     // Walk back from the cursor to the nearest space (or index 0). That index
     // is the start of the tag fragment the caret currently sits inside.
-    function fragmentStart(el: HTMLInputElement): number {
-        const value = el.value
-        let start = el.selectionStart ?? value.length
+    function fragmentStartOf(value: string, selStart: number): number {
+        let start = selStart
         while (start > 0 && value[start - 1] !== " ") start--
         return start
     }
 
-    function onInput(): void {
+    // Re-derive the fragment under the caret and (re)fetch its suggestions.
+    // Shared by typing and caret movement: moving the caret to a different
+    // fragment without typing must re-query, or the dropdown (and ghost) stay
+    // stale and Tab could accept a suggestion into the wrong fragment.
+    function refreshSuggestions(): void {
         if (debounceTimer) clearTimeout(debounceTimer)
         const value = inputEl.value
-        const start = fragmentStart(inputEl)
         const selStart = inputEl.selectionStart ?? value.length
+        const start = fragmentStartOf(value, selStart)
         const fragment = value.slice(start, selStart)
         // A leading `-` marks a "negative" (exclusion) tag. It isn't a valid
         // tag prefix, so strip it for the request but keep it on acceptance.
@@ -119,6 +165,11 @@ export function AutocompleteInput({
         }, DEBOUNCE_MS)
     }
 
+    function onInput(): void {
+        bump()
+        refreshSuggestions()
+    }
+
     function moveHighlight(dir: 1 | -1): void {
         const len = suggestions.val.length
         if (len === 0) return
@@ -133,8 +184,8 @@ export function AutocompleteInput({
         const suggestion = suggestions.val[index]
         if (!suggestion) return
         const value = inputEl.value
-        const start = fragmentStart(inputEl)
         const selStart = inputEl.selectionStart ?? value.length
+        const start = fragmentStartOf(value, selStart)
         // Preserve a leading `-` (negative/exclusion tag) across the replace.
         const prefix = value[start] === "-" ? "-" : ""
         inputEl.value =
@@ -145,6 +196,9 @@ export function AutocompleteInput({
         inputEl.focus()
         inputEl.setSelectionRange(cursor, cursor)
         dismiss()
+        // Programmatic value change: no native input event, re-render the
+        // overlay for the new text + caret.
+        bump()
         onAccept?.(suggestion.value)
     }
 
@@ -180,6 +234,62 @@ export function AutocompleteInput({
             onEnter?.(inputEl.value)
         }
     }
+
+    // The ghost-text overlay: an invisible sibling that exactly mirrors the
+    // input's font, padding, and scroll position, drawing the value in normal
+    // color plus the highlighted suggestion's remainder in a muted color,
+    // starting at the caret. The transparent border keeps its metrics aligned
+    // with the input's own border. It always renders (even without a ghost),
+    // since the input's own text is transparent.
+    // inline-block: `transform` (used for scroll sync) doesn't apply to
+    // plain inline elements.
+    const ghostInner = span({ class: "inline-block whitespace-pre" })
+    van.derive(() => {
+        // Reading rev subscribes us to caret/scroll/external mutations that
+        // don't touch any of the reactive state above.
+        const _ = rev.val
+        const text = inputEl.value
+        const caret = inputEl.selectionStart ?? text.length
+        const open = visible.val && suggestions.val.length > 0
+        let ghostText = ""
+        if (open) {
+            // Mirror the Enter/Tab fallback: with nothing actively
+            // highlighted, the first suggestion is what would be accepted.
+            const hi = highlighted.val >= 0 ? highlighted.val : 0
+            const s = suggestions.val[hi]
+            const frag = text.slice(fragmentStartOf(text, caret), caret)
+            // Strip the leading `-` (negative tag) the same way the request
+            // does, then only ghost a true remainder of the suggestion.
+            const q = frag.startsWith("-") ? frag.slice(1) : frag
+            // Case-insensitive: typed text may be mixed case, tags aren't.
+            if (s && q !== "" && s.value.toLowerCase().startsWith(q.toLowerCase()))
+                ghostText = s.value.slice(q.length)
+        }
+        ghostInner.style.transform = `translateX(${-inputEl.scrollLeft}px)`
+        if (ghostText === "") {
+            ghostInner.replaceChildren(text)
+        } else {
+            ghostInner.replaceChildren(
+                text.slice(0, caret),
+                span({ class: "text-zinc-600" }, ghostText),
+                text.slice(caret),
+            )
+        }
+    })
+    const ghost = div(
+        {
+            class: clsx(
+                "pointer-events-none absolute inset-0 overflow-hidden rounded-lg",
+                "border border-transparent py-2 pr-3",
+                icon ? "pl-9" : "pl-3",
+                // Mirror the input's text metrics, including its lowercase
+                // transform, or typed capitals would render misaligned.
+                "text-sm text-zinc-100 lowercase",
+            ),
+            "aria-hidden": "true",
+        },
+        ghostInner,
+    )
 
     // The dropdown is a reactive child of the (positioned) input container. It
     // always returns a DOM node: an empty div when hidden, the listbox when
@@ -235,6 +345,7 @@ export function AutocompleteInput({
               })
             : null,
         inputEl,
+        ghost,
         dropdown,
     )
 }

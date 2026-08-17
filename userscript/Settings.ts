@@ -40,8 +40,10 @@ function TagPill({ tag }: { tag: string }) {
 
 export function Settings() {
     // The autocomplete field is owned by AutocompleteInput; we keep a ref to
-    // read/clear it when a tag is added.
+    // read/clear it when a tag is added, and a resync so its ghost-text
+    // overlay picks up the programmatic clear.
     const inputRef = { current: null as HTMLInputElement | null }
+    const resyncRef = { current: null as (() => void) | null }
 
     // Add one or more tags (the input may hold several, space-separated).
     // Tokens are lowercased and deduped against the existing list; the field
@@ -64,6 +66,7 @@ export function Settings() {
         if (input) {
             input.value = ""
             input.focus()
+            resyncRef.current?.()
         }
     }
 
@@ -100,6 +103,7 @@ export function Settings() {
                     onAccept: addTags,
                     onEnter: addTags,
                     inputRef,
+                    resyncRef,
                 }),
                 button(
                     {

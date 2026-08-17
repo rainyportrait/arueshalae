@@ -17,8 +17,10 @@ function normalizeQuery(raw: string): string {
 
 export function SearchBar() {
     // The autocomplete input owns the field; we keep a ref to it so we can
-    // reflect a normalized query back into the UI on submit.
+    // reflect a normalized query back into the UI on submit, and a resync so
+    // its ghost-text overlay picks up the programmatic rewrite.
     const inputRef = { current: null as HTMLInputElement | null }
+    const resyncRef = { current: null as (() => void) | null }
 
     function submit(): void {
         const input = inputRef.current
@@ -29,6 +31,7 @@ export function SearchBar() {
         if (input) {
             input.value = normalized
             input.setSelectionRange(normalized.length, normalized.length)
+            resyncRef.current?.()
         }
         search(normalized === "" ? undefined : normalized)
     }
@@ -50,6 +53,7 @@ export function SearchBar() {
             ariaLabel: "Search using tags",
             onEnter: submit,
             inputRef,
+            resyncRef,
         }),
         button(
             {

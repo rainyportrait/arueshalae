@@ -4,12 +4,12 @@ import type { ChildDom, State } from "vanjs-core"
 import { CenteredState } from "./CenteredState.ts"
 import { Link } from "./Link.ts"
 import { TagList } from "./TagList.ts"
+import { Toggle } from "./Toggle.ts"
 import type { PostDetails as PostDetailsData } from "./api/post-details.ts"
-import clsx from "./clsx.ts"
 import { details, reloadDetails } from "./state/details.ts"
 import { preferOriginal } from "./state/settings.ts"
 
-const { a, aside, button, div, h2, h4, img, span, video } = van.tags
+const { a, aside, div, h2, h4, img, span, video } = van.tags
 
 function StatsSection({ post }: { post: PostDetailsData }) {
     const cells: ChildDom[] = []
@@ -60,11 +60,12 @@ function StatsSection({ post }: { post: PostDetailsData }) {
     )
 }
 
-// Toggles the displayed image between the (possibly sample) image and the
-// full-size file from the "Original image" sidebar link. Image posts only,
-// and hidden when the displayed image is already the original (small images
-// don't get a sample, so the two URLs are identical).
-function OriginalImageButton({
+// The displayed image can be swapped for the full-size file from the
+// "Original image" sidebar link. Image posts only, and hidden when the
+// displayed image is already the original (small images don't get a sample,
+// so the two URLs are identical). Reuses the settings page's toggle so both
+// image-quality switches look alike.
+function OriginalImageToggle({
     post,
     showOriginal,
 }: {
@@ -74,25 +75,21 @@ function OriginalImageButton({
     const media = post.media
     if (media.kind !== "image" || !media.originalImage || media.originalImage === media.src)
         return null
-    return button(
-        {
-            class: () =>
-                clsx(
-                    "w-full rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
-                    showOriginal.val
-                        ? "border-rose-500/60 bg-rose-500/15 text-rose-300 hover:bg-rose-500/25"
-                        : "border-zinc-700 bg-zinc-800/60 text-zinc-200 hover:bg-zinc-700/60",
-                ),
-            onclick: () => (showOriginal.val = !showOriginal.val),
-        },
-        () => (showOriginal.val ? "View sample image" : "View original image"),
+    return div(
+        { class: "rounded-xl border border-zinc-800 bg-zinc-900/40 p-4" },
+        Toggle({
+            label: "Original image",
+            description: "Show the full-resolution image instead of the sample.",
+            state: showOriginal,
+            onToggle: (value) => (showOriginal.val = value),
+        }),
     )
 }
 
 function Sidebar({ post, showOriginal }: { post: PostDetailsData; showOriginal: State<boolean> }) {
     return div(
         { class: "flex flex-col gap-6" },
-        OriginalImageButton({ post, showOriginal }),
+        OriginalImageToggle({ post, showOriginal }),
         StatsSection({ post }),
         TagList({ tags: post.tags }),
     )

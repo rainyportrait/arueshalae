@@ -22,10 +22,6 @@ export type GalleryState = Loadable<Gallery>
 
 export const gallery = van.state<GalleryState>({ status: "loading" })
 
-// Number of collection pages in flight; > 0 while a boundary step is loading
-// the adjacent page.
-export const pageLoads = van.state(0)
-
 type PostDetailsRoute = Extract<Route, { type: "postdetails" }>
 
 // Out-of-order protection for the origin-page load (fast steps, searches).
@@ -56,8 +52,7 @@ function loadOrigin(origin: PostOrigin): void {
         return
     }
     gallery.val = { status: "loading" }
-    const { page } = ensurePage(col, origin.pid)
-    void page.then(
+    void ensurePage(col, origin.pid).then(
         () => {
             if (current === seq) publish()
         },
@@ -112,11 +107,8 @@ function boundaryStep(
     r: PostDetailsRoute,
     pick: (posts: Post[]) => Post | undefined,
 ): void {
-    const { page, started } = ensurePage(col, pid)
-    if (started) pageLoads.val += 1
-    void page.then(
+    void ensurePage(col, pid).then(
         (pageData) => {
-            if (started) pageLoads.val -= 1
             // The collection may have been replaced while the page loaded
             // (the user searched something else); only act if it didn't.
             if (!isCurrent(col)) return
@@ -125,7 +117,8 @@ function boundaryStep(
             if (target !== undefined) navigate({ ...r, id: target.id }, { replace: true })
         },
         () => {
-            if (started) pageLoads.val -= 1
+            // A failed boundary fetch is silent; the button stays enabled
+            // and the next press retries.
         },
     )
 }

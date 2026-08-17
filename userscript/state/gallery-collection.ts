@@ -80,17 +80,12 @@ function fetchPage(
 
 // Load (or reuse) one page of the collection, deduplicated per pid. Mutates
 // the collection on settle (only if it is still the live one) but performs no
-// reactive side effects. `started` is true only when this call initiated a
-// fresh fetch (vs. returning a cached or already-in-flight page), so the
-// caller can count in-flight pages.
-export function ensurePage(
-    col: Collection,
-    pid: number,
-): { page: Promise<GalleryPage>; started: boolean } {
+// reactive side effects.
+export function ensurePage(col: Collection, pid: number): Promise<GalleryPage> {
     const loaded = col.pages.find((p) => p.pid === pid)
-    if (loaded !== undefined) return { page: Promise.resolve(loaded), started: false }
+    if (loaded !== undefined) return Promise.resolve(loaded)
     const inFlight = col.pending.get(pid)
-    if (inFlight !== undefined) return { page: inFlight, started: false }
+    if (inFlight !== undefined) return inFlight
 
     const page = fetchPage(col.origin, pid).then(
         (result) => {
@@ -123,5 +118,5 @@ export function ensurePage(
         },
     )
     col.pending.set(pid, page)
-    return { page, started: true }
+    return page
 }

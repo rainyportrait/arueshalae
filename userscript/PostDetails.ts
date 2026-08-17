@@ -9,7 +9,7 @@ import type { PostDetails as PostDetailsData } from "./api/post-details.ts"
 import clsx from "./clsx.ts"
 import { type PostOrigin, postHref, route } from "./router.ts"
 import { details, reloadDetails } from "./state/details.ts"
-import { canStep, gallery, pageLoads, reloadGallery, step } from "./state/gallery.ts"
+import { canStep, gallery, reloadGallery, step } from "./state/gallery.ts"
 import { preferOriginal } from "./state/settings.ts"
 
 const { a, aside, button, div, h4, img, span, video } = van.tags
@@ -161,9 +161,6 @@ function GalleryArrow({ dir }: { dir: 1 | -1 }) {
 // position counter. The strip grows as boundary steps load more pages.
 function Filmstrip({ origin, activeId }: { origin: PostOrigin; activeId: number }) {
     return div({ class: clsx("flex flex-col gap-1.5") }, () => {
-        // Read pageLoads so the strip re-renders while a boundary page loads
-        // and once it lands.
-        void pageLoads.val
         const g = gallery.val
         if (g.status === "loading") return div({ class: clsx("skeleton h-14 rounded-lg") })
         if (g.status === "error") {

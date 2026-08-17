@@ -156,9 +156,10 @@ export function reloadGallery(): void {
     if (r.type === "postdetails" && r.origin !== undefined) loadOrigin(r.origin)
 }
 
-// Step to the adjacent post in the collection. Inside a loaded page this is a
-// plain navigation; at a page boundary the adjacent page is fetched first and
-// the step lands on its first/last post.
+// Step to the adjacent post in the collection. Inside a loaded page this is
+// a replace navigation (the URL changes but no history entry is added, so
+// the browser back button exits the gallery); at a page boundary the
+// adjacent page is fetched first and the step lands on its first/last post.
 export function step(delta: 1 | -1): void {
     const r = route.val
     if (r.type !== "postdetails" || r.origin === undefined || collection === null) return
@@ -170,7 +171,9 @@ export function step(delta: 1 | -1): void {
     const size = pageSize(r.origin)
     const target = index + delta
     if (target >= 0 && target < posts.length) {
-        navigate({ ...r, id: posts[target].id })
+        // Replace, not push: gallery steps shouldn't pile up in the history,
+        // so the browser back button exits the gallery to the list.
+        navigate({ ...r, id: posts[target].id }, { replace: true })
         return
     }
     const pids = col.pages.map((p) => p.pid)
@@ -193,7 +196,7 @@ function boundaryStep(
             // (the user searched something else); only step if it didn't.
             if (col !== collection) return
             const target = pick(page.posts)
-            if (target !== undefined) navigate({ ...r, id: target.id })
+            if (target !== undefined) navigate({ ...r, id: target.id }, { replace: true })
         },
         () => {
             // A failed boundary fetch is silent; the button stays enabled

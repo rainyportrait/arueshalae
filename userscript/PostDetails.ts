@@ -206,6 +206,9 @@ function Filmstrip({ origin, activeId }: { origin: PostOrigin; activeId: number 
                     Link(
                         {
                             href: postHref(post.link, origin),
+                            // A filmstrip jump is gallery navigation: replace,
+                            // so back exits the gallery, not the previous post.
+                            replace: true,
                             class: clsx(
                                 "shrink-0 overflow-hidden rounded-md border transition-opacity",
                                 post.id === activeId

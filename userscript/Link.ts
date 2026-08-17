@@ -9,11 +9,13 @@ const { a } = van.tags
 // Shift-click and right-click keep their native behavior) but intercepts a
 // plain left-click to navigate SPA-style. Unrecognized hrefs are left to the
 // browser (no preventDefault), so they do a normal full navigation.
+// With replace set, a left-click replaces the current history entry instead
+// of pushing one (the gallery's filmstrip uses this).
 export function Link(
-    props: Props & { href: string },
+    props: Props & { href: string; replace?: boolean },
     ...children: readonly ChildDom[]
 ): HTMLAnchorElement {
-    const { href, ...rest } = props
+    const { href, replace, ...rest } = props
     return a(
         {
             ...rest,
@@ -23,7 +25,7 @@ export function Link(
                 const next = parseRoute(href)
                 if (next.type === "unknown") return
                 e.preventDefault()
-                navigate(next)
+                navigate(next, { replace })
             },
         },
         ...children,

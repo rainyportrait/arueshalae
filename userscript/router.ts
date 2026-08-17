@@ -163,12 +163,16 @@ export const route = van.state<Route>(parseRoute(window.location.href))
 // state) because it is captured inside `navigate` below.
 export const returnTo = van.state<Route | null>(null)
 
-// SPA navigation: push the new URL onto the history and update the route. The
-// guard avoids pushing a redundant history entry when the URL is unchanged.
-export function navigate(next: Route): void {
+// SPA navigation: push the new URL onto the history and update the route.
+// With replace set, the current entry is replaced instead — used by the
+// gallery, whose steps shouldn't pile up: the browser back button exits the
+// gallery to the list it came from rather than stepping back one post. The
+// guard avoids a redundant entry when the URL is unchanged.
+export function navigate(next: Route, opts: { replace?: boolean } = {}): void {
     const url = routeToUrl(next)
     if (url === window.location.pathname + window.location.search) return
-    window.history.pushState(null, "", url)
+    if (opts.replace) window.history.replaceState(null, "", url)
+    else window.history.pushState(null, "", url)
     // Snapshot the current route when heading to login, so the login flow can
     // bring the user back here.
     if (next.type === "login") returnTo.val = route.val

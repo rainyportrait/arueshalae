@@ -107,11 +107,16 @@ function Sidebar({ post, showOriginal }: { post: PostDetailsData; showOriginal: 
 function MediaArea({
     post,
     showOriginal,
+    // In focus mode the wrapper's height is set by the layout (flex-1), so
+    // the media is capped by its container instead of the viewport.
+    fill = false,
 }: {
     post: PostDetailsData
     showOriginal: State<boolean>
+    fill?: boolean
 }) {
     const media = post.media
+    const elementClass = clsx(fill ? "max-h-full" : "max-h-[80vh]", "w-auto max-w-full rounded-lg")
     const element =
         media.kind === "video"
             ? video({
@@ -121,7 +126,7 @@ function MediaArea({
                   loop: true,
                   muted: true,
                   autoplay: true,
-                  class: clsx("max-h-[80vh] w-auto max-w-full rounded-lg"),
+                  class: elementClass,
               })
             : img({
                   // Function prop: re-runs when showOriginal changes, swapping
@@ -129,9 +134,12 @@ function MediaArea({
                   src: () =>
                       showOriginal.val && media.originalImage ? media.originalImage : media.src,
                   alt: post.title ? `Post ${post.id}: ${post.title}` : `Post ${post.id}`,
-                  class: clsx("max-h-[80vh] w-auto max-w-full rounded-lg"),
+                  class: elementClass,
               })
-    return div({ class: clsx("flex min-h-[60vh] items-center justify-center") }, element)
+    return div(
+        { class: clsx("flex items-center justify-center", fill ? "h-full" : "min-h-[60vh]") },
+        element,
+    )
 }
 
 // One side of the gallery: a live node returning a chevron button. Disabled
@@ -187,7 +195,7 @@ function FocusButton() {
 // The gallery filmstrip: the collection's loaded posts as thumbnails, with a
 // position counter. The strip grows as boundary steps load more pages.
 function Filmstrip({ origin, activeId }: { origin: PostOrigin; activeId: number }) {
-    return div({ class: clsx("flex flex-col gap-1.5") }, () => {
+    return div({ class: clsx("flex shrink-0 flex-col gap-1.5") }, () => {
         const g = gallery.val
         if (g.status === "loading") return div({ class: clsx("skeleton h-14 rounded-lg") })
         if (g.status === "error") {
@@ -322,6 +330,7 @@ export function PostDetails() {
         // from a list or favorites page — the origin rides on the URL.
         const r = route.val
         const origin = r.type === "postdetails" ? r.origin : undefined
+        const focus = galleryFocus.val
         // Sidebar sits left of the media on desktop; on narrow screens it
         // stacks below the media at full width.
         return div(
@@ -339,12 +348,22 @@ export function PostDetails() {
                 Sidebar({ post: state.post, showOriginal }),
             ),
             div(
-                { class: clsx("order-first min-w-0 flex-1") },
+                {
+                    // In focus mode the column fills the viewport minus the
+                    // main's vertical padding (py-6 = 3rem): the media grows
+                    // into the space above the filmstrip, which stays pinned
+                    // to the bottom, all without page scroll.
+                    class: () =>
+                        clsx(
+                            "order-first min-w-0 flex-1",
+                            focus && "flex h-[calc(100vh-3rem)] flex-col gap-3",
+                        ),
+                },
                 origin !== undefined
                     ? [
                           div(
-                              { class: clsx("relative") },
-                              MediaArea({ post: state.post, showOriginal }),
+                              { class: () => clsx("relative", focus && "min-h-0 flex-1") },
+                              MediaArea({ post: state.post, showOriginal, fill: focus }),
                               // A live node must return one connected node, so
                               // each arrow is a live node in this static overlay.
                               div(

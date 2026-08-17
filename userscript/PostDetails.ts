@@ -354,10 +354,7 @@ export function PostDetails() {
                     // into the space above the filmstrip, which stays pinned
                     // to the bottom, all without page scroll.
                     class: () =>
-                        clsx(
-                            "order-first min-w-0 flex-1",
-                            focus && "flex h-[calc(100vh-3rem)] flex-col gap-3",
-                        ),
+                        clsx("order-first min-w-0 flex-1", focus && "flex h-screen flex-col gap-3"),
                 },
                 origin !== undefined
                     ? [

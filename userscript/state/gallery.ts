@@ -1,23 +1,22 @@
 import van from "vanjs-core"
 
-import { fetchFavorites } from "../api/favorites.ts"
-import { type Post, fetchPostList } from "../api/post-list.ts"
+import { type Post } from "../api/post-list.ts"
 import { type PostOrigin, type Route, navigate, route } from "../router.ts"
-import { FAVORITES_PAGE_SIZE } from "./favorites.ts"
-import { PAGE_SIZE } from "./list.ts"
+import {
+    type Collection,
+    type Gallery,
+    collectionFor,
+    ensurePage,
+    getCollection,
+    isCurrent,
+    originKey,
+    pageSize,
+    snapshot,
+} from "./gallery-collection.ts"
 import { type Loadable } from "./load.ts"
 import { cachedPostDetails } from "./post-details-cache.ts"
 
-// A loaded page of the collection.
-export type GalleryPage = { pid: number; posts: Post[] }
-
-export type Gallery = {
-    origin: PostOrigin
-    // Loaded pages, sorted by pid; the flattened posts are the gallery order.
-    pages: GalleryPage[]
-    // The site's last-page offset for the collection; -1 until a page says.
-    lastPagePID: number
-}
+export type { Gallery, GalleryPage } from "./gallery-collection.ts"
 
 export type GalleryState = Loadable<Gallery>
 
@@ -29,99 +28,17 @@ export const pageLoads = van.state(0)
 
 type PostDetailsRoute = Extract<Route, { type: "postdetails" }>
 
-type Collection = Gallery & { pending: Map<number, Promise<GalleryPage>> }
-
-// The collection outlives individual postdetails navigations (each gallery
-// step is a route change), so it lives in a module variable; `gallery` is a
-// fresh snapshot of it on every change, which is what makes the UI reactive.
-let collection: Collection | null = null
 // Out-of-order protection for the origin-page load (fast steps, searches).
 let seq = 0
 
-function originKey(origin: PostOrigin): string {
-    return origin.kind === "list" ? `list:${origin.tags ?? ""}` : `favorites:${origin.uid}`
-}
-
-function pageSize(origin: PostOrigin): number {
-    return origin.kind === "list" ? PAGE_SIZE : FAVORITES_PAGE_SIZE
-}
-
-function collectionFor(origin: PostOrigin): Collection {
-    if (collection !== null && originKey(collection.origin) === originKey(origin)) return collection
-    collection = { origin, pages: [], lastPagePID: -1, pending: new Map() }
-    return collection
-}
-
-// Publish a fresh snapshot; van's state setter only re-renders on a new
-// object, so in-place collection mutations need this to be seen.
-function publish(col: Collection): void {
-    gallery.val = {
-        status: "ready",
-        origin: col.origin,
-        pages: [...col.pages],
-        lastPagePID: col.lastPagePID,
-    }
-}
-
-function fetchPage(
-    origin: PostOrigin,
-    pid: number,
-): Promise<{ posts: Post[]; lastPagePID: number }> {
-    return origin.kind === "list"
-        ? fetchPostList(origin.tags, pid).then((r) => ({
-              posts: r.posts,
-              lastPagePID: r.lastPagePID,
-          }))
-        : fetchFavorites(origin.uid, pid).then((r) => ({
-              posts: r.posts,
-              lastPagePID: r.lastPagePID,
-          }))
-}
-
-// Load (or reuse) one page of the collection, deduplicated per pid.
-function ensurePage(col: Collection, pid: number): Promise<GalleryPage> {
-    const loaded = col.pages.find((p) => p.pid === pid)
-    if (loaded !== undefined) return Promise.resolve(loaded)
-    const inFlight = col.pending.get(pid)
-    if (inFlight !== undefined) return inFlight
-
-    const page = fetchPage(col.origin, pid).then(
-        (result) => {
-            col.pending.delete(pid)
-            pageLoads.val -= 1
-            // The collection may have been replaced while the page loaded
-            // (the user searched something else); only publish if it didn't.
-            if (col !== collection) return { pid, posts: result.posts }
-            if (result.posts.length === 0) {
-                // Empty page: the site's favorites last-page link can point a
-                // page past the end (stale count). Clamp so boundary steps
-                // stop here. The page is deliberately not stored, so a later
-                // attempt (e.g. after new favorites) refetches it.
-                const others = col.pages.map((p) => p.pid)
-                col.lastPagePID = Math.max(
-                    col.lastPagePID,
-                    others.length > 0 ? Math.max(...others) : 0,
-                )
-                publish(col)
-                return { pid, posts: [] }
-            }
-            col.lastPagePID = Math.max(col.lastPagePID, result.lastPagePID)
-            col.pages = [
-                ...col.pages.filter((p) => p.pid !== pid),
-                { pid, posts: result.posts },
-            ].sort((a, b) => a.pid - b.pid)
-            publish(col)
-            return col.pages.find((p) => p.pid === pid)!
-        },
-        (error: unknown) => {
-            col.pending.delete(pid)
-            pageLoads.val -= 1
-            throw error
-        },
-    )
-    col.pending.set(pid, page)
-    pageLoads.val += 1
-    return page
+// Publish a fresh snapshot of the live collection. van's state setter only
+// re-renders on a new object, so a snapshot taken here (a new object every
+// call) is what makes the in-place collection mutations in
+// state/gallery-collection.ts visible to the UI.
+function publish(): void {
+    const col = getCollection()
+    if (col === null) return
+    gallery.val = { status: "ready", ...snapshot(col) }
 }
 
 // Load the origin page whenever a gallery-enabled post details route shows.
@@ -135,13 +52,14 @@ function loadOrigin(origin: PostOrigin): void {
     const current = ++seq
     const col = collectionFor(origin)
     if (col.pages.some((p) => p.pid === origin.pid)) {
-        publish(col)
+        publish()
         return
     }
     gallery.val = { status: "loading" }
-    void ensurePage(col, origin.pid).then(
+    const { page } = ensurePage(col, origin.pid)
+    void page.then(
         () => {
-            if (current === seq) publish(col)
+            if (current === seq) publish()
         },
         (error: unknown) => {
             if (current === seq) {
@@ -162,9 +80,10 @@ export function reloadGallery(): void {
 // adjacent page is fetched first and the step lands on its first/last post.
 export function step(delta: 1 | -1): void {
     const r = route.val
-    if (r.type !== "postdetails" || r.origin === undefined || collection === null) return
-    if (originKey(collection.origin) !== originKey(r.origin)) return
-    const col = collection
+    if (r.type !== "postdetails" || r.origin === undefined) return
+    const col = getCollection()
+    if (col === null) return
+    if (originKey(col.origin) !== originKey(r.origin)) return
     const posts = col.pages.flatMap((p) => p.posts)
     const index = posts.findIndex((p) => p.id === r.id)
     if (index === -1) return
@@ -184,23 +103,29 @@ export function step(delta: 1 | -1): void {
     }
 }
 
+// At a page boundary, fetch the adjacent page, publish it (so the filmstrip
+// grows), then land on its first/last post. A failed boundary fetch is silent;
+// the button stays enabled and the next press retries.
 function boundaryStep(
     col: Collection,
     pid: number,
     r: PostDetailsRoute,
     pick: (posts: Post[]) => Post | undefined,
 ): void {
-    void ensurePage(col, pid).then(
-        (page) => {
+    const { page, started } = ensurePage(col, pid)
+    if (started) pageLoads.val += 1
+    void page.then(
+        (pageData) => {
+            if (started) pageLoads.val -= 1
             // The collection may have been replaced while the page loaded
-            // (the user searched something else); only step if it didn't.
-            if (col !== collection) return
-            const target = pick(page.posts)
+            // (the user searched something else); only act if it didn't.
+            if (!isCurrent(col)) return
+            publish()
+            const target = pick(pageData.posts)
             if (target !== undefined) navigate({ ...r, id: target.id }, { replace: true })
         },
         () => {
-            // A failed boundary fetch is silent; the button stays enabled
-            // and the next press retries.
+            if (started) pageLoads.val -= 1
         },
     )
 }
@@ -208,9 +133,10 @@ function boundaryStep(
 // Whether a step in the given direction is possible right now.
 export function canStep(delta: 1 | -1): boolean {
     const r = route.val
-    if (r.type !== "postdetails" || r.origin === undefined || collection === null) return false
-    if (originKey(collection.origin) !== originKey(r.origin)) return false
-    const col = collection
+    if (r.type !== "postdetails" || r.origin === undefined) return false
+    const col = getCollection()
+    if (col === null) return false
+    if (originKey(col.origin) !== originKey(r.origin)) return false
     const posts = col.pages.flatMap((p) => p.posts)
     const index = posts.findIndex((p) => p.id === r.id)
     if (index === -1) return false

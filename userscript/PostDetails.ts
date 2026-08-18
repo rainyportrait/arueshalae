@@ -179,7 +179,8 @@ function FocusButton() {
                         ? "border-zinc-500 bg-zinc-700 text-zinc-100"
                         : "border-zinc-800 text-zinc-500 hover:bg-zinc-800/60 hover:text-zinc-200",
                 ),
-            title: () => (galleryFocus.val ? "Exit focus mode" : "Focus mode: hide navigation"),
+            title: () =>
+                galleryFocus.val ? "Exit focus mode (Esc)" : "Focus mode: hide navigation (F)",
             onclick: () => {
                 galleryFocus.val = !galleryFocus.val
             },

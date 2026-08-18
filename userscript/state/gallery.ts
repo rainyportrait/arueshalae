@@ -174,9 +174,11 @@ van.derive(() => {
     if (next !== undefined) void cachedPostDetails(next.id)
 })
 
-// Arrow keys step through the gallery. Installed once at module load; the
-// handler bails outside a gallery-enabled post details page and while the
-// user is typing in a form field (e.g. the search bar).
+// Gallery keys. Installed once at module load; the handler bails outside a
+// gallery-enabled post details page and while the user is typing in a form
+// field (e.g. the search bar).
+// - ArrowRight/ArrowLeft step through the gallery
+// - F opens focus mode, Escape closes it
 document.addEventListener("keydown", (event) => {
     const r = route.val
     if (r.type !== "postdetails" || r.origin === undefined) return
@@ -193,6 +195,10 @@ document.addEventListener("keydown", (event) => {
     } else if (event.key === "ArrowLeft") {
         event.preventDefault()
         step(-1)
+    } else if (event.key === "f" || event.key === "F") {
+        galleryFocus.val = true
+    } else if (event.key === "Escape" && galleryFocus.val) {
+        galleryFocus.val = false
     }
 })
 

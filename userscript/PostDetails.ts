@@ -194,8 +194,18 @@ function FocusButton() {
 
 // The gallery filmstrip: the collection's loaded posts as thumbnails, with a
 // position counter. The strip grows as boundary steps load more pages.
-function Filmstrip({ origin, activeId }: { origin: PostOrigin; activeId: number }) {
-    return div({ class: clsx("flex shrink-0 flex-col gap-1.5") }, () => {
+// In focus mode it runs vertically down the right side of the screen and
+// scrolls instead of growing beyond the viewport.
+function Filmstrip({
+    origin,
+    activeId,
+    vertical = false,
+}: {
+    origin: PostOrigin
+    activeId: number
+    vertical?: boolean
+}) {
+    return div({ class: clsx("flex shrink-0 flex-col gap-1.5", vertical && "w-24") }, () => {
         const g = gallery.val
         if (g.status === "loading") return div({ class: clsx("skeleton h-14 rounded-lg") })
         if (g.status === "error") {
@@ -219,25 +229,65 @@ function Filmstrip({ origin, activeId }: { origin: PostOrigin; activeId: number 
         const posts = g.pages.flatMap((p) => p.posts)
         const index = posts.findIndex((p) => p.id === activeId)
         return div(
-            div(
-                { class: clsx("flex items-center justify-between px-0.5") },
-                span(
-                    { class: clsx("text-xs font-semibold tracking-wider text-zinc-500 uppercase") },
-                    "Gallery",
-                ),
-                div(
-                    { class: clsx("flex items-center gap-2") },
-                    index === -1
-                        ? document.createComment("")
-                        : span(
-                              { class: clsx("text-xs text-zinc-500 tabular-nums") },
-                              `${index + 1} / ${posts.length}`,
+            {
+                // This wrapper is a flex item of the outer column; in vertical
+                // mode it must take the leftover height (and allow shrinking)
+                // so the strip below can be capped and scroll internally.
+                class: clsx("flex flex-col", vertical && "min-h-0 flex-1"),
+            },
+            // The vertical header stacks: label + focus button on one row, the
+            // counter below, to fit the narrow strip.
+            vertical
+                ? div(
+                      { class: clsx("flex flex-col gap-1 px-0.5") },
+                      div(
+                          { class: clsx("flex items-center justify-between") },
+                          span(
+                              {
+                                  class: clsx(
+                                      "text-xs font-semibold tracking-wider text-zinc-500 uppercase",
+                                  ),
+                              },
+                              "Gallery",
                           ),
-                    FocusButton(),
-                ),
-            ),
+                          FocusButton(),
+                      ),
+                      index === -1
+                          ? document.createComment("")
+                          : span(
+                                { class: clsx("text-xs text-zinc-500 tabular-nums") },
+                                `${index + 1} / ${posts.length}`,
+                            ),
+                  )
+                : div(
+                      { class: clsx("flex items-center justify-between px-0.5") },
+                      span(
+                          {
+                              class: clsx(
+                                  "text-xs font-semibold tracking-wider text-zinc-500 uppercase",
+                              ),
+                          },
+                          "Gallery",
+                      ),
+                      div(
+                          { class: clsx("flex items-center gap-2") },
+                          index === -1
+                              ? document.createComment("")
+                              : span(
+                                    { class: clsx("text-xs text-zinc-500 tabular-nums") },
+                                    `${index + 1} / ${posts.length}`,
+                                ),
+                          FocusButton(),
+                      ),
+                  ),
             div(
-                { class: clsx("flex gap-1.5 overflow-x-auto pb-1") },
+                {
+                    class: clsx(
+                        vertical
+                            ? "flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto"
+                            : "flex gap-1.5 overflow-x-auto pb-1",
+                    ),
+                },
                 posts.map((post) =>
                     Link(
                         {
@@ -258,7 +308,12 @@ function Filmstrip({ origin, activeId }: { origin: PostOrigin; activeId: number 
                             src: post.thumbnail,
                             alt: `Post ${post.id}`,
                             loading: "lazy",
-                            class: clsx("h-12 w-16 object-cover"),
+                            class: clsx(
+                                // The vertical thumb fills the strip's width so
+                                // the anchor's border hugs the image exactly.
+                                "object-cover",
+                                vertical ? "h-14 w-full" : "h-12 w-16",
+                            ),
                         }),
                     ),
                 ),
@@ -271,8 +326,8 @@ function Filmstrip({ origin, activeId }: { origin: PostOrigin; activeId: number 
                     )
                     active?.scrollIntoView({
                         behavior: "smooth",
-                        block: "nearest",
-                        inline: "center",
+                        block: vertical ? "center" : "nearest",
+                        inline: vertical ? "nearest" : "center",
                     })
                 })
                 return document.createComment("")
@@ -350,16 +405,15 @@ export function PostDetails() {
             div(
                 {
                     // In focus mode the column fills the viewport minus the
-                    // main's vertical padding (py-6 = 3rem): the media grows
-                    // into the space above the filmstrip, which stays pinned
-                    // to the bottom, all without page scroll.
-                    class: () =>
-                        clsx("order-first min-w-0 flex-1", focus && "flex h-screen flex-col gap-3"),
+                    // main's vertical padding (py-6 = 3rem): the media takes
+                    // the remaining width next to the vertical filmstrip on
+                    // the right, all without page scroll.
+                    class: () => clsx("order-first min-w-0 flex-1", focus && "flex h-screen gap-3"),
                 },
                 origin !== undefined
                     ? [
                           div(
-                              { class: () => clsx("relative", focus && "min-h-0 flex-1") },
+                              { class: () => clsx("relative", focus && "min-h-0 min-w-0 flex-1") },
                               MediaArea({ post: state.post, showOriginal, fill: focus }),
                               // A live node must return one connected node, so
                               // each arrow is a live node in this static overlay.
@@ -373,7 +427,11 @@ export function PostDetails() {
                                   GalleryArrow({ dir: 1 }),
                               ),
                           ),
-                          Filmstrip({ origin, activeId: state.post.id }),
+                          Filmstrip({
+                              origin,
+                              activeId: state.post.id,
+                              vertical: focus,
+                          }),
                       ]
                     : MediaArea({ post: state.post, showOriginal }),
             ),

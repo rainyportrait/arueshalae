@@ -62,7 +62,11 @@ The source files can be found in `./userscript/`.
   in `App.ts`) — but a node that has been _detached_ must be rebuilt, never reused: vanjs
   permanently drops any binding (and derive listener) whose `_dom` is disconnected when a subscribed
   state changes (`keepConnected` in vanjs-core), so a re-attached subtree is dead and never updates
-  again.
+  again. The same technique applies deeper in the tree: the details page builds its layout shell
+  (and the gallery filmstrip inside it) once and keeps it across post steps, because swapping an
+  ancestor detaches a scroll container and resets its scroll position (see `buildShell` and
+  `Filmstrip` in `PostDetails.ts`). A live child function must return a single node — arrays are
+  only allowed as static children; wrap a varying list in a `display: contents` element.
 - The same trap applies to _reads_: any state read while a plain child function runs registers a
   dependency on the **parent** binding, so e.g. reading `route` in `PostCard` would rebuild the
   whole grid on every navigation. Make the varying bit a live function prop so only the attribute

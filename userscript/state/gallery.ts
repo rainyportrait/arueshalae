@@ -36,10 +36,16 @@ let seq = 0
 // Publish a fresh snapshot of the live collection. van's state setter only
 // re-renders on a new object, so a snapshot taken here (a new object every
 // call) is what makes the in-place collection mutations in
-// state/gallery-collection.ts visible to the UI.
+// state/gallery-collection.ts visible to the UI. Skipped when nothing has
+// changed since the last publish (the collection's version is unchanged): a
+// gallery step within loaded pages must not touch `gallery` — re-rendering
+// the filmstrip would reset its scroll position.
+let published: { col: Collection; version: number } | null = null
 function publish(): void {
     const col = getCollection()
     if (col === null) return
+    if (published !== null && published.col === col && published.version === col.version) return
+    published = { col, version: col.version }
     gallery.val = { status: "ready", ...snapshot(col) }
 }
 
@@ -65,6 +71,10 @@ function loadOrigin(origin: PostOrigin): void {
         publish()
         return
     }
+    // Not tracked as published: the next publish() must run even if the
+    // collection's version didn't change (e.g. a step onto an in-flight page
+    // came back via the cache-hit path above).
+    published = null
     gallery.val = { status: "loading" }
     void ensurePage(col, origin.pid).then(
         () => {
@@ -72,6 +82,7 @@ function loadOrigin(origin: PostOrigin): void {
         },
         (error: unknown) => {
             if (current === seq) {
+                published = null
                 gallery.val = { status: "error", error: errorMessage(error) }
             }
         },

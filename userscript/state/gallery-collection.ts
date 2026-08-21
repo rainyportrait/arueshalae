@@ -18,8 +18,11 @@ export type Gallery = {
 }
 
 // The live collection: the public shape plus the in-flight page map used for
-// per-pid dedup. Exported so the reactive layer can type its helpers against it.
-export type Collection = Gallery & { pending: Map<number, Promise<GalleryPage>> }
+// per-pid dedup. `version` counts real mutations (a page stored, lastPagePID
+// updated) so the reactive layer can skip no-op publishes — a cache-hit step
+// must not re-render the filmstrip (it would reset the strip's scroll).
+// Exported so the reactive layer can type its helpers against it.
+export type Collection = Gallery & { pending: Map<number, Promise<GalleryPage>>; version: number }
 
 // The collection outlives individual postdetails navigations (each gallery
 // step is a route change), so it lives in a module variable. It is plain data
@@ -59,7 +62,7 @@ export function snapshot(col: Collection): Gallery {
 // collection is for a different origin.
 export function collectionFor(origin: PostOrigin): Collection {
     if (collection !== null && originKey(collection.origin) === originKey(origin)) return collection
-    collection = { origin, pages: [], lastPagePID: -1, pending: new Map() }
+    collection = { origin, pages: [], lastPagePID: -1, pending: new Map(), version: 0 }
     return collection
 }
 
@@ -93,6 +96,10 @@ export function ensurePage(col: Collection, pid: number): Promise<GalleryPage> {
             // The collection may have been replaced while the page loaded
             // (the user searched something else); only mutate it if it didn't.
             if (col !== collection) return { pid, posts: result.posts }
+            // A successful fetch is always a state change worth publishing
+            // (a stored page, or the empty-page clamp below possibly not
+            // changing anything — still ends the loading skeleton).
+            col.version++
             if (result.posts.length === 0) {
                 // Empty page: the site's favorites last-page link can point a
                 // page past the end (stale count). Clamp so boundary steps

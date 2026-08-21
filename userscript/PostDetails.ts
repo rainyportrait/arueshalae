@@ -6,9 +6,11 @@ import { Link } from "./Link.ts"
 import { TagList } from "./TagList.ts"
 import { Toggle } from "./Toggle.ts"
 import type { PostDetails as PostDetailsData } from "./api/post-details.ts"
+import type { Post } from "./api/post-list.ts"
 import clsx from "./clsx.ts"
 import { type PostOrigin, postHref } from "./router.ts"
 import { details, reloadDetails } from "./state/details.ts"
+import { originKey } from "./state/gallery-collection.ts"
 import { canStep, gallery, galleryFocus, reloadGallery, step } from "./state/gallery.ts"
 import { preferOriginal } from "./state/settings.ts"
 
@@ -197,16 +199,43 @@ function FocusButton() {
 // position counter. The strip grows as boundary steps load more pages.
 // In focus mode it runs vertically down the right side of the screen and
 // scrolls instead of growing beyond the viewport.
+//
+// The returned node is built ONCE and kept across gallery steps (the caller
+// memoizes it): every part that varies is a live binding inside, so stepping
+// posts never swaps the scroll container — a swap would reset its scroll
+// position. Only a change of the loaded pages rebuilds the thumbs.
 function Filmstrip({
     origin,
     activeId,
     vertical = false,
 }: {
     origin: PostOrigin
-    activeId: number
+    activeId: () => number
     vertical?: boolean
 }) {
-    return div({ class: clsx("flex shrink-0 flex-col gap-1.5", vertical && "w-24") }, () => {
+    // The active post's index over the currently loaded pages (-1 if absent).
+    const activeIndex = () => {
+        const g = gallery.val
+        if (g.status !== "ready") return -1
+        return g.pages.flatMap((p) => p.posts).findIndex((p) => p.id === activeId())
+    }
+    // The position counter. Re-runs on post steps and page loads; swapping a
+    // tiny span is fine (only the scroller must not be swapped).
+    const Counter = () => {
+        const index = activeIndex()
+        const total =
+            gallery.val.status === "ready" ? gallery.val.pages.flatMap((p) => p.posts).length : 0
+        return index === -1
+            ? document.createComment("")
+            : span({ class: clsx("text-xs text-zinc-500 tabular-nums") }, `${index + 1} / ${total}`)
+    }
+    // The thumbs. Re-runs only when the gallery state changes (a page load,
+    // an error); the scroller itself stays mounted, so its scroll position
+    // survives. The ready branch wraps the anchors in a display:contents div
+    // so they lay out as direct children of the scroller while the live
+    // binding still returns a single node (vanjs binding funcs can't return
+    // arrays).
+    const Thumbs = () => {
         const g = gallery.val
         if (g.status === "loading") return div({ class: clsx("skeleton h-14 rounded-lg") })
         if (g.status === "error") {
@@ -227,41 +256,38 @@ function Filmstrip({
                 ),
             )
         }
-        const posts = g.pages.flatMap((p) => p.posts)
-        const index = posts.findIndex((p) => p.id === activeId)
         return div(
-            {
-                // This wrapper is a flex item of the outer column; in vertical
-                // mode it must take the leftover height (and allow shrinking)
-                // so the strip below can be capped and scroll internally.
-                class: clsx("flex flex-col", vertical && "min-h-0 flex-1"),
-            },
-            // The vertical header stacks: label + focus button on one row, the
-            // counter below, to fit the narrow strip.
-            vertical
-                ? div(
-                      { class: clsx("flex flex-col gap-1 px-0.5") },
-                      div(
-                          { class: clsx("flex items-center justify-between") },
-                          span(
-                              {
-                                  class: clsx(
-                                      "text-xs font-semibold tracking-wider text-zinc-500 uppercase",
-                                  ),
-                              },
-                              "Gallery",
-                          ),
-                          FocusButton(),
-                      ),
-                      index === -1
-                          ? document.createComment("")
-                          : span(
-                                { class: clsx("text-xs text-zinc-500 tabular-nums") },
-                                `${index + 1} / ${posts.length}`,
-                            ),
-                  )
-                : div(
-                      { class: clsx("flex items-center justify-between px-0.5") },
+            { class: clsx("contents") },
+            g.pages
+                .flatMap((p) => p.posts)
+                .map((post) => Thumb({ post, origin, activeId, vertical })),
+        )
+    }
+    // Scroll the active thumb into view whenever the active post or the
+    // loaded pages change (a live node must return one node, so this is a
+    // comment carrying the side effect).
+    const ScrollActive = () => {
+        activeId()
+        void gallery.val
+        queueMicrotask(() => {
+            const active = document.querySelector<HTMLAnchorElement>('[data-gallery-active="true"]')
+            active?.scrollIntoView({
+                behavior: "smooth",
+                block: vertical ? "center" : "nearest",
+                inline: vertical ? "nearest" : "center",
+            })
+        })
+        return document.createComment("")
+    }
+    return div(
+        { class: clsx("flex shrink-0 flex-col gap-1.5", vertical && "w-24") },
+        // The vertical header stacks: label + focus button on one row, the
+        // counter below, to fit the narrow strip.
+        vertical
+            ? div(
+                  { class: clsx("flex flex-col gap-1 px-0.5") },
+                  div(
+                      { class: clsx("flex items-center justify-between") },
                       span(
                           {
                               class: clsx(
@@ -270,71 +296,79 @@ function Filmstrip({
                           },
                           "Gallery",
                       ),
-                      div(
-                          { class: clsx("flex items-center gap-2") },
-                          index === -1
-                              ? document.createComment("")
-                              : span(
-                                    { class: clsx("text-xs text-zinc-500 tabular-nums") },
-                                    `${index + 1} / ${posts.length}`,
-                                ),
-                          FocusButton(),
-                      ),
+                      FocusButton(),
                   ),
-            div(
-                {
-                    class: clsx(
-                        vertical
-                            ? "flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto"
-                            : "flex gap-1.5 overflow-x-auto pb-1",
-                    ),
-                },
-                posts.map((post) =>
-                    Link(
-                        {
-                            href: postHref(post.link, origin),
-                            // A filmstrip jump is gallery navigation: replace,
-                            // so back exits the gallery, not the previous post.
-                            replace: true,
-                            class: clsx(
-                                "shrink-0 overflow-hidden rounded-md border transition-opacity",
-                                post.id === activeId
-                                    ? "border-zinc-200 opacity-100"
-                                    : "border-transparent opacity-50 hover:opacity-100",
-                            ),
-                            title: `Post #${post.id}`,
-                            ...(post.id === activeId ? { "data-gallery-active": "true" } : {}),
-                        },
-                        img({
-                            src: post.thumbnail,
-                            alt: `Post ${post.id}`,
-                            loading: "lazy",
-                            class: clsx(
-                                // The vertical thumb fills the strip's width so
-                                // the anchor's border hugs the image exactly.
-                                "object-cover",
-                                vertical ? "h-14 w-full" : "h-12 w-16",
-                            ),
-                        }),
-                    ),
+                  Counter(),
+              )
+            : div(
+                  { class: clsx("flex items-center justify-between px-0.5") },
+                  span(
+                      {
+                          class: clsx(
+                              "text-xs font-semibold tracking-wider text-zinc-500 uppercase",
+                          ),
+                      },
+                      "Gallery",
+                  ),
+                  div({ class: clsx("flex items-center gap-2") }, Counter(), FocusButton()),
+              ),
+        div(
+            {
+                class: clsx(
+                    vertical
+                        ? "flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto"
+                        : "flex gap-1.5 overflow-x-auto pb-1",
                 ),
-            ),
-            // Scroll the active thumb into view after each render.
-            () => {
-                queueMicrotask(() => {
-                    const active = document.querySelector<HTMLAnchorElement>(
-                        '[data-gallery-active="true"]',
-                    )
-                    active?.scrollIntoView({
-                        behavior: "smooth",
-                        block: vertical ? "center" : "nearest",
-                        inline: vertical ? "nearest" : "center",
-                    })
-                })
-                return document.createComment("")
             },
-        )
-    })
+            Thumbs,
+        ),
+        ScrollActive,
+    )
+}
+
+// One filmstrip thumbnail. Built once per loaded post; the active highlight
+// follows the current post via live props, so a step updates attributes in
+// place instead of rebuilding the strip.
+function Thumb({
+    post,
+    origin,
+    activeId,
+    vertical,
+}: {
+    post: Post
+    origin: PostOrigin
+    activeId: () => number
+    vertical: boolean
+}) {
+    const isActive = () => post.id === activeId()
+    return Link(
+        {
+            href: postHref(post.link, origin),
+            // A filmstrip jump is gallery navigation: replace, so back exits
+            // the gallery, not the previous post.
+            replace: true,
+            class: () =>
+                clsx(
+                    "shrink-0 overflow-hidden rounded-md border transition-opacity",
+                    isActive()
+                        ? "border-zinc-200 opacity-100"
+                        : "border-transparent opacity-50 hover:opacity-100",
+                ),
+            title: `Post #${post.id}`,
+            "data-gallery-active": () => (isActive() ? "true" : "false"),
+        },
+        img({
+            src: post.thumbnail,
+            alt: `Post ${post.id}`,
+            loading: "lazy",
+            class: clsx(
+                // The vertical thumb fills the strip's width so the anchor's
+                // border hugs the image exactly.
+                "object-cover",
+                vertical ? "h-14 w-full" : "h-12 w-16",
+            ),
+        }),
+    )
 }
 
 function LoadingState() {
@@ -375,72 +409,146 @@ function ErrorState(message: string) {
 }
 
 export function PostDetails() {
+    // The page shell (layout wrappers, filmstrip) is built once per mount and
+    // kept across post steps: vanjs swaps children whose identity changed, so
+    // rebuilding the shell per post would detach the filmstrip's scroll
+    // container and reset its scroll position. Only the shell's varying parts
+    // (sidebar content, media, filmstrip internals) are live bindings.
+    // Discarded on error / first load — a detached shell's bindings are dead
+    // (keepConnected), so it must never be reused after being taken off
+    // screen.
+    let shell: Node | undefined
     return div({ class: clsx("min-h-[60vh]") }, () => {
         const state = details.val
-        if (state.status === "error") return ErrorState(state.error)
+        if (state.status === "error") {
+            shell = undefined
+            return ErrorState(state.error)
+        }
         // While the next post loads, the state keeps the previous one (see
-        // state/load.ts), which is what renders here; only the very first load
-        // has no post and falls back to the skeleton.
-        const ready = state.status === "ready" ? state : null
-        if (ready === null) return LoadingState()
-        const post: PostDetailsData = ready.post
-        // Fresh per post: the toggle resets whenever the details change, but
-        // starts from the user's "load original right away" setting.
-        const showOriginal = van.state(preferOriginal.val)
-        // The gallery (arrows + filmstrip) shows when the post was opened
-        // from a list or favorites page — the origin is stored in the ready
-        // payload (see state/details.ts), so this page never reads the route.
-        const origin = ready.origin
+        // state/load.ts), which is what renders here; only the very first
+        // load has no post and falls back to the skeleton.
+        if (state.status !== "ready") {
+            shell = undefined
+            return LoadingState()
+        }
+        if (shell === undefined) shell = buildShell()
+        return shell
+    })
+}
+
+// The static page chrome plus the live per-post slots. Everything here stays
+// mounted across post steps within the same gallery.
+function buildShell(): Node {
+    // "Load original right away" toggle, shared by the sidebar switch and the
+    // media. Reset to the user's setting whenever the post changes (checked
+    // idempotently from both slots; the sidebar slot renders first, and its
+    // reset re-triggers the media's live src in the same pass).
+    let showOriginalFor: number | undefined
+    const showOriginal = van.state(preferOriginal.val)
+    const ensureShowOriginal = (post: PostDetailsData) => {
+        if (showOriginalFor !== post.id) {
+            showOriginalFor = post.id
+            showOriginal.val = preferOriginal.val
+        }
+    }
+    // The filmstrip node, memoized per (orientation, origin). Rebuilt when
+    // focus mode flips the strip's layout or the gallery origin changes — and
+    // whenever the non-gallery branch renders, because the strip was
+    // detached there and its bindings are dead (keepConnected).
+    let strip: { key: string; node: Node } | undefined
+    // The currently shown post's id, read from the state so the memoized
+    // strip sees the active post of *now*, not the one it was built with.
+    const activeId = () => (details.val.status === "ready" ? details.val.post.id : -1)
+
+    // Sidebar slot: per-post content inside the static aside. Runs before the
+    // column slot (created first), so its showOriginal reset propagates to
+    // the media within the same update.
+    const sidebarContent = () => {
+        const state = details.val
+        if (state.status !== "ready") {
+            return div(
+                { class: clsx("flex flex-col gap-2.5") },
+                Array.from({ length: 12 }).map((_, i) =>
+                    div({
+                        class: clsx("skeleton h-4 rounded"),
+                        style: `width: ${90 - (i % 4) * 15}%`,
+                    }),
+                ),
+            )
+        }
+        ensureShowOriginal(state.post)
+        return Sidebar({ post: state.post, showOriginal })
+    }
+
+    // Media slot: the media wrapper (media + arrow overlay), rebuilt per post
+    // — its <img>/<video> changes anyway. A comment when there is no post yet.
+    const mediaSlot = () => {
+        const state = details.val
+        if (state.status !== "ready") return document.createComment("")
+        ensureShowOriginal(state.post)
         const focus = galleryFocus.val
-        // Sidebar sits left of the media on desktop; on narrow screens it
-        // stacks below the media at full width.
         return div(
-            { class: clsx("flex flex-col gap-6 lg:flex-row") },
-            aside(
-                {
-                    // Focus mode hides the metadata sidebar so the media fills
-                    // the row; `display: none` keeps it mounted.
-                    class: () =>
-                        clsx(
-                            "order-last w-full shrink-0 lg:order-first lg:w-64",
-                            galleryFocus.val && "hidden",
-                        ),
-                },
-                Sidebar({ post, showOriginal }),
-            ),
+            { class: () => clsx("relative", galleryFocus.val && "min-h-0 min-w-0 flex-1") },
+            MediaArea({ post: state.post, showOriginal, fill: focus }),
+            // A live node must return one connected node, so each arrow
+            // is a live node in this static overlay.
             div(
                 {
-                    // In focus mode the column fills the viewport minus the
-                    // main's vertical padding (py-6 = 3rem): the media takes
-                    // the remaining width next to the vertical filmstrip on
-                    // the right, all without page scroll.
-                    class: () => clsx("order-first min-w-0 flex-1", focus && "flex h-screen gap-3"),
+                    class: clsx(
+                        "pointer-events-none absolute inset-0 flex items-center justify-between px-2",
+                    ),
                 },
-                origin !== undefined
-                    ? [
-                          div(
-                              { class: () => clsx("relative", focus && "min-h-0 min-w-0 flex-1") },
-                              MediaArea({ post, showOriginal, fill: focus }),
-                              // A live node must return one connected node, so
-                              // each arrow is a live node in this static overlay.
-                              div(
-                                  {
-                                      class: clsx(
-                                          "pointer-events-none absolute inset-0 flex items-center justify-between px-2",
-                                      ),
-                                  },
-                                  GalleryArrow({ dir: -1 }),
-                                  GalleryArrow({ dir: 1 }),
-                              ),
-                          ),
-                          Filmstrip({
-                              origin,
-                              activeId: post.id,
-                              vertical: focus,
-                          }),
-                      ]
-                    : MediaArea({ post, showOriginal }),
+                GalleryArrow({ dir: -1 }),
+                GalleryArrow({ dir: 1 }),
             ),
         )
-    })
+    }
+
+    // Filmstrip slot: the memoized strip node, or nothing outside a gallery.
+    // The strip's own live bindings follow the active post and page loads; a
+    // step never swaps it, so its scroll position survives.
+    const stripSlot = () => {
+        const state = details.val
+        if (state.status !== "ready" || state.origin === undefined) {
+            // Off a gallery (or no post yet) the strip below would be
+            // detached — never reuse it afterwards (keepConnected).
+            strip = undefined
+            return document.createComment("")
+        }
+        const key = `${galleryFocus.val ? "v" : "h"}:${originKey(state.origin)}`
+        if (strip?.key !== key)
+            strip = {
+                key,
+                node: Filmstrip({ origin: state.origin, activeId, vertical: galleryFocus.val }),
+            }
+        return strip.node
+    }
+
+    return div(
+        { class: clsx("flex flex-col gap-6 lg:flex-row") },
+        aside(
+            {
+                // Focus mode hides the metadata sidebar so the media fills
+                // the row; `display: none` keeps it mounted.
+                class: () =>
+                    clsx(
+                        "order-last w-full shrink-0 lg:order-first lg:w-64",
+                        galleryFocus.val && "hidden",
+                    ),
+            },
+            sidebarContent,
+        ),
+        div(
+            {
+                // In focus mode the column fills the viewport minus the
+                // main's vertical padding (py-6 = 3rem): the media takes
+                // the remaining width next to the vertical filmstrip on
+                // the right, all without page scroll.
+                class: () =>
+                    clsx("order-first min-w-0 flex-1", galleryFocus.val && "flex h-screen gap-3"),
+            },
+            mediaSlot,
+            stripSlot,
+        ),
+    )
 }

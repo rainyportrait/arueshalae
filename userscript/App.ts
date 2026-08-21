@@ -14,6 +14,7 @@ import { type Route, route } from "./router.ts"
 import { profile, profileLoading } from "./state/account.ts"
 import { details, detailsLoading } from "./state/details.ts"
 import { favorites, favoritesLoading } from "./state/favorites.ts"
+import { galleryFocus } from "./state/gallery.ts"
 import { list, listLoading } from "./state/list.ts"
 import { pageLoading } from "./state/loading.ts"
 
@@ -105,7 +106,14 @@ function ArueApp() {
         { class: clsx("flex min-h-screen flex-col bg-zinc-950 text-zinc-100") },
         Navbar(),
         LoadingBar(),
-        main({ class: clsx("mx-auto w-full flex-1 p-2.5") }, mainContent),
+        main(
+            {
+                // Focus mode drops the padding so the media column can run edge
+                // to edge under the hidden navbar.
+                class: () => clsx("mx-auto w-full flex-1", !galleryFocus.val && "p-2.5"),
+            },
+            mainContent,
+        ),
     )
 }
 

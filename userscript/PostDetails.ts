@@ -120,8 +120,11 @@ function buildMediaEl(
     fill: boolean,
 ): { el: HTMLElement; whenReady: Promise<void>; fill: boolean } {
     const media = post.media
+    // min-h-0 overrides the grid item's automatic minimum size: without it
+    // the image's natural height sizes the (auto) grid row, and max-h-full
+    // then resolves against that inflated track instead of the viewport.
     const elementClass = clsx(
-        fill ? "max-h-full" : "max-h-[80vh]",
+        fill ? "max-h-full min-h-0" : "max-h-[80vh]",
         "w-auto max-w-full rounded-lg transition-opacity duration-200",
     )
     if (media.kind === "video") {
@@ -536,7 +539,7 @@ function buildShell(): Node {
             if (shown.fill !== fill) {
                 shown.fill = fill
                 shown.el.className = clsx(
-                    fill ? "max-h-full" : "max-h-[80vh]",
+                    fill ? "max-h-full min-h-0" : "max-h-[80vh]",
                     "w-auto max-w-full rounded-lg transition-opacity duration-200",
                 )
             }
@@ -606,8 +609,9 @@ function buildShell(): Node {
         ),
         div(
             {
-                // In focus mode the column fills the viewport minus the
-                // main's vertical padding (py-6 = 3rem): the media takes
+                // In focus mode the column fills the viewport exactly
+                // (h-screen): main drops its padding and the navbar is hidden,
+                // so nothing offsets it. The media takes the remaining width
                 // the remaining width next to the vertical filmstrip on
                 // the right, all without page scroll.
                 class: () =>

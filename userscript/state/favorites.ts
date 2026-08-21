@@ -16,8 +16,11 @@ export const favoritesPid = van.derive<number>(() =>
     route.val.type === "favorites" ? route.val.pid : 0,
 )
 
-// Favorites page data (posts + the site's last-page offset).
-export const favorites = van.state<Loadable<Favorites>>({ status: "loading" })
+// Favorites page data (posts + the site's last-page offset), plus the route
+// parameters it was loaded with (see ListReady for why).
+export type FavoritesReady = Favorites & { id: number; pid: number }
+
+export const favorites = van.state<Loadable<FavoritesReady>>({ status: "loading" })
 
 // The favorites count from the user's profile page. The site's own favorites
 // paginator runs off a stale count (its "last page" can be empty), so the
@@ -32,11 +35,16 @@ const reloadTick = van.state(0)
 // Read rawVal (not val): this closure runs inside the trigger derive below,
 // and a tracked read would make that derive depend on favoritesId/favoritesPid,
 // re-running (and re-fetching) a second time when they change with the route.
-const loadFavorites = createLoader<Favorites, void>(favorites, () => {
-    const id = favoritesId.rawVal
-    const pid = favoritesPid.rawVal
-    return fetchFavorites(id, pid)
-})
+const { load: loadFavorites, pending: favoritesLoading } = createLoader<FavoritesReady, void>(
+    favorites,
+    () => {
+        const id = favoritesId.rawVal
+        const pid = favoritesPid.rawVal
+        return fetchFavorites(id, pid).then((result) => ({ ...result, id, pid }))
+    },
+)
+
+export { favoritesLoading }
 
 // Re-fetch the page whenever the route (id/pid) or reloadTick changes. Gated
 // to favorites so we don't fire a wasted fetch while sitting on another route.

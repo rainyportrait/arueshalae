@@ -10,19 +10,23 @@ const { a } = van.tags
 // plain left-click to navigate SPA-style. Unrecognized hrefs are left to the
 // browser (no preventDefault), so they do a normal full navigation.
 // With replace set, a left-click replaces the current history entry instead
-// of pushing one (the gallery's filmstrip uses this).
+// of pushing one (the gallery's filmstrip uses it).
+// href may be a function: vanjs then treats it as a live prop and re-resolves
+// the attribute when its dependencies change (PostCard uses this to follow
+// the route without registering it as a dependency of the whole grid).
 export function Link(
-    props: Props & { href: string; replace?: boolean },
+    props: Props & { href: string | (() => string); replace?: boolean },
     ...children: readonly ChildDom[]
 ): HTMLAnchorElement {
     const { href, replace, ...rest } = props
+    const currentHref = () => (typeof href === "function" ? href() : href)
     return a(
         {
             ...rest,
             href,
             onclick: (e: MouseEvent) => {
                 if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
-                const next = parseRoute(href)
+                const next = parseRoute(currentHref())
                 if (next.type === "unknown") return
                 e.preventDefault()
                 navigate(next, { replace })

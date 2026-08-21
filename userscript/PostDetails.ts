@@ -7,7 +7,7 @@ import { TagList } from "./TagList.ts"
 import { Toggle } from "./Toggle.ts"
 import type { PostDetails as PostDetailsData } from "./api/post-details.ts"
 import clsx from "./clsx.ts"
-import { type PostOrigin, postHref, route } from "./router.ts"
+import { type PostOrigin, postHref } from "./router.ts"
 import { details, reloadDetails } from "./state/details.ts"
 import { canStep, gallery, galleryFocus, reloadGallery, step } from "./state/gallery.ts"
 import { preferOriginal } from "./state/settings.ts"
@@ -377,15 +377,20 @@ function ErrorState(message: string) {
 export function PostDetails() {
     return div({ class: clsx("min-h-[60vh]") }, () => {
         const state = details.val
-        if (state.status === "loading") return LoadingState()
         if (state.status === "error") return ErrorState(state.error)
+        // While the next post loads, the state keeps the previous one (see
+        // state/load.ts), which is what renders here; only the very first load
+        // has no post and falls back to the skeleton.
+        const ready = state.status === "ready" ? state : null
+        if (ready === null) return LoadingState()
+        const post: PostDetailsData = ready.post
         // Fresh per post: the toggle resets whenever the details change, but
         // starts from the user's "load original right away" setting.
         const showOriginal = van.state(preferOriginal.val)
         // The gallery (arrows + filmstrip) shows when the post was opened
-        // from a list or favorites page — the origin rides on the URL.
-        const r = route.val
-        const origin = r.type === "postdetails" ? r.origin : undefined
+        // from a list or favorites page — the origin is stored in the ready
+        // payload (see state/details.ts), so this page never reads the route.
+        const origin = ready.origin
         const focus = galleryFocus.val
         // Sidebar sits left of the media on desktop; on narrow screens it
         // stacks below the media at full width.
@@ -401,7 +406,7 @@ export function PostDetails() {
                             galleryFocus.val && "hidden",
                         ),
                 },
-                Sidebar({ post: state.post, showOriginal }),
+                Sidebar({ post, showOriginal }),
             ),
             div(
                 {
@@ -415,7 +420,7 @@ export function PostDetails() {
                     ? [
                           div(
                               { class: () => clsx("relative", focus && "min-h-0 min-w-0 flex-1") },
-                              MediaArea({ post: state.post, showOriginal, fill: focus }),
+                              MediaArea({ post, showOriginal, fill: focus }),
                               // A live node must return one connected node, so
                               // each arrow is a live node in this static overlay.
                               div(
@@ -430,11 +435,11 @@ export function PostDetails() {
                           ),
                           Filmstrip({
                               origin,
-                              activeId: state.post.id,
+                              activeId: post.id,
                               vertical: focus,
                           }),
                       ]
-                    : MediaArea({ post: state.post, showOriginal }),
+                    : MediaArea({ post, showOriginal }),
             ),
         )
     })

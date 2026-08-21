@@ -11,8 +11,10 @@ const { img } = van.tags
 // On the post list and favorites routes the post link carries the gallery
 // origin (which collection it came from and from which page), so the details
 // page can offer navigation to the adjacent posts. Any other surface (e.g.
-// the profile page) keeps the site's bare link. Evaluated at render time, so
-// it follows the route: the grid re-renders whenever it changes.
+// the profile page) keeps the site's bare link. It follows the route, but is
+// evaluated as a live prop (see below) so that `route` is a dependency of the
+// anchor only, not of the grid: a plain read here would rebuild every card
+// (and reload every <img>) on any navigation.
 function cardHref(post: Post): string {
     const r = route.val
     if (r.type === "postlist")
@@ -25,7 +27,7 @@ function cardHref(post: Post): string {
 export function PostCard(post: Post) {
     return Link(
         {
-            href: cardHref(post),
+            href: () => cardHref(post),
             class: clsx(
                 "masonry-item group",
                 "block w-full overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900",

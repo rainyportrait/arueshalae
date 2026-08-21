@@ -11,7 +11,12 @@ export const profile = van.state<Loadable<UserProfile>>({ status: "loading" })
 // Bumped to force a re-fetch (used by the error state's "Try again" button).
 const reloadTick = van.state(0)
 
-const loadProfile = createLoader<UserProfile, ProfileRef>(profile, fetchProfile)
+const { load: loadProfile, pending: profileLoading } = createLoader<UserProfile, ProfileRef>(
+    profile,
+    fetchProfile,
+)
+
+export { profileLoading }
 
 // Fetch whenever the account route (ref) or reloadTick changes. Gated to the
 // account route so we don't fire a wasted fetch while sitting on another

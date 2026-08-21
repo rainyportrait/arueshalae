@@ -82,6 +82,27 @@ body {
     }
 }
 
+/*
+ * Indeterminate loading bar (pinned to the top of the viewport while page data
+ * fetches). A fixed-width segment sweeps back and forth across the track, the
+ * same pattern YouTube uses. The element only exists in the DOM while
+ * loading, so no pause/exit state is needed.
+ */
+.loading-bar {
+    width: 40%;
+    height: 100%;
+    background-color: #f43f5e;
+    animation: loading-bar-sweep 1.1s ease-in-out infinite alternate;
+}
+@keyframes loading-bar-sweep {
+    from {
+        transform: translateX(-100%);
+    }
+    to {
+        transform: translateX(250%);
+    }
+}
+
 /* Hide the native number-input spin buttons (used by the Pagination jump input). */
 input[type="number"] {
     appearance: textfield;

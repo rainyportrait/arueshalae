@@ -46,9 +46,11 @@ export const userInfo = van.state<UserInfoState>({ status: "idle" })
 // hold it in `userInfo`. Fires once per authenticated user: guarded so it
 // doesn't re-fetch while loading or already ready, and doesn't auto-retry an
 // error (the menu stays functional off `userId` alone).
-const loadProfile = createLoader(userInfo, (userId: number) =>
+const { load: loadProfile, pending: userInfoLoading } = createLoader(userInfo, (userId: number) =>
     fetchUserProfile(userId).then((profile) => ({ profile })),
 )
+
+export { userInfoLoading }
 
 van.derive(() => {
     const a = auth.val

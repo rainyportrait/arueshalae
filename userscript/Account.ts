@@ -165,7 +165,6 @@ function LoadingSkeleton() {
 export function Account() {
     return div({ class: clsx("min-h-[60vh]") }, () => {
         const state = profile.val
-        if (state.status === "loading") return LoadingSkeleton()
         if (state.status === "error") {
             return CenteredState({
                 icon: "⚠️",
@@ -174,6 +173,11 @@ export function Account() {
                 action: { label: "Try again", onclick: reloadProfile },
             })
         }
-        return ProfileView({ data: state })
+        // While a new profile loads, the state keeps the previous one (see
+        // state/load.ts), which is what renders here; only the very first load
+        // has no profile and falls back to the skeleton.
+        const data: UserProfile | null = state.status === "ready" ? state : null
+        if (data === null) return LoadingSkeleton()
+        return ProfileView({ data })
     })
 }

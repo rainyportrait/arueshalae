@@ -56,7 +56,6 @@ export function PostGrid({
     errorTitle,
     onRetry,
 }: PostGridProps): HTMLDivElement {
-    if (state.status === "loading") return SkeletonGrid()
     if (state.status === "error") {
         return CenteredState({
             icon: "⚠️",
@@ -65,6 +64,9 @@ export function PostGrid({
             action: { label: "Try again", onclick: onRetry },
         })
     }
+    // "loading" only ever holds the initial state (see state/load.ts): while
+    // a new page loads the state keeps the previous one, which renders here.
+    if (state.status === "loading") return SkeletonGrid()
     if (state.posts.length === 0) return CenteredState(empty)
 
     return div(

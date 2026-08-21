@@ -27,9 +27,3 @@ export function cachedPostDetails(id: number): Promise<PostDetails> {
     inflight.set(id, fetch)
     return fetch
 }
-
-// The cached post for id, if already resolved — lets callers skip the
-// loading state entirely on a hit (no skeleton flash when stepping).
-export function peekPostDetails(id: number): PostDetails | undefined {
-    return cache.get(id)
-}

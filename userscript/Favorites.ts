@@ -19,14 +19,18 @@ export function Favorites() {
     return div({ class: clsx("min-h-[60vh]") }, () => {
         const state = favorites.val
         const count = favoritesCount.val
+        // The page on screen: the ready page (the state keeps the previous one
+        // while a new one loads, see state/load.ts). Pagination follows it, so
+        // the old page's own number and links stay in place during the load.
+        const source = state.status === "ready" ? state : null
         return PostGrid({
             state,
-            currentPage: Math.floor(favoritesPid.val / FAVORITES_PAGE_SIZE) + 1,
-            totalPages: state.status === "ready" ? totalPages(state, count) : 1,
+            currentPage: Math.floor((source?.pid ?? favoritesPid.val) / FAVORITES_PAGE_SIZE) + 1,
+            totalPages: source ? totalPages(source, count) : 1,
             pageHref: (page) =>
                 routeToUrl({
                     type: "favorites",
-                    id: favoritesId.val,
+                    id: source?.id ?? favoritesId.val,
                     pid: (page - 1) * FAVORITES_PAGE_SIZE,
                 }),
             empty: {

@@ -106,42 +106,61 @@ function Sidebar({ post, showOriginal }: { post: PostDetailsData; showOriginal: 
     )
 }
 
-function MediaArea({
-    post,
-    showOriginal,
-    // In focus mode the wrapper's height is set by the layout (flex-1), so
-    // the media is capped by its container instead of the viewport.
-    fill = false,
-}: {
-    post: PostDetailsData
-    showOriginal: State<boolean>
-    fill?: boolean
-}) {
+// Build the media element for a post without inserting it. The element
+// starts transparent; `whenReady` resolves when it can be faded in — images
+// via decode(), videos when playback can start (the poster frame shows until
+// then). The img src stays a live prop so the "original image" toggle keeps
+// working after insertion.
+function buildMediaEl(
+    post: PostDetailsData,
+    showOriginal: State<boolean>,
+    // In focus mode the media is capped by its container (flex-1) instead of
+    // the viewport.
+    fill: boolean,
+): { el: HTMLElement; whenReady: Promise<void>; fill: boolean } {
     const media = post.media
-    const elementClass = clsx(fill ? "max-h-full" : "max-h-[80vh]", "w-auto max-w-full rounded-lg")
-    const element =
-        media.kind === "video"
-            ? video({
-                  src: media.src,
-                  poster: media.poster,
-                  controls: true,
-                  loop: true,
-                  muted: true,
-                  autoplay: true,
-                  class: elementClass,
-              })
-            : img({
-                  // Function prop: re-runs when showOriginal changes, swapping
-                  // the displayed image for the original (and back).
-                  src: () =>
-                      showOriginal.val && media.originalImage ? media.originalImage : media.src,
-                  alt: post.title ? `Post ${post.id}: ${post.title}` : `Post ${post.id}`,
-                  class: elementClass,
-              })
-    return div(
-        { class: clsx("flex items-center justify-center", fill ? "h-full" : "min-h-[60vh]") },
-        element,
+    const elementClass = clsx(
+        fill ? "max-h-full" : "max-h-[80vh]",
+        "w-auto max-w-full rounded-lg transition-opacity duration-200",
     )
+    if (media.kind === "video") {
+        const el = video({
+            src: media.src,
+            poster: media.poster,
+            controls: true,
+            loop: true,
+            muted: true,
+            autoplay: true,
+            class: elementClass,
+            style: "grid-area: 1 / 1",
+        })
+        const whenReady = new Promise<void>((resolve) => {
+            if (el.readyState >= 2) resolve()
+            else {
+                el.addEventListener("canplay", () => resolve(), { once: true })
+                el.addEventListener("error", () => resolve(), { once: true })
+            }
+        })
+        return { el, whenReady, fill }
+    }
+    const el = img({
+        // Function prop: re-runs when showOriginal changes, swapping the
+        // displayed image for the original (and back).
+        src: () => (showOriginal.val && media.originalImage ? media.originalImage : media.src),
+        alt: post.title ? `Post ${post.id}: ${post.title}` : `Post ${post.id}`,
+        class: elementClass,
+        style: "grid-area: 1 / 1",
+    })
+    // A rejected decode (broken image) still resolves: fade in whatever the
+    // browser renders rather than holding the old post forever.
+    return {
+        el,
+        whenReady: el.decode().then(
+            () => {},
+            () => {},
+        ),
+        fill,
+    }
 }
 
 // One side of the gallery: a live node returning a chevron button. Disabled
@@ -480,28 +499,70 @@ function buildShell(): Node {
         return Sidebar({ post: state.post, showOriginal })
     }
 
-    // Media slot: the media wrapper (media + arrow overlay), rebuilt per post
-    // — its <img>/<video> changes anyway. A comment when there is no post yet.
+    // Media slot: a stable wrapper (media holder + arrow overlay) whose
+    // media content is crossfaded per post. The holder is a grid whose
+    // children all occupy the same cell, so during a fade the outgoing and
+    // incoming media overlap; the incoming element starts transparent and is
+    // faded in once it is decodable/can-play, then the outgoing one is
+    // removed. The wrapper node never changes identity — swapping it would
+    // cut instead of fade.
+    const mediaHolder = div({
+        class: () => clsx("grid place-items-center", galleryFocus.val ? "h-full" : "min-h-[60vh]"),
+    })
+    const mediaBox = div(
+        { class: () => clsx("relative", galleryFocus.val && "min-h-0 min-w-0 flex-1") },
+        mediaHolder,
+        // A live node must return one connected node, so each arrow
+        // is a live node in this static overlay.
+        div(
+            {
+                class: clsx(
+                    "pointer-events-none absolute inset-0 flex items-center justify-between px-2",
+                ),
+            },
+            GalleryArrow({ dir: -1 }),
+            GalleryArrow({ dir: 1 }),
+        ),
+    )
+    let shown: { id: number; el: HTMLElement; fill: boolean } | undefined
+    const swapMedia = (post: PostDetailsData, fill: boolean): void => {
+        if (shown?.id === post.id) {
+            // Same post, but focus mode may have flipped the sizing cap.
+            if (shown.fill !== fill) {
+                shown.fill = fill
+                shown.el.className = clsx(
+                    fill ? "max-h-full" : "max-h-[80vh]",
+                    "w-auto max-w-full rounded-lg transition-opacity duration-200",
+                )
+            }
+            return
+        }
+        // Drop an element from a superseded swap that never got faded in.
+        for (const child of [...mediaHolder.children]) if (child !== shown?.el) child.remove()
+        const prev = shown
+        const next = buildMediaEl(post, showOriginal, fill)
+        next.el.style.opacity = "0"
+        mediaHolder.append(next.el)
+        shown = { id: post.id, el: next.el, fill }
+        void next.whenReady.then(() => {
+            if (shown?.el !== next.el) {
+                // Superseded by another step before it was ready.
+                next.el.remove()
+                return
+            }
+            next.el.style.opacity = "1"
+            if (prev) window.setTimeout(() => prev.el.remove(), 250)
+        })
+    }
     const mediaSlot = () => {
         const state = details.val
-        if (state.status !== "ready") return document.createComment("")
-        ensureShowOriginal(state.post)
-        const focus = galleryFocus.val
-        return div(
-            { class: () => clsx("relative", galleryFocus.val && "min-h-0 min-w-0 flex-1") },
-            MediaArea({ post: state.post, showOriginal, fill: focus }),
-            // A live node must return one connected node, so each arrow
-            // is a live node in this static overlay.
-            div(
-                {
-                    class: clsx(
-                        "pointer-events-none absolute inset-0 flex items-center justify-between px-2",
-                    ),
-                },
-                GalleryArrow({ dir: -1 }),
-                GalleryArrow({ dir: 1 }),
-            ),
-        )
+        // Off a ready payload (only possible before the first load) the
+        // previous media simply stays up.
+        if (state.status === "ready") {
+            ensureShowOriginal(state.post)
+            swapMedia(state.post, galleryFocus.val)
+        }
+        return mediaBox
     }
 
     // Filmstrip slot: the memoized strip node, or nothing outside a gallery.

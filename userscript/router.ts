@@ -171,12 +171,20 @@ export const returnTo = van.state<Route | null>(null)
 export function navigate(next: Route, opts: { replace?: boolean } = {}): void {
     const url = routeToUrl(next)
     if (url === window.location.pathname + window.location.search) return
-    if (opts.replace) window.history.replaceState(null, "", url)
-    else window.history.pushState(null, "", url)
-    // Snapshot the current route when heading to login, so the login flow can
-    // bring the user back here.
-    if (next.type === "login") returnTo.val = route.val
-    route.val = next
+    // A gallery step (postdetails -> postdetails: arrows, keyboard, filmstrip
+    // clicks) crossfades via the View Transitions API instead of cutting —
+    // unsupported browsers just update synchronously.
+    const isGalleryStep = route.val.type === "postdetails" && next.type === "postdetails"
+    const update = () => {
+        if (opts.replace) window.history.replaceState(null, "", url)
+        else window.history.pushState(null, "", url)
+        // Snapshot the current route when heading to login, so the login flow
+        // can bring the user back here.
+        if (next.type === "login") returnTo.val = route.val
+        route.val = next
+    }
+    if (isGalleryStep && document.startViewTransition) document.startViewTransition(update)
+    else update()
 }
 
 // Replace the current URL and route without adding a history entry. Used for

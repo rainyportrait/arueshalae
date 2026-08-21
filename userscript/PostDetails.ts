@@ -7,6 +7,7 @@ import { TagList } from "./TagList.ts"
 import { Toggle } from "./Toggle.ts"
 import type { PostDetails as PostDetailsData } from "./api/post-details.ts"
 import type { Post } from "./api/post-list.ts"
+import { isAnimated } from "./api/tags.ts"
 import clsx from "./clsx.ts"
 import { type PostOrigin, postHref } from "./router.ts"
 import { details, reloadDetails } from "./state/details.ts"
@@ -371,7 +372,11 @@ function Thumb({
                     "shrink-0 overflow-hidden rounded-md border transition-opacity",
                     isActive()
                         ? "border-zinc-200 opacity-100"
-                        : "border-transparent opacity-50 hover:opacity-100",
+                        : // Inactive animated thumbs keep a rose border so
+                          // they stay findable at a glance.
+                          isAnimated(post.tags)
+                          ? "border-rose-500/60 opacity-50 hover:opacity-100"
+                          : "border-transparent opacity-50 hover:opacity-100",
                 ),
             title: `Post #${post.id}`,
             "data-gallery-active": () => (isActive() ? "true" : "false"),

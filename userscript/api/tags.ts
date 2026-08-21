@@ -18,6 +18,15 @@ export const KNOWN_TYPES: ReadonlySet<string> = new Set([
     "metadata",
 ])
 
+// Tags that mark a post's media as animated: rule34's `animated` parent tag
+// (and any `animated_*` format subtag, e.g. `animated_gif`) plus the video
+// containers. Matched against normalized tag slugs.
+const ANIMATED_TAG_SLUGS = new Set(["animated", "webm", "mp4"])
+
+export function isAnimated(tags: string[]): boolean {
+    return tags.some((tag) => ANIMATED_TAG_SLUGS.has(tag) || tag.startsWith("animated_"))
+}
+
 // Normalize a raw, whitespace-separated string of tags into a clean list: trim
 // + lowercase each token, drop empties, and dedupe (first-seen order). This is
 // the shared core behind the search query (which rejoins the result into a

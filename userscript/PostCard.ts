@@ -2,6 +2,7 @@ import van from "vanjs-core"
 
 import { Link } from "./Link.ts"
 import type { Post } from "./api/post-list.ts"
+import { isAnimated } from "./api/tags.ts"
 import clsx from "./clsx.ts"
 import { setCardSpan } from "./masonry.ts"
 import { postHref, route } from "./router.ts"
@@ -30,8 +31,13 @@ export function PostCard(post: Post) {
             href: () => cardHref(post),
             class: clsx(
                 "masonry-item group",
-                "block w-full overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900",
-                "transition-colors duration-150 hover:border-zinc-600",
+                "block w-full overflow-hidden rounded-xl border bg-zinc-900",
+                "transition-colors duration-150",
+                // Animated posts carry a rose border so they stand out in the
+                // grid; the hover state brightens whichever base is set.
+                isAnimated(post.tags)
+                    ? "border-rose-500/60 hover:border-rose-400/70"
+                    : "border-zinc-800 hover:border-zinc-600",
             ),
             title: `Post #${post.id}`,
         },

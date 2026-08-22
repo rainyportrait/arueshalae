@@ -18,7 +18,10 @@ export type PostList = {
 }
 
 export async function fetchPostList(tags?: string, pid?: number): Promise<PostList> {
-    const url = `/index.php?page=post&s=list${tags ? `&tags=${tags}` : ""}${pid ? `&pid=${pid}` : ""}`
+    // Encode the query: it is raw user input (spaces, and occasionally
+    // special characters) that must not inject or truncate query parameters,
+    // matching routeToUrl in router.ts.
+    const url = `/index.php?page=post&s=list${tags ? `&tags=${encodeURIComponent(tags)}` : ""}${pid ? `&pid=${pid}` : ""}`
     const doc = await fetchDocument(url)
     const { posts, lastPagePID } = extractPostList(doc, pid ?? 0)
     return { posts, lastPagePID, tags: extractTags(doc) }

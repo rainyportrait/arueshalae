@@ -13,7 +13,7 @@ import {
     pageSize,
     snapshot,
 } from "./gallery-collection.ts"
-import { type Loadable } from "./load.ts"
+import { type Loadable, errorMessage } from "./load.ts"
 import { cachedPostDetails } from "./post-details-cache.ts"
 
 export type { Gallery, GalleryPage } from "./gallery-collection.ts"
@@ -115,11 +115,13 @@ export function step(delta: 1 | -1): void {
         navigate({ ...r, id: posts[target].id }, { replace: true })
         return
     }
-    const pids = col.pages.map((p) => p.pid)
-    if (delta === 1 && pids.length > 0 && Math.max(...pids) + size <= col.lastPagePID) {
-        void boundaryStep(col, Math.max(...pids) + size, r, (page) => page[0])
-    } else if (delta === -1 && pids.length > 0 && Math.min(...pids) - size >= 0) {
-        void boundaryStep(col, Math.min(...pids) - size, r, (page) => page[page.length - 1])
+    // Pages are sorted by pid, so the extremes are the first and last page.
+    const first = col.pages[0]
+    const last = col.pages[col.pages.length - 1]
+    if (delta === 1 && last !== undefined && last.pid + size <= col.lastPagePID) {
+        void boundaryStep(col, last.pid + size, r, (page) => page[0])
+    } else if (delta === -1 && first !== undefined && first.pid - size >= 0) {
+        void boundaryStep(col, first.pid - size, r, (page) => page[page.length - 1])
     }
 }
 
@@ -159,14 +161,15 @@ export function canStep(delta: 1 | -1): boolean {
     const index = posts.findIndex((p) => p.id === r.id)
     if (index === -1) return false
     const size = pageSize(r.origin)
-    const pids = col.pages.map((p) => p.pid)
+    // Pages are sorted by pid, so the extremes are the first and last page.
+    const first = col.pages[0]
+    const last = col.pages[col.pages.length - 1]
     if (delta === 1) {
         return (
-            index < posts.length - 1 ||
-            (pids.length > 0 && Math.max(...pids) + size <= col.lastPagePID)
+            index < posts.length - 1 || (last !== undefined && last.pid + size <= col.lastPagePID)
         )
     }
-    return index > 0 || (pids.length > 0 && Math.min(...pids) - size >= 0)
+    return index > 0 || (first !== undefined && first.pid - size >= 0)
 }
 
 // Prefetch the details of the two adjacent loaded posts, so arrow-stepping
@@ -212,7 +215,3 @@ document.addEventListener("keydown", (event) => {
         galleryFocus.val = false
     }
 })
-
-function errorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error)
-}

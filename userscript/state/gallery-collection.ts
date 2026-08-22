@@ -105,11 +105,10 @@ export function ensurePage(col: Collection, pid: number): Promise<GalleryPage> {
                 // page past the end (stale count). Clamp so boundary steps
                 // stop here. The page is deliberately not stored, so a later
                 // attempt (e.g. after new favorites) refetches it.
-                const others = col.pages.map((p) => p.pid)
-                col.lastPagePID = Math.max(
-                    col.lastPagePID,
-                    others.length > 0 ? Math.max(...others) : 0,
-                )
+                // Pages are sorted by pid, so the highest loaded page is the
+                // last one (the empty page itself is not stored).
+                const highest = col.pages[col.pages.length - 1]
+                col.lastPagePID = Math.max(col.lastPagePID, highest?.pid ?? 0)
                 return { pid, posts: [] }
             }
             col.lastPagePID = Math.max(col.lastPagePID, result.lastPagePID)

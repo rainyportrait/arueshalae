@@ -42,6 +42,6 @@ export function createLoader<T, A, Extra = never>(
     return { load, pending }
 }
 
-function errorMessage(error: unknown): string {
+export function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error)
 }

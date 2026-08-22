@@ -2,6 +2,7 @@ import van from "vanjs-core"
 
 import { AutocompleteInput } from "./AutocompleteInput.ts"
 import { Toggle } from "./Toggle.ts"
+import { normalizeTags } from "./api/tags.ts"
 import clsx from "./clsx.ts"
 import {
     preferOriginal,
@@ -46,14 +47,14 @@ export function Settings() {
     const resyncRef = { current: null as (() => void) | null }
 
     // Add one or more tags (the input may hold several, space-separated).
-    // Tokens are lowercased and deduped against the existing list; the field
-    // is cleared on every attempt.
+    // Tokens are normalized with the shared normalizeTags (trim, lowercase,
+    // dedupe) and deduped against the existing list; the field is cleared on
+    // every attempt.
     function addTags(raw: string): void {
         const set = new Set(tagBlacklist.val)
         let addedAny = false
-        for (const part of raw.split(/\s+/)) {
-            const token = part.trim().toLowerCase()
-            if (token === "" || set.has(token)) continue
+        for (const token of normalizeTags(raw)) {
+            if (set.has(token)) continue
             set.add(token)
             addedAny = true
         }

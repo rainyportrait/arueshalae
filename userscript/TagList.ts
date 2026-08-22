@@ -1,4 +1,5 @@
 import van from "vanjs-core"
+import type { State } from "vanjs-core"
 
 import { Link } from "./Link.ts"
 import type { Tag, TagType } from "./api/tags.ts"
@@ -56,10 +57,24 @@ function TagLink({ tag }: { tag: Tag }) {
     )
 }
 
+// Collapse state lives at module scope, keyed by tag type: TagGroup is a
+// plain function re-called on every render of its parent (a page turn, a
+// fetch settling, ...), so a per-call state would be re-created and silently
+// re-expand every group the user had collapsed.
+const collapsedByType = new Map<TagType, State<boolean>>()
+function collapsedState(type: TagType): State<boolean> {
+    let s = collapsedByType.get(type)
+    if (s === undefined) {
+        s = van.state(false)
+        collapsedByType.set(type, s)
+    }
+    return s
+}
+
 // One tag-type group with a clickable heading that toggles collapse. Collapsed,
 // it shows the first tag plus a count of the hidden ones.
 function TagGroup({ type, tags }: { type: TagType; tags: Tag[] }) {
-    const collapsed = van.state(false)
+    const collapsed = collapsedState(type)
     // A single-tag group can't collapse, so its heading stays inert (no cursor,
     // hover, or chevron) to avoid dead affordances.
     const interactive = tags.length > 1

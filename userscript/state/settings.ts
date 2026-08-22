@@ -1,4 +1,5 @@
 import van from "vanjs-core"
+import type { State } from "vanjs-core"
 
 import type { Post } from "../api/post-list.ts"
 
@@ -28,29 +29,40 @@ function writeJSON(key: string, value: unknown): void {
     }
 }
 
+// A van state backed by localStorage: read once at init, and every write
+// persists (a failed write just doesn't persist). Assignments and reactivity
+// behave exactly like a plain state — the wrapper's accessors proxy the inner
+// state, so derives that read it subscribe to the real state.
+function persisted<T>(key: string, fallback: T): State<T> {
+    const s = van.state<T>(readJSON(key, fallback))
+    return {
+        get val() {
+            return s.val
+        },
+        set val(v) {
+            s.val = v
+            writeJSON(key, v)
+        },
+        get oldVal() {
+            return s.oldVal
+        },
+        get rawVal() {
+            return s.rawVal
+        },
+    }
+}
+
 // --- Tag blacklist --------------------------------------------------------
 // A list of tags; any postlist post carrying one of these is hidden. Applied
 // only to the post list, never to favorites or other post surfaces.
 
-export const tagBlacklist = van.state<string[]>(readJSON<string[]>(`${PREFIX}tag-blacklist`, []))
-
-export function setTagBlacklist(tags: string[]): void {
-    tagBlacklist.val = tags
-    writeJSON(`${PREFIX}tag-blacklist`, tags)
-}
+export const tagBlacklist = persisted<string[]>(`${PREFIX}tag-blacklist`, [])
 
 // --- Image quality --------------------------------------------------------
 // When true, the post details page loads the original image right away instead
 // of the sample.
 
-export const preferOriginal = van.state<boolean>(
-    readJSON<boolean>(`${PREFIX}prefer-original`, false),
-)
-
-export function setPreferOriginal(value: boolean): void {
-    preferOriginal.val = value
-    writeJSON(`${PREFIX}prefer-original`, value)
-}
+export const preferOriginal = persisted<boolean>(`${PREFIX}prefer-original`, false)
 
 // --- Hidden posts toggle --------------------------------------------------
 // Whether blacklisted posts are currently shown in the post list. Session-only

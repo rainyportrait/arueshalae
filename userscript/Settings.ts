@@ -4,12 +4,7 @@ import { AutocompleteInput } from "./AutocompleteInput.ts"
 import { Toggle } from "./Toggle.ts"
 import { normalizeTags } from "./api/tags.ts"
 import clsx from "./clsx.ts"
-import {
-    preferOriginal,
-    setPreferOriginal,
-    setTagBlacklist,
-    tagBlacklist,
-} from "./state/settings.ts"
+import { preferOriginal, tagBlacklist } from "./state/settings.ts"
 
 const { button, div, h1, h2, p, section, span } = van.tags
 
@@ -32,7 +27,7 @@ function TagPill({ tag }: { tag: string }) {
                     "flex h-5 w-5 shrink-0 items-center justify-center rounded-full",
                     "text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-zinc-100",
                 ),
-                onclick: () => setTagBlacklist(tagBlacklist.val.filter((t) => t !== tag)),
+                onclick: () => (tagBlacklist.val = tagBlacklist.val.filter((t) => t !== tag)),
             },
             "×",
         ),
@@ -58,7 +53,7 @@ export function Settings() {
             set.add(token)
             addedAny = true
         }
-        if (addedAny) setTagBlacklist([...set])
+        if (addedAny) tagBlacklist.val = [...set]
         clearInput()
     }
 
@@ -146,7 +141,7 @@ export function Settings() {
                 description:
                     "Skip the sample image and load the full-resolution original on the post page.",
                 state: preferOriginal,
-                onToggle: setPreferOriginal,
+                onToggle: (value) => (preferOriginal.val = value),
             }),
         ),
     )

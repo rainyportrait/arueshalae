@@ -7,10 +7,13 @@ export type AutocompleteSuggestion = {
     type: TagType
 }
 
-// The endpoint HTML-entity-encodes special characters in tags (e.g. an
-// apostrophe arrives as `&#039;`), so both `label` and `value` must be
-// decoded before display or insertion. Parsing through the DOM gives a
-// faithful, single-pass decode of numeric and named entities.
+// The endpoint HTML-entity-encodes special characters in tag strings (e.g. an
+// apostrophe arrives as `&#039;`), so the raw JSON body carries entities
+// inside its string values. We decode the whole body in one pass (parsing it
+// as HTML text gives a faithful decode of numeric and named entities) before
+// parsing the JSON — one DOM parse per response instead of one per field. The
+// JSON's own structure (quotes, braces, fixed key names) contains no entities,
+// so the body-wide pass decodes exactly the tag values.
 function decodeEntities(s: string): string {
     return new DOMParser().parseFromString(s, "text/html").documentElement.textContent ?? s
 }
@@ -21,12 +24,15 @@ function decodeEntities(s: string): string {
 export async function fetchAutocomplete(query: string): Promise<AutocompleteSuggestion[]> {
     const url = `/public/autocomplete.php?q=${encodeURIComponent(query)}`
     const response = await fetchCleared(url)
-    const data: Array<{ label: string; value: string; type: string }> = await response.json()
+    const raw = await response.text()
+    const data: Array<{ label: string; value: string; type: string }> = JSON.parse(
+        decodeEntities(raw),
+    )
     return data
         .filter((item) => typeof item.value === "string" && item.value !== "")
         .map((item) => ({
-            label: decodeEntities(item.label ?? item.value),
-            value: decodeEntities(item.value),
+            label: item.label ?? item.value,
+            value: item.value,
             type: (KNOWN_TYPES.has(item.type) ? item.type : "general") as TagType,
         }))
 }

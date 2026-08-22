@@ -3,7 +3,7 @@ import type { ChildDom, State } from "vanjs-core"
 
 import { CenteredState } from "./CenteredState.ts"
 import { Link } from "./Link.ts"
-import { TagList } from "./TagList.ts"
+import { TagList, TagListSkeleton } from "./TagList.ts"
 import { Toggle } from "./Toggle.ts"
 import type { PostDetails as PostDetailsData } from "./api/post-details.ts"
 import type { Post } from "./api/post-list.ts"
@@ -405,15 +405,7 @@ function LoadingState() {
         { class: clsx("flex flex-col gap-6 lg:flex-row") },
         aside(
             { class: clsx("order-last w-full shrink-0 lg:order-first lg:w-64") },
-            div(
-                { class: clsx("flex flex-col gap-2.5") },
-                Array.from({ length: 12 }).map((_, i) =>
-                    div({
-                        class: clsx("skeleton h-4 rounded"),
-                        style: `width: ${90 - (i % 4) * 15}%`,
-                    }),
-                ),
-            ),
+            TagListSkeleton(),
         ),
         div(
             {
@@ -492,17 +484,7 @@ function buildShell(): Node {
     // the media within the same update.
     const sidebarContent = () => {
         const state = details.val
-        if (state.status !== "ready") {
-            return div(
-                { class: clsx("flex flex-col gap-2.5") },
-                Array.from({ length: 12 }).map((_, i) =>
-                    div({
-                        class: clsx("skeleton h-4 rounded"),
-                        style: `width: ${90 - (i % 4) * 15}%`,
-                    }),
-                ),
-            )
-        }
+        if (state.status !== "ready") return TagListSkeleton()
         ensureShowOriginal(state.post)
         return Sidebar({ post: state.post, showOriginal })
     }

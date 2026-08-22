@@ -2,7 +2,7 @@ import van from "vanjs-core"
 import type { ChildDom } from "vanjs-core"
 
 import { PostGrid } from "./PostGrid.ts"
-import { TagList } from "./TagList.ts"
+import { TagList, TagListSkeleton } from "./TagList.ts"
 import { type Post } from "./api/post-list.ts"
 import clsx from "./clsx.ts"
 import { routeToUrl } from "./router.ts"
@@ -11,18 +11,6 @@ import { type Loadable } from "./state/load.ts"
 import { filterByBlacklist, showHiddenPosts, tagBlacklist } from "./state/settings.ts"
 
 const { aside, button, div } = van.tags
-
-// Varying widths so the tag-list skeleton reads as a list of tag rows.
-const TAG_SKELETON_WIDTHS = ["80%", "65%", "90%", "55%", "70%", "45%", "85%", "60%", "75%", "50%"]
-
-function TagListSkeleton() {
-    return div(
-        { class: clsx("flex flex-col gap-2.5") },
-        TAG_SKELETON_WIDTHS.map((width) =>
-            div({ class: clsx("skeleton h-4 rounded"), style: `width: ${width}` }),
-        ),
-    )
-}
 
 // Sidebar element reporting how many posts the blacklist is hiding, with a
 // click to reveal them (and hide them again). Zero-footprint (a comment) when

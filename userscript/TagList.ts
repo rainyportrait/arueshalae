@@ -138,6 +138,21 @@ function TagGroup({ type, tags }: { type: TagType; tags: Tag[] }) {
     }
 }
 
+// Varying widths so the tag-list skeleton reads as a list of tag rows.
+const TAG_SKELETON_WIDTHS = ["80%", "65%", "90%", "55%", "70%", "45%", "85%", "60%", "75%", "50%"]
+
+// The tag sidebar while its page is on its first load: one skeleton row per
+// tag. Shared by the post list and the post details page, whose sidebars both
+// stand in with this.
+export function TagListSkeleton() {
+    return div(
+        { class: clsx("flex flex-col gap-2.5") },
+        TAG_SKELETON_WIDTHS.map((width) =>
+            div({ class: clsx("skeleton h-4 rounded"), style: `width: ${width}` }),
+        ),
+    )
+}
+
 // Reusable, presentational tag list. Takes a flat list of tags and renders them
 // grouped by type, each as a link that searches for that single tag.
 // Groups are collapsible via their heading (see `TagGroup`).

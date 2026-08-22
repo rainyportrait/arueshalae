@@ -115,8 +115,8 @@ function Sidebar({ post, showOriginal }: { post: PostDetailsData; showOriginal: 
 function buildMediaEl(
     post: PostDetailsData,
     showOriginal: State<boolean>,
-    // In focus mode the media is capped by its container (flex-1) instead of
-    // the viewport.
+    // In focus mode the media box fills its container (flex-1) and the
+    // content is object-contain scaled to the largest size that fits in it.
     fill: boolean,
 ): { el: HTMLElement; whenReady: Promise<void>; fill: boolean } {
     const media = post.media
@@ -124,7 +124,7 @@ function buildMediaEl(
     // the image's natural height sizes the (auto) grid row, and max-h-full
     // then resolves against that inflated track instead of the viewport.
     const elementClass = clsx(
-        fill ? "max-h-full min-h-0" : "max-h-[80vh]",
+        fill ? "h-full object-contain" : "max-h-[80vh]",
         "w-auto max-w-full rounded-lg transition-opacity duration-200",
     )
     if (media.kind === "video") {
@@ -515,7 +515,14 @@ function buildShell(): Node {
     // removed. The wrapper node never changes identity — swapping it would
     // cut instead of fade.
     const mediaHolder = div({
-        class: () => clsx("grid place-items-center", galleryFocus.val ? "h-full" : "min-h-[60vh]"),
+        class: () =>
+            clsx(
+                "grid place-items-center",
+                // In focus mode the row track is definite (minmax(0,1fr) of
+                // the full-height grid) so the media's h-full resolves against
+                // the viewport instead of the item's natural size.
+                galleryFocus.val ? "h-full grid-rows-[minmax(0,1fr)]" : "min-h-[60vh]",
+            ),
     })
     const mediaBox = div(
         { class: () => clsx("relative", galleryFocus.val && "min-h-0 min-w-0 flex-1") },
@@ -539,7 +546,7 @@ function buildShell(): Node {
             if (shown.fill !== fill) {
                 shown.fill = fill
                 shown.el.className = clsx(
-                    fill ? "max-h-full min-h-0" : "max-h-[80vh]",
+                    fill ? "h-full object-contain" : "max-h-[80vh]",
                     "w-auto max-w-full rounded-lg transition-opacity duration-200",
                 )
             }

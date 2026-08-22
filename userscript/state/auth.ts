@@ -85,11 +85,14 @@ export async function login(username: string, password: string): Promise<LoginOu
     return { ok: false, error: result.error }
 }
 
-// Log out: fire the request (the server clears the session cookie) and reset
-// both states regardless of the result — the user's intent is unambiguous, and
-// a flaky network call shouldn't leave them "stuck logged in" in the UI.
+// Log out by deleting the session cookies: the server keys the session on
+// them, so once they are gone the user is anonymous and no network round-trip
+// is needed (and none can fail or trip the rate limiter). Both cookies are
+// JavaScript-readable; expiry in the past makes the browser drop them.
 export function logout(): void {
-    void fetch("/index.php?page=account&s=login&code=01").catch(() => {})
+    for (const name of ["user_id", "pass_hash"]) {
+        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`
+    }
     auth.val = { status: "guest" }
     userInfo.val = { status: "idle" }
 }

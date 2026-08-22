@@ -11,7 +11,7 @@ import { isAnimated } from "./api/tags.ts"
 import clsx from "./clsx.ts"
 import { type PostOrigin, postHref } from "./router.ts"
 import { details, reloadDetails } from "./state/details.ts"
-import { originKey } from "./state/gallery-collection.ts"
+import { loadedPosts, originKey } from "./state/gallery-collection.ts"
 import { canStep, gallery, galleryFocus, reloadGallery, step } from "./state/gallery.ts"
 import { preferOriginal } from "./state/settings.ts"
 
@@ -240,14 +240,14 @@ function Filmstrip({
     const activeIndex = () => {
         const g = gallery.val
         if (g.status !== "ready") return -1
-        return g.pages.flatMap((p) => p.posts).findIndex((p) => p.id === activeId())
+        return loadedPosts(g).findIndex((p) => p.id === activeId())
     }
     // The position counter. Re-runs on post steps and page loads; swapping a
     // tiny span is fine (only the scroller must not be swapped).
     const Counter = () => {
+        const g = gallery.val
         const index = activeIndex()
-        const total =
-            gallery.val.status === "ready" ? gallery.val.pages.flatMap((p) => p.posts).length : 0
+        const total = g.status === "ready" ? loadedPosts(g).length : 0
         return index === -1
             ? document.createComment("")
             : span({ class: clsx("text-xs text-zinc-500 tabular-nums") }, `${index + 1} / ${total}`)
@@ -281,9 +281,7 @@ function Filmstrip({
         }
         return div(
             { class: clsx("contents") },
-            g.pages
-                .flatMap((p) => p.posts)
-                .map((post) => Thumb({ post, origin, activeId, vertical })),
+            loadedPosts(g).map((post) => Thumb({ post, origin, activeId, vertical })),
         )
     }
     // Scroll the active thumb into view whenever the active post or the

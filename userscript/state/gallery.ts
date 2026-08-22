@@ -9,6 +9,7 @@ import {
     ensurePage,
     getCollection,
     isCurrent,
+    loadedPosts,
     originKey,
     pageSize,
     snapshot,
@@ -104,7 +105,7 @@ export function step(delta: 1 | -1): void {
     const col = getCollection()
     if (col === null) return
     if (originKey(col.origin) !== originKey(r.origin)) return
-    const posts = col.pages.flatMap((p) => p.posts)
+    const posts = loadedPosts(col)
     const index = posts.findIndex((p) => p.id === r.id)
     if (index === -1) return
     const size = pageSize(r.origin)
@@ -157,7 +158,7 @@ export function canStep(delta: 1 | -1): boolean {
     const col = getCollection()
     if (col === null) return false
     if (originKey(col.origin) !== originKey(r.origin)) return false
-    const posts = col.pages.flatMap((p) => p.posts)
+    const posts = loadedPosts(col)
     const index = posts.findIndex((p) => p.id === r.id)
     if (index === -1) return false
     const size = pageSize(r.origin)
@@ -179,7 +180,7 @@ van.derive(() => {
     if (r.type !== "postdetails" || r.origin === undefined) return
     const g = gallery.val
     if (g.status !== "ready") return
-    const posts = g.pages.flatMap((p) => p.posts)
+    const posts = loadedPosts(g)
     const index = posts.findIndex((p) => p.id === r.id)
     if (index === -1) return
     const prev = posts[index - 1]

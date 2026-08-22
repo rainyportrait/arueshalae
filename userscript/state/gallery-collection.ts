@@ -40,6 +40,12 @@ export function pageSize(origin: PostOrigin): number {
     return origin.kind === "list" ? PAGE_SIZE : FAVORITES_PAGE_SIZE
 }
 
+// The collection's loaded posts in gallery order (the pages flattened in pid
+// order). Shared by the step/boundary logic, the prefetch, and the filmstrip.
+export function loadedPosts(g: Gallery): Post[] {
+    return g.pages.flatMap((p) => p.posts)
+}
+
 // The live collection, or null before the first gallery route.
 export function getCollection(): Collection | null {
     return collection

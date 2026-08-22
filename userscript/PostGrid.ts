@@ -6,6 +6,7 @@ import { PostCard } from "./PostCard.ts"
 import { type Post } from "./api/post-list.ts"
 import clsx from "./clsx.ts"
 import { MASONRY_GAP } from "./masonry.ts"
+import { type Route } from "./router.ts"
 import { type Loadable } from "./state/load.ts"
 
 const { div } = van.tags
@@ -36,7 +37,7 @@ export interface PostGridProps {
     // Pagination, computed by the caller from its own state and page size.
     currentPage: number
     totalPages: number
-    pageHref: (page: number) => string
+    routeForPage: (page: number) => Route
     // Copy for the empty state.
     empty: { icon: string; title: string; message: string }
     errorTitle: string
@@ -51,7 +52,7 @@ export function PostGrid({
     state,
     currentPage,
     totalPages,
-    pageHref,
+    routeForPage,
     empty,
     errorTitle,
     onRetry,
@@ -75,6 +76,6 @@ export function PostGrid({
             { class: clsx("masonry") },
             state.posts.map((post) => PostCard(post)),
         ),
-        Pagination({ currentPage, totalPages, pageHref }),
+        Pagination({ currentPage, totalPages, routeForPage }),
     )
 }

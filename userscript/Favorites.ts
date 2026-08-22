@@ -3,7 +3,7 @@ import van from "vanjs-core"
 import { PostGrid } from "./PostGrid.ts"
 import type { Favorites } from "./api/favorites.ts"
 import clsx from "./clsx.ts"
-import { routeToUrl } from "./router.ts"
+import type { Route } from "./router.ts"
 import {
     FAVORITES_PAGE_SIZE,
     favorites,
@@ -27,12 +27,11 @@ export function Favorites() {
             state,
             currentPage: Math.floor((source?.pid ?? favoritesPid.val) / FAVORITES_PAGE_SIZE) + 1,
             totalPages: source ? totalPages(source, count) : 1,
-            pageHref: (page) =>
-                routeToUrl({
-                    type: "favorites",
-                    id: source?.id ?? favoritesId.val,
-                    pid: (page - 1) * FAVORITES_PAGE_SIZE,
-                }),
+            routeForPage: (page): Route => ({
+                type: "favorites",
+                id: source?.id ?? favoritesId.val,
+                pid: (page - 1) * FAVORITES_PAGE_SIZE,
+            }),
             empty: {
                 icon: "🤍",
                 title: "No favorites",

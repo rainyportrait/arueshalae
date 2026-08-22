@@ -2,7 +2,7 @@ import van from "vanjs-core"
 
 import { Link } from "./Link.ts"
 import clsx from "./clsx.ts"
-import { navigate, parseRoute } from "./router.ts"
+import { type Route, navigate, routeToUrl } from "./router.ts"
 
 const { div, form, input, nav, span } = van.tags
 
@@ -72,13 +72,13 @@ interface PageJumpProps {
     min: number
     max: number
     totalPages: number
-    pageHref: (page: number) => string
+    routeForPage: (page: number) => Route
 }
 
 // Stands in for a collapsed range of pages: type a page number and press
-// Enter to jump there. Navigates SPA-style when the target is a known route
-// (mirroring Link), and falls back to a full navigation otherwise.
-function PageJump({ min, max, totalPages, pageHref }: PageJumpProps) {
+// Enter to jump there. Navigates SPA-style to the route the caller builds
+// for the page (no URL round-trip: the route is always one we generated).
+function PageJump({ min, max, totalPages, routeForPage }: PageJumpProps) {
     return form(
         {
             class: "flex items-center",
@@ -88,10 +88,7 @@ function PageJump({ min, max, totalPages, pageHref }: PageJumpProps) {
                 const raw = Number((el.elements.namedItem("page") as HTMLInputElement).value)
                 if (!Number.isFinite(raw)) return
                 const page = Math.min(totalPages, Math.max(1, Math.trunc(raw)))
-                const href = pageHref(page)
-                const next = parseRoute(href)
-                if (next.type === "unknown") window.location.assign(href)
-                else navigate(next)
+                navigate(routeForPage(page))
             },
         },
         input({
@@ -109,14 +106,16 @@ function PageJump({ min, max, totalPages, pageHref }: PageJumpProps) {
 export interface PaginationProps {
     currentPage: number
     totalPages: number
-    // The URL for a given page. Being a real href is what lets middle-click /
-    // ⌘-click open a page in a new tab.
-    pageHref: (page: number) => string
+    // The route for a given page; the per-page href is derived from it (a
+    // real href is what lets middle-click / ⌘-click open a page in a new
+    // tab). The jump input navigates the route directly.
+    routeForPage: (page: number) => Route
 }
 
 // Presentational: the caller computes the current and total page from its own
-// state and page size, and supplies the per-page URL.
-export function Pagination({ currentPage, totalPages, pageHref }: PaginationProps) {
+// state and page size, and supplies the per-page route.
+export function Pagination({ currentPage, totalPages, routeForPage }: PaginationProps) {
+    const pageHref = (page: number) => routeToUrl(routeForPage(page))
     if (totalPages <= 1) return div()
 
     return nav(
@@ -141,7 +140,7 @@ export function Pagination({ currentPage, totalPages, pageHref }: PaginationProp
                           min: item.min,
                           max: item.max,
                           totalPages,
-                          pageHref,
+                          routeForPage,
                       })
                     : PageItem({
                           href: pageHref(item.page),

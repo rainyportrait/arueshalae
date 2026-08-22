@@ -5,7 +5,7 @@ import { PostGrid } from "./PostGrid.ts"
 import { TagList, TagListSkeleton } from "./TagList.ts"
 import { type Post } from "./api/post-list.ts"
 import clsx from "./clsx.ts"
-import { routeToUrl } from "./router.ts"
+import type { Route } from "./router.ts"
 import { type ListReady, PAGE_SIZE, list, pid, reloadList, tags } from "./state/list.ts"
 import { type Loadable } from "./state/load.ts"
 import { filterByBlacklist, showHiddenPosts, tagBlacklist } from "./state/settings.ts"
@@ -79,12 +79,11 @@ export function PostList() {
             state: gridState,
             currentPage: Math.floor((source?.pid ?? pid.val) / PAGE_SIZE) + 1,
             totalPages: source ? Math.max(1, Math.round(source.lastPagePID / PAGE_SIZE) + 1) : 1,
-            pageHref: (page) =>
-                routeToUrl({
-                    type: "postlist",
-                    tags: source?.query ?? tags.val,
-                    pid: (page - 1) * PAGE_SIZE,
-                }),
+            routeForPage: (page): Route => ({
+                type: "postlist",
+                tags: source?.query ?? tags.val,
+                pid: (page - 1) * PAGE_SIZE,
+            }),
             empty: allHidden
                 ? {
                       icon: "🙈",

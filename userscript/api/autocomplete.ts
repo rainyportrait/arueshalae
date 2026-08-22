@@ -9,13 +9,15 @@ export type AutocompleteSuggestion = {
 
 // The endpoint HTML-entity-encodes special characters in tag strings (e.g. an
 // apostrophe arrives as `&#039;`), so the raw JSON body carries entities
-// inside its string values. We decode the whole body in one pass (parsing it
-// as HTML text gives a faithful decode of numeric and named entities) before
-// parsing the JSON — one DOM parse per response instead of one per field. The
-// JSON's own structure (quotes, braces, fixed key names) contains no entities,
-// so the body-wide pass decodes exactly the tag values.
+// inside its string values. We decode the whole body in one pass before
+// parsing the JSON — one decode per response instead of one per field. A
+// detached <textarea> (raw-text content) decodes every entity without any
+// part of the body being interpreted as markup, so a tag value containing
+// angle brackets can't be swallowed as an element.
 function decodeEntities(s: string): string {
-    return new DOMParser().parseFromString(s, "text/html").documentElement.textContent ?? s
+    const ta = document.createElement("textarea")
+    ta.innerHTML = s
+    return ta.value
 }
 
 // The autocomplete endpoint returns a JSON array of { label, value, type }.

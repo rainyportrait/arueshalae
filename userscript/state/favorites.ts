@@ -25,9 +25,23 @@ export const favorites = van.state<Loadable<FavoritesReady>>({ status: "loading"
 // The favorites count from the user's profile page. The site's own favorites
 // paginator runs off a stale count (its "last page" can be empty), so the
 // pagination is grounded in the profile's count instead. Fetched only when
-// the id changes, not on every page turn. `0` means "count unavailable" and
-// the UI falls back to the paginator's own last-page link.
-export const favoritesCount = van.state(0)
+// the id changes, not on every page turn. `0` means "count unavailable"
+// (loading, error, or not fetched) and the UI falls back to the paginator's
+// own last-page link.
+const favoritesCountLoadable = van.state<Loadable<{ count: number }>>({ status: "loading" })
+
+// Non-fatal: a failure just leaves the count at 0 and the UI falls back to
+// the last-page link. The loader's sequence counter drops out-of-order
+// responses if the id changes mid-flight.
+const { load: loadFavoritesCount } = createLoader<{ count: number }, number>(
+    favoritesCountLoadable,
+    (id: number) => fetchUserProfile(id).then((profile) => ({ count: profile.favorites })),
+)
+
+export const favoritesCount = van.derive<number>(() => {
+    const c = favoritesCountLoadable.val
+    return c.status === "ready" ? c.count : 0
+})
 
 // Bumped to force a re-fetch (used by the error state's "Try again" button).
 const reloadTick = van.state(0)
@@ -55,22 +69,11 @@ van.derive(() => {
 })
 
 // Fetch the profile when the id changes; off the favorites route the derived
-// id is 0, which skips the fetch. Non-fatal: a failure just leaves the count
-// at 0 and the UI falls back to the last-page link. The sequence counter drops
-// out-of-order responses if the id changes mid-flight.
-let profileSeq = 0
+// id is 0, which skips the fetch.
 van.derive(() => {
     const id = favoritesId.val
     if (id === 0) return
-    const seq = ++profileSeq
-    favoritesCount.val = 0
-    void fetchUserProfile(id)
-        .then((profile) => {
-            if (seq === profileSeq) favoritesCount.val = profile.favorites
-        })
-        .catch(() => {
-            if (seq === profileSeq) favoritesCount.val = 0
-        })
+    loadFavoritesCount(id)
 })
 
 export function reloadFavorites(): void {

@@ -112,6 +112,18 @@ function Sidebar({ post, showOriginal }: { post: PostDetailsData; showOriginal: 
 // via decode(), videos when playback can start (the poster frame shows until
 // then). The img src stays a live prop so the "original image" toggle keeps
 // working after insertion.
+// The media element's classes: capped to the viewport normally, or filling
+// the container (and object-contain scaled) in focus mode.
+function mediaElementClass(fill: boolean): string {
+    // min-h-0 overrides the grid item's automatic minimum size: without it
+    // the image's natural height sizes the (auto) grid row, and max-h-full
+    // then resolves against that inflated track instead of the viewport.
+    return clsx(
+        fill ? "h-full object-contain" : "max-h-[80vh]",
+        "w-auto max-w-full rounded-lg transition-opacity duration-200",
+    )
+}
+
 function buildMediaEl(
     post: PostDetailsData,
     showOriginal: State<boolean>,
@@ -120,13 +132,7 @@ function buildMediaEl(
     fill: boolean,
 ): { el: HTMLElement; whenReady: Promise<void>; fill: boolean } {
     const media = post.media
-    // min-h-0 overrides the grid item's automatic minimum size: without it
-    // the image's natural height sizes the (auto) grid row, and max-h-full
-    // then resolves against that inflated track instead of the viewport.
-    const elementClass = clsx(
-        fill ? "h-full object-contain" : "max-h-[80vh]",
-        "w-auto max-w-full rounded-lg transition-opacity duration-200",
-    )
+    const elementClass = mediaElementClass(fill)
     if (media.kind === "video") {
         const el = video({
             src: media.src,
@@ -159,10 +165,7 @@ function buildMediaEl(
     // browser renders rather than holding the old post forever.
     return {
         el,
-        whenReady: el.decode().then(
-            () => {},
-            () => {},
-        ),
+        whenReady: el.decode().catch(() => {}),
         fill,
     }
 }
@@ -525,10 +528,7 @@ function buildShell(): Node {
             // Same post, but focus mode may have flipped the sizing cap.
             if (shown.fill !== fill) {
                 shown.fill = fill
-                shown.el.className = clsx(
-                    fill ? "h-full object-contain" : "max-h-[80vh]",
-                    "w-auto max-w-full rounded-lg transition-opacity duration-200",
-                )
+                shown.el.className = mediaElementClass(fill)
             }
             return
         }

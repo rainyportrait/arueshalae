@@ -11,6 +11,16 @@ body {
     color: #f4f4f5;
 }
 
+/*
+ * Reserve the vertical scrollbar gutter even when the document isn't tall
+ * enough to scroll. Page height oscillates during post steps (the crossfade
+ * briefly holds both media, the sidebar reflows), which would otherwise make
+ * the scrollbar appear and disappear and rock the centered content sideways.
+ */
+html {
+    scrollbar-gutter: stable;
+}
+
 /* Subtle, theme-matched scrollbar. */
 ::-webkit-scrollbar {
     width: 5px;

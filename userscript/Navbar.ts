@@ -229,7 +229,7 @@ export function Navbar() {
             { class: clsx("mx-auto flex w-full items-center gap-3 px-4 py-3") },
             Link(
                 {
-                    href: "/index.php?page=post&s=list",
+                    href: routeToUrl({ type: "postlist", tags: undefined, pid: 0 }),
                     class: clsx("flex shrink-0 items-center gap-2"),
                     "aria-label": "Arueshalae home",
                 },

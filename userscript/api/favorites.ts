@@ -1,3 +1,4 @@
+import { routeToUrl } from "../router.ts"
 import { fetchDocument } from "./network.ts"
 import { positiveInt, queryParam } from "./parse.ts"
 import { type Post, extractPosts } from "./post-list.ts"
@@ -8,7 +9,7 @@ export type Favorites = {
 }
 
 export async function fetchFavorites(id: number, pid: number): Promise<Favorites> {
-    const url = `/index.php?page=favorites&s=view&id=${id}${pid ? `&pid=${pid}` : ""}`
+    const url = routeToUrl({ type: "favorites", id, pid })
     const doc = await fetchDocument(url)
     return extractFavorites(doc, pid)
 }

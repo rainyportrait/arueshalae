@@ -4,6 +4,7 @@ import type { State } from "vanjs-core"
 import { Link } from "./Link.ts"
 import type { Tag, TagType } from "./api/tags.ts"
 import clsx from "./clsx.ts"
+import { routeToUrl } from "./router.ts"
 
 const { div, button, span } = van.tags
 
@@ -40,7 +41,7 @@ function groupByType(tags: Tag[]): [TagType, Tag[]][] {
 function TagLink({ tag }: { tag: Tag }) {
     return Link(
         {
-            href: `/index.php?page=post&s=list&tags=${encodeURIComponent(tag.slug)}`,
+            href: routeToUrl({ type: "postlist", tags: tag.slug, pid: 0 }),
             title: tag.slug,
             class: clsx(
                 "flex items-baseline gap-2 rounded px-2 py-1",

@@ -1,3 +1,4 @@
+import { routeToUrl } from "../router.ts"
 import { fetchDocument } from "./network.ts"
 import { positiveInt, queryParam } from "./parse.ts"
 import { type Tag, extractTags, normalizeTags } from "./tags.ts"
@@ -18,10 +19,10 @@ export type PostList = {
 }
 
 export async function fetchPostList(tags?: string, pid?: number): Promise<PostList> {
-    // Encode the query: it is raw user input (spaces, and occasionally
-    // special characters) that must not inject or truncate query parameters,
-    // matching routeToUrl in router.ts.
-    const url = `/index.php?page=post&s=list${tags ? `&tags=${encodeURIComponent(tags)}` : ""}${pid ? `&pid=${pid}` : ""}`
+    // The route serializer encodes the query (raw user input with spaces and
+    // occasional special characters) so it can't inject or truncate query
+    // parameters, and is the single source of truth for the site's URL scheme.
+    const url = routeToUrl({ type: "postlist", tags, pid: pid ?? 0 })
     const doc = await fetchDocument(url)
     const { posts, lastPagePID } = extractPostList(doc, pid ?? 0)
     return { posts, lastPagePID, tags: extractTags(doc) }

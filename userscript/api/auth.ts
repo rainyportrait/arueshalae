@@ -1,3 +1,4 @@
+import { routeToUrl } from "../router.ts"
 import { fetchDocument } from "./network.ts"
 import { parseCount, positiveInt, queryParam } from "./parse.ts"
 import { type Post, extractPosts } from "./post-list.ts"
@@ -77,10 +78,9 @@ export type ProfileRef = { id: number } | { uname: string }
 
 // Fetch and parse the profile view for a user, addressed by id or username.
 export async function fetchProfile(ref: ProfileRef): Promise<UserProfile> {
-    const url =
-        "id" in ref
-            ? `/index.php?page=account&s=profile&id=${ref.id}`
-            : `/index.php?page=account&s=profile&uname=${encodeURIComponent(ref.uname)}`
+    // The account route serializes to exactly the profile page (id or
+    // uname), so the shared serializer doubles as the URL builder here.
+    const url = routeToUrl({ type: "account", ...ref })
     const doc = await fetchDocument(url)
     return extractUserProfile(doc)
 }

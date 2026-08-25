@@ -4,32 +4,31 @@ import { Link } from "./Link.ts"
 import clsx from "./clsx.ts"
 import { type Route, navigate, routeToUrl } from "./router.ts"
 
-const { div, form, input, nav, span } = van.tags
-
-type PageItem =
-    | { kind: "page"; page: number }
-    // A run of pages too far from the current one to render as buttons; the
-    // min/max is the range this gap covers (used as a hint for the jump input).
-    | { kind: "gap"; min: number; max: number }
-
-function pageItems(current: number, total: number): PageItem[] {
-    if (total <= 7) {
-        return Array.from({ length: total }, (_, i) => ({ kind: "page" as const, page: i + 1 }))
-    }
-    const items: PageItem[] = [{ kind: "page", page: 1 }]
-    const left = Math.max(2, current - 1)
-    const right = Math.min(total - 1, current + 1)
-    if (left > 2) items.push({ kind: "gap", min: 2, max: left - 1 })
-    for (let page = left; page <= right; page++) items.push({ kind: "page", page })
-    if (right < total - 1) items.push({ kind: "gap", min: right + 1, max: total - 1 })
-    items.push({ kind: "page", page: total })
-    return items
-}
+const { button, div, form, input, nav, span } = van.tags
 
 // Shared sizing/centering. inline-flex so min-w-9 and centering apply to the
 // inline <a>/<span> (a bare button centers its content by default).
 const ITEM_CLASS =
     "inline-flex min-w-9 items-center justify-center rounded-lg px-3 py-1.5 text-sm tabular-nums transition-colors"
+
+// Width budget of the fixed chrome items (« ‹ › » …) in px: they hold a single
+// glyph, so they always sit at the min-w-9 floor, plus the 6px flex gap.
+const FIXED_ITEM_WIDTH = 42
+const FIXED_ITEMS = 5
+
+// The window of page buttons shown around the current page, sized to fill the
+// container. Buttons get no reserved space outside the window — « and » cover
+// first/last, the "…" popover covers arbitrary jumps.
+function windowForWidth(container: number, item: number): number {
+    return Math.max(1, Math.floor((container - FIXED_ITEMS * FIXED_ITEM_WIDTH) / (item + 6)))
+}
+
+function windowPages(current: number, total: number, capacity: number): number[] {
+    const count = Math.min(Math.max(capacity, 1), total)
+    if (count >= total) return Array.from({ length: total }, (_, i) => i + 1)
+    const start = Math.min(Math.max(current - Math.floor(count / 2), 1), total - count + 1)
+    return Array.from({ length: count }, (_, i) => start + i)
+}
 
 interface PageItemProps {
     href: string
@@ -67,40 +66,92 @@ function PageItem({ href, label, title = label, disabled = false, active = false
 }
 
 interface PageJumpProps {
-    // The range of pages the gap this input stands in for covers. Suggested
-    // in the title; the input itself accepts any valid page.
-    min: number
-    max: number
     totalPages: number
     routeForPage: (page: number) => Route
 }
 
-// Stands in for a collapsed range of pages: type a page number and press
-// Enter to jump there. Navigates SPA-style to the route the caller builds
-// for the page (no URL round-trip: the route is always one we generated).
-function PageJump({ min, max, totalPages, routeForPage }: PageJumpProps) {
-    return form(
+// The "…" button: opens a small popover with a number input for jumping to
+// any page. A document-level click listener (attached only while open) closes
+// it on outside clicks; it removes itself once the node leaves the document,
+// so an unmount while open doesn't leak the listener.
+function PageJump({ totalPages, routeForPage }: PageJumpProps) {
+    const open = van.state(false)
+    const field = input({
+        type: "number",
+        min: 1,
+        max: totalPages,
+        title: `Page (1–${totalPages})`,
+        class: "w-16 rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1 text-center text-sm tabular-nums focus:border-rose-500 focus:outline-none",
+        onkeydown: (e: KeyboardEvent) => {
+            if (e.key === "Escape") open.val = false
+        },
+    })
+    const pop = div(
         {
-            class: "flex items-center",
-            onsubmit: (e: SubmitEvent) => {
-                e.preventDefault()
-                const el = e.currentTarget as HTMLFormElement
-                const raw = Number((el.elements.namedItem("page") as HTMLInputElement).value)
-                if (!Number.isFinite(raw)) return
-                const page = Math.min(totalPages, Math.max(1, Math.trunc(raw)))
-                navigate(routeForPage(page))
+            class: "absolute bottom-full left-1/2 z-10 mb-2 hidden -translate-x-1/2 rounded-xl border border-zinc-700 bg-zinc-900 p-2 shadow-lg",
+            onclick: (e: MouseEvent) => e.stopPropagation(),
+        },
+        form(
+            {
+                class: "flex items-center gap-2",
+                onsubmit: (e: SubmitEvent) => {
+                    e.preventDefault()
+                    const raw = Number(field.value)
+                    if (!Number.isFinite(raw)) return
+                    const page = Math.min(totalPages, Math.max(1, Math.trunc(raw)))
+                    open.val = false
+                    navigate(routeForPage(page))
+                },
+            },
+            field,
+            button(
+                {
+                    type: "submit",
+                    class: "rounded-lg bg-rose-500 px-2.5 py-1 text-sm font-medium text-white transition-colors hover:bg-rose-400",
+                },
+                "Go",
+            ),
+        ),
+    )
+    const btn = button(
+        {
+            "aria-haspopup": "dialog",
+            title: "Go to page",
+            class: clsx(ITEM_CLASS, "text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"),
+            onclick: (e: MouseEvent) => {
+                e.stopPropagation()
+                open.val = !open.val
             },
         },
-        input({
-            type: "number",
-            name: "page",
-            min: 1,
-            max: totalPages,
-            placeholder: "…",
-            title: `Type a page number and press Enter (this gap covers ${min}–${max})`,
-            class: "w-7 rounded-lg border border-transparent bg-transparent px-2 py-1.5 text-center text-sm tabular-nums placeholder:text-zinc-600 hover:border-zinc-700 hover:bg-zinc-900 focus:border-rose-500 focus:bg-zinc-900 focus:outline-none focus:w-14 transition-all",
-        }),
+        "…",
     )
+    const node = div({ class: "relative inline-flex" }, btn, pop)
+    const onDocClick = () => {
+        if (!node.isConnected) {
+            document.removeEventListener("click", onDocClick)
+            return
+        }
+        open.val = false
+    }
+    let tracking = false
+    return () => {
+        const isOpen = open.val
+        if (isOpen && !tracking) {
+            document.addEventListener("click", onDocClick)
+            tracking = true
+        }
+        if (!isOpen && tracking) {
+            document.removeEventListener("click", onDocClick)
+            tracking = false
+        }
+        pop.classList.toggle("hidden", !isOpen)
+        btn.setAttribute("aria-expanded", String(isOpen))
+        if (isOpen) {
+            field.value = ""
+            field.focus()
+        }
+        return node
+    }
 }
 
 export interface PaginationProps {
@@ -114,14 +165,65 @@ export interface PaginationProps {
 
 // Presentational: the caller computes the current and total page from its own
 // state and page size, and supplies the per-page route.
+//
+// Live wrapper: the window size follows the container width and the actual
+// button width. The nav is full width, so a ResizeObserver on it reports the
+// container; a hidden probe button (same classes, labeled with the widest
+// page number) is measured for the item width — button widths grow with digit
+// count, so a constant doesn't work. Both land in one state value. The nav
+// keeps a stable identity across runs via the `node` closure — a fresh
+// element would be a replacement, re-running the observer from scratch, and
+// any node the parent detaches must be rebuilt, never reused. Each Pagination
+// call owns its own observer, which disconnects when its nav leaves the
+// document (page navigation), so no dead observers accumulate.
 export function Pagination({ currentPage, totalPages, routeForPage }: PaginationProps) {
-    const pageHref = (page: number) => routeToUrl(routeForPage(page))
     if (totalPages <= 1) return div()
+    const pageHref = (page: number) => routeToUrl(routeForPage(page))
 
-    return nav(
-        { class: clsx("mt-10 flex justify-center pb-4"), "aria-label": "Pagination" },
-        div(
-            { class: clsx("flex flex-wrap items-center justify-center gap-1.5") },
+    // Estimates for the first frame; the initial observer callback corrects
+    // both right after insertion.
+    const metrics = van.state<{ container: number; item: number }>({ container: 960, item: 36 })
+    let node: HTMLElement | null = null
+    let inner: HTMLElement | null = null
+    return () => {
+        const { container, item } = metrics.val
+        if (!node) {
+            const probe = span(
+                {
+                    class: ITEM_CLASS,
+                    style: "position:absolute; visibility:hidden; pointer-events:none",
+                },
+                String(totalPages),
+            )
+            node = nav(
+                {
+                    class: clsx("relative mt-10 flex w-full justify-center pb-4"),
+                    "aria-label": "Pagination",
+                },
+                probe,
+            )
+            const el = node
+            const observer = new ResizeObserver((entries) => {
+                const entry = entries[0]
+                const target = entry.target as HTMLElement
+                if (!target.isConnected) {
+                    // The nav was swapped out; stop observing the dead node.
+                    observer.disconnect()
+                    return
+                }
+                const newWidth = entry.contentRect.width
+                if (newWidth <= 0) return
+                // The 2px slack keeps fractional-width churn out of the state.
+                if (Math.abs(newWidth - metrics.val.container) > 2) {
+                    metrics.val = { container: newWidth, item: probe.offsetWidth }
+                }
+            })
+            observer.observe(el)
+        }
+        const el = node
+        if (inner && inner.parentNode === el) el.removeChild(inner)
+        inner = div(
+            { class: "flex flex-wrap items-center justify-center gap-1.5" },
             PageItem({
                 href: pageHref(1),
                 label: "«",
@@ -134,20 +236,13 @@ export function Pagination({ currentPage, totalPages, routeForPage }: Pagination
                 title: "Previous page",
                 disabled: currentPage <= 1,
             }),
-            ...pageItems(currentPage, totalPages).map((item) =>
-                item.kind === "gap"
-                    ? PageJump({
-                          min: item.min,
-                          max: item.max,
-                          totalPages,
-                          routeForPage,
-                      })
-                    : PageItem({
-                          href: pageHref(item.page),
-                          label: String(item.page),
-                          title: `Page ${item.page}`,
-                          active: item.page === currentPage,
-                      }),
+            ...windowPages(currentPage, totalPages, windowForWidth(container, item)).map((page) =>
+                PageItem({
+                    href: pageHref(page),
+                    label: String(page),
+                    title: `Page ${page}`,
+                    active: page === currentPage,
+                }),
             ),
             PageItem({
                 href: pageHref(currentPage + 1),
@@ -161,6 +256,9 @@ export function Pagination({ currentPage, totalPages, routeForPage }: Pagination
                 title: "Last page",
                 disabled: currentPage >= totalPages,
             }),
-        ),
-    )
+            PageJump({ totalPages, routeForPage }),
+        )
+        van.add(el, inner)
+        return el
+    }
 }

@@ -19,9 +19,18 @@ export const KNOWN_TYPES: ReadonlySet<string> = new Set([
 ])
 
 // Tags that mark a post's media as animated: rule34's `animated` parent tag
-// (and any `animated_*` format subtag, e.g. `animated_gif`) plus the video
-// containers. Matched against normalized tag slugs.
-const ANIMATED_TAG_SLUGS = new Set(["animated", "webm", "mp4"])
+// (and any `animated_*` format subtag, e.g. `animated_gif`), the video
+// containers, and tags that describe the video itself. Matched against
+// normalized tag slugs.
+const ANIMATED_TAG_SLUGS = new Set([
+    "animated",
+    "webm",
+    "mp4",
+    "video",
+    "60fps",
+    "sound",
+    "longer_than_10_seconds",
+])
 
 export function isAnimated(tags: string[]): boolean {
     return tags.some((tag) => ANIMATED_TAG_SLUGS.has(tag) || tag.startsWith("animated_"))

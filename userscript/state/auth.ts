@@ -3,7 +3,7 @@ import van from "vanjs-core"
 import {
     type UserProfile,
     login as apiLogin,
-    fetchUserProfile,
+    fetchProfile,
     parseUserIdFromCookie,
 } from "../api/auth.ts"
 import { navigate, redirect, returnTo, route } from "../router.ts"
@@ -47,7 +47,7 @@ export const userInfo = van.state<UserInfoState>({ status: "idle" })
 // doesn't re-fetch while loading or already ready, and doesn't auto-retry an
 // error (the menu stays functional off `userId` alone).
 const { load: loadProfile, pending: userInfoLoading } = createLoader(userInfo, (userId: number) =>
-    fetchUserProfile(userId).then((profile) => ({ profile })),
+    fetchProfile({ id: userId }).then((profile) => ({ profile })),
 )
 
 export { userInfoLoading }

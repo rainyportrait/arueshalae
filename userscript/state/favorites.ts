@@ -1,6 +1,6 @@
 import van from "vanjs-core"
 
-import { fetchUserProfile } from "../api/auth.ts"
+import { fetchProfile } from "../api/auth.ts"
 import { type Favorites, fetchFavorites } from "../api/favorites.ts"
 import { route } from "../router.ts"
 import { type Loadable, createLoader, routeLoader } from "./load.ts"
@@ -42,7 +42,7 @@ const favoritesCountLoadable = van.state<Loadable<{ count: number }>>({ status: 
 // responses if the id changes mid-flight.
 const { load: loadFavoritesCount } = createLoader<{ count: number }, number>(
     favoritesCountLoadable,
-    (id: number) => fetchUserProfile(id).then((profile) => ({ count: profile.favorites })),
+    (id: number) => fetchProfile({ id }).then((profile) => ({ count: profile.favorites })),
 )
 
 export const favoritesCount = van.derive<number>(() => {

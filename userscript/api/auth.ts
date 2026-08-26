@@ -85,10 +85,6 @@ export async function fetchProfile(ref: ProfileRef): Promise<UserProfile> {
     return extractUserProfile(doc)
 }
 
-export async function fetchUserProfile(userId: number): Promise<UserProfile> {
-    return fetchProfile({ id: userId })
-}
-
 export function extractUserProfile(doc: Document): UserProfile {
     const username = (doc.querySelector("#content h2")?.textContent ?? "")
         .replace(/\s+/g, " ")

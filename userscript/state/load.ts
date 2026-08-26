@@ -1,6 +1,8 @@
 import van from "vanjs-core"
 import type { State } from "vanjs-core"
 
+import { type Route, route } from "../router.ts"
+
 // The shared shape of an async-loaded piece of state: loading, error, or
 // ready carrying `T`'s fields spread in. "loading" only holds the initial
 // value before the first fetch settles — while a fetch is in flight the state
@@ -40,6 +42,43 @@ export function createLoader<T, A, Extra = never>(
         )
     }
     return { load, pending }
+}
+
+type RouteOfType<K extends Route["type"]> = Extract<Route, { type: K }>
+
+// The standard shape of a page's data state, wired up in one call: a loader
+// whose trigger derive watches the route (plus a reload tick) and fetches
+// only while the route is of the given type (no wasted fetch on other
+// routes). Returns a `pending` state for the loading bar and a `reload`
+// function for the error state's "Try again" button.
+//
+// The fetcher receives the guarded route, so it reads its arguments from the
+// same navigation that triggered it — no derived-state reads that could make
+// the trigger derive depend on anything but `route` and the reload tick.
+// As everywhere else, the data state is not touched on load start; it keeps
+// the previous page until the fetch settles.
+export function routeLoader<T, K extends Route["type"]>(
+    state: State<Loadable<T>>,
+    routeType: K,
+    fetcher: (route: RouteOfType<K>) => Promise<T>,
+): { pending: State<boolean>; reload: () => void } {
+    const tick = van.state(0)
+    const { load, pending } = createLoader<T, RouteOfType<K>>(state, fetcher)
+    // Reading `tick` via `void` registers it as a dependency without using
+    // its value, so bumping the tick re-runs this derive (a forced reload)
+    // just like a route change does.
+    van.derive(() => {
+        const r = route.val
+        if (r.type !== routeType) return
+        void tick.val
+        load(r as RouteOfType<K>)
+    })
+    return {
+        pending,
+        reload: () => {
+            tick.val += 1
+        },
+    }
 }
 
 export function errorMessage(error: unknown): string {

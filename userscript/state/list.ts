@@ -3,7 +3,7 @@ import van from "vanjs-core"
 import { type PostList, fetchPostList } from "../api/post-list.ts"
 import { type Tag } from "../api/tags.ts"
 import { navigate, route } from "../router.ts"
-import { type Loadable, createLoader } from "./load.ts"
+import { type Loadable, routeLoader } from "./load.ts"
 
 // The rule34.xxx post list is paginated 42 posts per page (pid = 42 * (page - 1)).
 export const PAGE_SIZE = 42
@@ -34,36 +34,19 @@ export type ListState = Loadable<ListReady>
 
 export const list = van.state<ListState>({ status: "loading" })
 
-// Bumped to force a re-fetch (used by the error state's "Try again" button).
-export const reloadTick = van.state(0)
-
-// Read rawVal (not val): this closure runs inside the trigger derive below,
-// and a tracked read would make that derive depend on tags/pid, re-running
-// (and re-fetching) a second time when they change alongside the route.
-const { load: loadList, pending: listLoading } = createLoader<ListReady, void>(list, () =>
-    fetchPostList(tags.rawVal, pid.rawVal).then((result) => ({
-        posts: result.posts,
-        lastPagePID: result.lastPagePID,
-        tags: result.tags,
-        pid: pid.rawVal,
-        query: tags.rawVal,
-    })),
+export const { pending: listLoading, reload: reloadList } = routeLoader<ListReady, "postlist">(
+    list,
+    "postlist",
+    (r) =>
+        fetchPostList(r.tags, r.pid).then((result) => ({
+            posts: result.posts,
+            lastPagePID: result.lastPagePID,
+            tags: result.tags,
+            pid: r.pid,
+            query: r.tags,
+        })),
 )
-
-export { listLoading }
-
-// Re-fetch whenever the route (tags/pid) or reloadTick changes. Gated to
-// postlist so we don't fire a wasted fetch while sitting on another route.
-van.derive(() => {
-    if (route.val.type !== "postlist") return
-    void reloadTick.val
-    loadList()
-})
 
 export function search(newTags: string | undefined): void {
     navigate({ type: "postlist", tags: newTags, pid: 0 })
-}
-
-export function reloadList(): void {
-    reloadTick.val += 1
 }

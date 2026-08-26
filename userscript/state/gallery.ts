@@ -5,6 +5,7 @@ import { type PostOrigin, type Route, navigate, route } from "../router.ts"
 import {
     type Collection,
     type Gallery,
+    type GalleryPage,
     collectionFor,
     ensurePage,
     getCollection,
@@ -30,6 +31,39 @@ export const gallery = van.state<GalleryState>({ status: "loading" })
 export const galleryFocus = van.state(false)
 
 type PostDetailsRoute = Extract<Route, { type: "postdetails" }>
+
+// Everything a gallery step needs to know about the current position: the
+// route, its collection, the loaded posts, the active post's index, the page
+// size, and the first/last pages (sorted by pid, so the extremes are the
+// collection's edges). Null when not on a gallery-enabled postdetails route,
+// before the collection exists, when the collection is for another origin,
+// or when the active post isn't among the loaded posts.
+function stepContext(): {
+    r: PostDetailsRoute
+    col: Collection
+    posts: Post[]
+    index: number
+    size: number
+    first: GalleryPage | undefined
+    last: GalleryPage | undefined
+} | null {
+    const r = route.val
+    if (r.type !== "postdetails" || r.origin === undefined) return null
+    const col = getCollection()
+    if (col === null || originKey(col.origin) !== originKey(r.origin)) return null
+    const posts = loadedPosts(col)
+    const index = posts.findIndex((p) => p.id === r.id)
+    if (index === -1) return null
+    return {
+        r,
+        col,
+        posts,
+        index,
+        size: pageSize(r.origin),
+        first: col.pages[0],
+        last: col.pages[col.pages.length - 1],
+    }
+}
 
 // Out-of-order protection for the origin-page load (fast steps, searches).
 let seq = 0
@@ -100,29 +134,19 @@ export function reloadGallery(): void {
 // the browser back button exits the gallery); at a page boundary the
 // adjacent page is fetched first and the step lands on its first/last post.
 export function step(delta: 1 | -1): void {
-    const r = route.val
-    if (r.type !== "postdetails" || r.origin === undefined) return
-    const col = getCollection()
-    if (col === null) return
-    if (originKey(col.origin) !== originKey(r.origin)) return
-    const posts = loadedPosts(col)
-    const index = posts.findIndex((p) => p.id === r.id)
-    if (index === -1) return
-    const size = pageSize(r.origin)
-    const target = index + delta
-    if (target >= 0 && target < posts.length) {
+    const ctx = stepContext()
+    if (ctx === null) return
+    const target = ctx.index + delta
+    if (target >= 0 && target < ctx.posts.length) {
         // Replace, not push: gallery steps shouldn't pile up in the history,
         // so the browser back button exits the gallery to the list.
-        navigate({ ...r, id: posts[target].id }, { replace: true })
+        navigate({ ...ctx.r, id: ctx.posts[target].id }, { replace: true })
         return
     }
-    // Pages are sorted by pid, so the extremes are the first and last page.
-    const first = col.pages[0]
-    const last = col.pages[col.pages.length - 1]
-    if (delta === 1 && last !== undefined && last.pid + size <= col.lastPagePID) {
-        void boundaryStep(col, last.pid + size, r, (page) => page[0])
-    } else if (delta === -1 && first !== undefined && first.pid - size >= 0) {
-        void boundaryStep(col, first.pid - size, r, (page) => page[page.length - 1])
+    if (delta === 1 && ctx.last !== undefined && ctx.last.pid + ctx.size <= ctx.col.lastPagePID) {
+        void boundaryStep(ctx.col, ctx.last.pid + ctx.size, ctx.r, (page) => page[0])
+    } else if (delta === -1 && ctx.first !== undefined && ctx.first.pid - ctx.size >= 0) {
+        void boundaryStep(ctx.col, ctx.first.pid - ctx.size, ctx.r, (page) => page[page.length - 1])
     }
 }
 
@@ -153,24 +177,15 @@ function boundaryStep(
 
 // Whether a step in the given direction is possible right now.
 export function canStep(delta: 1 | -1): boolean {
-    const r = route.val
-    if (r.type !== "postdetails" || r.origin === undefined) return false
-    const col = getCollection()
-    if (col === null) return false
-    if (originKey(col.origin) !== originKey(r.origin)) return false
-    const posts = loadedPosts(col)
-    const index = posts.findIndex((p) => p.id === r.id)
-    if (index === -1) return false
-    const size = pageSize(r.origin)
-    // Pages are sorted by pid, so the extremes are the first and last page.
-    const first = col.pages[0]
-    const last = col.pages[col.pages.length - 1]
+    const ctx = stepContext()
+    if (ctx === null) return false
     if (delta === 1) {
         return (
-            index < posts.length - 1 || (last !== undefined && last.pid + size <= col.lastPagePID)
+            ctx.index < ctx.posts.length - 1 ||
+            (ctx.last !== undefined && ctx.last.pid + ctx.size <= ctx.col.lastPagePID)
         )
     }
-    return index > 0 || (first !== undefined && first.pid - size >= 0)
+    return ctx.index > 0 || (ctx.first !== undefined && ctx.first.pid - ctx.size >= 0)
 }
 
 // Prefetch the details of the two adjacent loaded posts, so arrow-stepping

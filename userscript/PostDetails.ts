@@ -303,39 +303,30 @@ function Filmstrip({
         })
         return document.createComment("")
     }
+    // The "Gallery" heading, shared by both orientations.
+    const headerLabel = span(
+        {
+            class: clsx("text-xs font-semibold tracking-wider text-zinc-500 uppercase"),
+        },
+        "Gallery",
+    )
+    // The vertical header stacks the label + focus button on one row with the
+    // counter below, to fit the narrow strip; horizontal puts everything on
+    // one row with the counter grouped next to the focus button.
+    const header = vertical
+        ? div(
+              { class: clsx("flex flex-col gap-1 px-0.5") },
+              div({ class: clsx("flex items-center justify-between") }, headerLabel, FocusButton()),
+              Counter(),
+          )
+        : div(
+              { class: clsx("flex items-center justify-between px-0.5") },
+              headerLabel,
+              div({ class: clsx("flex items-center gap-2") }, Counter(), FocusButton()),
+          )
     return div(
         { class: clsx("flex shrink-0 flex-col gap-1.5", vertical && "w-24") },
-        // The vertical header stacks: label + focus button on one row, the
-        // counter below, to fit the narrow strip.
-        vertical
-            ? div(
-                  { class: clsx("flex flex-col gap-1 px-0.5") },
-                  div(
-                      { class: clsx("flex items-center justify-between") },
-                      span(
-                          {
-                              class: clsx(
-                                  "text-xs font-semibold tracking-wider text-zinc-500 uppercase",
-                              ),
-                          },
-                          "Gallery",
-                      ),
-                      FocusButton(),
-                  ),
-                  Counter(),
-              )
-            : div(
-                  { class: clsx("flex items-center justify-between px-0.5") },
-                  span(
-                      {
-                          class: clsx(
-                              "text-xs font-semibold tracking-wider text-zinc-500 uppercase",
-                          ),
-                      },
-                      "Gallery",
-                  ),
-                  div({ class: clsx("flex items-center gap-2") }, Counter(), FocusButton()),
-              ),
+        header,
         div(
             {
                 class: clsx(

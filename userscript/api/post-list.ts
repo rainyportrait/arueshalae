@@ -80,15 +80,9 @@ function extractPostList(
     // The site omits the "last page" link when the current page already is
     // the last page, so in that case (and on a single page, pid=0) fall
     // back to the pid we requested.
-    let lastPagePID = currentPid
-    if (lastPageLink) {
-        const href = lastPageLink.getAttribute("href") ?? ""
-        const pid = queryParam(href, "pid")
-        const parsed = Number(pid)
-        if (pid !== null && Number.isFinite(parsed)) {
-            lastPagePID = parsed
-        }
-    }
+    const pid = lastPageLink
+        ? positiveInt(queryParam(lastPageLink.getAttribute("href") ?? "", "pid"))
+        : null
 
-    return { posts, lastPagePID }
+    return { posts, lastPagePID: pid ?? currentPid }
 }

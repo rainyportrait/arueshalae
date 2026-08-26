@@ -166,16 +166,17 @@ export interface PaginationProps {
 // Presentational: the caller computes the current and total page from its own
 // state and page size, and supplies the per-page route.
 //
-// Live wrapper: the window size follows the container width and the actual
-// button width. The nav is full width, so a ResizeObserver on it reports the
-// container; a hidden probe button (same classes, labeled with the widest
-// page number) is measured for the item width — button widths grow with digit
-// count, so a constant doesn't work. Both land in one state value. The nav
-// keeps a stable identity across runs via the `node` closure — a fresh
-// element would be a replacement, re-running the observer from scratch, and
-// any node the parent detaches must be rebuilt, never reused. Each Pagination
-// call owns its own observer, which disconnects when its nav leaves the
-// document (page navigation), so no dead observers accumulate.
+// The window size follows the container width and the actual button width.
+// The nav is full width, so a ResizeObserver on it reports the container; a
+// hidden probe button (same classes, labeled with the widest page number) is
+// measured for the item width — button widths grow with digit count, so a
+// constant doesn't work. Both land in one state value.
+//
+// The items row is a live child of the stable nav element: van replaces it
+// whenever the measured widths change (and once more after insertion, when
+// the first real measurement corrects the estimates). The observer disconnects
+// when its nav leaves the document (page navigation), so no dead observers
+// accumulate.
 export function Pagination({ currentPage, totalPages, routeForPage }: PaginationProps) {
     if (totalPages <= 1) return div()
     const pageHref = (page: number) => routeToUrl(routeForPage(page))
@@ -183,46 +184,17 @@ export function Pagination({ currentPage, totalPages, routeForPage }: Pagination
     // Estimates for the first frame; the initial observer callback corrects
     // both right after insertion.
     const metrics = van.state<{ container: number; item: number }>({ container: 960, item: 36 })
-    let node: HTMLElement | null = null
-    let inner: HTMLElement | null = null
-    return () => {
+
+    const probe = span(
+        {
+            class: ITEM_CLASS,
+            style: "position:absolute; visibility:hidden; pointer-events:none",
+        },
+        String(totalPages),
+    )
+    const itemsRow = () => {
         const { container, item } = metrics.val
-        if (!node) {
-            const probe = span(
-                {
-                    class: ITEM_CLASS,
-                    style: "position:absolute; visibility:hidden; pointer-events:none",
-                },
-                String(totalPages),
-            )
-            node = nav(
-                {
-                    class: clsx("relative mt-10 flex w-full justify-center pb-4"),
-                    "aria-label": "Pagination",
-                },
-                probe,
-            )
-            const el = node
-            const observer = new ResizeObserver((entries) => {
-                const entry = entries[0]
-                const target = entry.target as HTMLElement
-                if (!target.isConnected) {
-                    // The nav was swapped out; stop observing the dead node.
-                    observer.disconnect()
-                    return
-                }
-                const newWidth = entry.contentRect.width
-                if (newWidth <= 0) return
-                // The 2px slack keeps fractional-width churn out of the state.
-                if (Math.abs(newWidth - metrics.val.container) > 2) {
-                    metrics.val = { container: newWidth, item: probe.offsetWidth }
-                }
-            })
-            observer.observe(el)
-        }
-        const el = node
-        if (inner && inner.parentNode === el) el.removeChild(inner)
-        inner = div(
+        return div(
             { class: "flex flex-wrap items-center justify-center gap-1.5" },
             PageItem({
                 href: pageHref(1),
@@ -258,7 +230,30 @@ export function Pagination({ currentPage, totalPages, routeForPage }: Pagination
             }),
             PageJump({ totalPages, routeForPage }),
         )
-        van.add(el, inner)
-        return el
     }
+    const el = nav(
+        {
+            class: clsx("relative mt-10 flex w-full justify-center pb-4"),
+            "aria-label": "Pagination",
+        },
+        probe,
+        itemsRow,
+    )
+    const observer = new ResizeObserver((entries) => {
+        const entry = entries[0]
+        const target = entry.target as HTMLElement
+        if (!target.isConnected) {
+            // The nav was swapped out; stop observing the dead node.
+            observer.disconnect()
+            return
+        }
+        const newWidth = entry.contentRect.width
+        if (newWidth <= 0) return
+        // The 2px slack keeps fractional-width churn out of the state.
+        if (Math.abs(newWidth - metrics.val.container) > 2) {
+            metrics.val = { container: newWidth, item: probe.offsetWidth }
+        }
+    })
+    observer.observe(el)
+    return el
 }

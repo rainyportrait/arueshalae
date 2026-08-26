@@ -1,7 +1,7 @@
 import { routeToUrl } from "../router.ts"
 import { fetchDocument } from "./network.ts"
 import { positiveInt, queryParam } from "./parse.ts"
-import { type Post, extractPosts } from "./post-list.ts"
+import { type Post, collectImageLists } from "./post-list.ts"
 
 export type Favorites = {
     posts: Post[]
@@ -19,11 +19,7 @@ export async function fetchFavorites(id: number, pid: number): Promise<Favorites
 // hrefs, and the "Remove" link sits outside the `.thumb` span, so it is
 // skipped automatically).
 export function extractFavorites(doc: Document, currentPid: number): Favorites {
-    const posts: Post[] = []
-    for (const imageList of doc.querySelectorAll(".image-list")) {
-        posts.push(...extractPosts(imageList))
-    }
-    return { posts, lastPagePID: extractLastPagePID(doc, currentPid) }
+    return { posts: collectImageLists(doc), lastPagePID: extractLastPagePID(doc, currentPid) }
 }
 
 // The favorites paginator renders its links with `href="#"` and an `onclick`

@@ -67,14 +67,21 @@ function parsePostIdFromHref(href: string): number {
     return positiveInt(queryParam(href, "id")) ?? 0
 }
 
+// Every `.image-list` section of the document flattened into posts. The post
+// list and the profile/favorites pages all place their thumbs in these lists.
+export function collectImageLists(container: ParentNode): Post[] {
+    const posts: Post[] = []
+    for (const imageList of container.querySelectorAll(".image-list")) {
+        posts.push(...extractPosts(imageList))
+    }
+    return posts
+}
+
 function extractPostList(
     DOM: Document,
     currentPid: number,
 ): { posts: Post[]; lastPagePID: number } {
-    const posts: Post[] = []
-    for (const imageList of DOM.querySelectorAll(".image-list")) {
-        posts.push(...extractPosts(imageList))
-    }
+    const posts = collectImageLists(DOM)
 
     const lastPageLink = DOM.querySelector('a[alt="last page"]')
     // The site omits the "last page" link when the current page already is

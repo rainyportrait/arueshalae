@@ -3,6 +3,7 @@ import van from "vanjs-core"
 import { AutocompleteInput } from "./AutocompleteInput.ts"
 import { normalizeTags } from "./api/tags.ts"
 import clsx from "./clsx.ts"
+import { route } from "./router.ts"
 import { search } from "./state/list.ts"
 
 const { button, form } = van.tags
@@ -21,6 +22,36 @@ export function SearchBar() {
     // its ghost-text overlay picks up the programmatic rewrite.
     const inputRef = { current: null as HTMLInputElement | null }
     const resyncRef = { current: null as (() => void) | null }
+
+    // The field is created before the derive so the derive's immediate
+    // first run already finds the ref set — otherwise a direct load of a
+    // tagged list URL would only fill the field on the next navigation.
+    const field = AutocompleteInput({
+        icon: "search",
+        placeholder: "Search using tags (e.g. blonde_hair)",
+        ariaLabel: "Search using tags",
+        onEnter: submit,
+        inputRef,
+        resyncRef,
+    })
+
+    // Keep the field in step with the query carried by the route: direct
+    // loads of a tagged list URL, back/forward, and post links (a
+    // postdetails route carries the query the post was found under). Only
+    // list/detail routes sync — the field is left alone on other pages.
+    // The derive runs only when the route changes, so it never interrupts
+    // typing — but navigating to a list or detail page discards whatever
+    // unsubmitted text is in the field.
+    van.derive(() => {
+        const r = route.val
+        if (r.type !== "postlist" && r.type !== "postdetails") return
+        const input = inputRef.current
+        if (!input) return
+        const q = r.tags ?? ""
+        if (input.value === q) return
+        input.value = q
+        resyncRef.current?.()
+    })
 
     function submit(): void {
         const input = inputRef.current
@@ -47,14 +78,7 @@ export function SearchBar() {
                 submit()
             },
         },
-        AutocompleteInput({
-            icon: "search",
-            placeholder: "Search using tags (e.g. blonde_hair)",
-            ariaLabel: "Search using tags",
-            onEnter: submit,
-            inputRef,
-            resyncRef,
-        }),
+        field,
         button(
             {
                 type: "submit",

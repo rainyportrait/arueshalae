@@ -208,7 +208,7 @@ van.derive(() => {
 // gallery-enabled post details page and while the user is typing in a form
 // field (e.g. the search bar).
 // - ArrowRight/ArrowLeft step through the gallery
-// - F opens focus mode, Escape closes it
+// - F toggles focus mode, Escape closes it
 document.addEventListener("keydown", (event) => {
     const r = route.val
     if (r.type !== "postdetails" || r.origin === undefined) return
@@ -226,7 +226,7 @@ document.addEventListener("keydown", (event) => {
         event.preventDefault()
         step(-1)
     } else if (event.key === "f" || event.key === "F") {
-        galleryFocus.val = true
+        galleryFocus.val = !galleryFocus.val
     } else if (event.key === "Escape" && galleryFocus.val) {
         galleryFocus.val = false
     }

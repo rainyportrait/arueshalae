@@ -1,4 +1,4 @@
-import { CenteredState } from "./CenteredState"
+import { CenteredState } from "./CenteredState.ts"
 
 export function NotFound() {
     return CenteredState({

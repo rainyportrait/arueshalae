@@ -3,11 +3,7 @@
     "version": "0.1.0",
     "scripts": {
         "format": "prettier --write .",
-        "format:check": "prettier --check .",
-        "verify:tags": "node verify-tags.mts",
-        "verify:post-tags": "node verify-post-tags.mts",
-        "verify:post-details": "node verify-post-details.mts",
-        "verify:auth": "node verify-auth.mts"
+        "format:check": "prettier --check ."
     },
     "devEngines": {
         "packageManager": {

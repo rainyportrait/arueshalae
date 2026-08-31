@@ -5,11 +5,13 @@ import { CenteredState } from "./CenteredState.ts"
 import { Link } from "./Link.ts"
 import { TagList, TagListSkeleton } from "./TagList.ts"
 import { Toggle } from "./Toggle.ts"
+import { addFavorite } from "./api/favorites.ts"
 import type { PostDetails as PostDetailsData } from "./api/post-details.ts"
 import type { Post } from "./api/post-list.ts"
 import { isAnimated } from "./api/tags.ts"
 import clsx from "./clsx.ts"
 import { type PostOrigin, postHref } from "./router.ts"
+import { auth } from "./state/auth.ts"
 import { details, reloadDetails } from "./state/details.ts"
 import { loadedPosts, originKey } from "./state/gallery-collection.ts"
 import { canStep, gallery, galleryFocus, reloadGallery, step } from "./state/gallery.ts"
@@ -98,9 +100,76 @@ function OriginalImageToggle({
     )
 }
 
-function Sidebar({ post, showOriginal }: { post: PostDetailsData; showOriginal: State<boolean> }) {
+// The favorite button's lifecycle for the currently shown post: available,
+// in flight, or settled into one of the two disabled end states.
+type FavoriteStatus = "idle" | "adding" | "added" | "already"
+
+// "Add to favorites" button. Rule34 exposes no way to check whether a post is
+// already in the user's favorites, so the button always starts out available
+// and settles into a disabled end state only once the API has replied for the
+// current post. Hidden entirely for guests. The button is a live node reading
+// `auth` and the per-post `favorite` (owned by the page shell), so login/logout
+// and a click re-render just this button, not the sidebar around it.
+function AddFavoriteButton({
+    post,
+    favorite,
+}: {
+    post: PostDetailsData
+    favorite: State<FavoriteStatus>
+}) {
+    return () => {
+        if (auth.val.status !== "authenticated") return document.createComment("")
+        const current = favorite.val
+        const label =
+            current === "adding"
+                ? "Adding…"
+                : current === "added"
+                  ? "Added to favorites"
+                  : current === "already"
+                    ? "Already in favorites"
+                    : "Add to favorites"
+        return button(
+            {
+                type: "button",
+                disabled: current !== "idle",
+                class: clsx(
+                    "w-full rounded-lg border px-3 py-2 text-sm transition-colors",
+                    current === "idle"
+                        ? "cursor-pointer border-zinc-700 bg-zinc-900/60 text-zinc-200 hover:bg-zinc-800"
+                        : "cursor-default border-zinc-800 bg-zinc-900/40 text-zinc-500",
+                ),
+                onclick: () => {
+                    if (favorite.val !== "idle") return
+                    favorite.val = "adding"
+                    addFavorite(post.id)
+                        .then((result) => {
+                            if (result.ok) favorite.val = "added"
+                            else if (result.reason === "already-in-favorites")
+                                favorite.val = "already"
+                            else favorite.val = "idle" // not logged in (stale session)
+                        })
+                        .catch(() => {
+                            favorite.val = "idle" // network error; keep it retryable
+                        })
+                },
+            },
+            label,
+        )
+    }
+}
+
+function Sidebar({
+    post,
+    showOriginal,
+    favorite,
+}: {
+    post: PostDetailsData
+    showOriginal: State<boolean>
+    favorite: State<FavoriteStatus>
+}) {
     return div(
         { class: clsx("flex flex-col gap-6") },
+        AddFavoriteButton({ post, favorite }),
         OriginalImageToggle({ post, showOriginal }),
         StatsSection({ post }),
         TagList({ tags: post.tags }),
@@ -471,6 +540,18 @@ function buildShell(): Node {
     // strip sees the active post of *now*, not the one it was built with.
     const activeId = () => (details.val.status === "ready" ? details.val.post.id : -1)
 
+    // The favorite button's per-post status (reset per post, checked
+    // idempotently like showOriginal): rule34 can't tell us beforehand
+    // whether a post is favorited, so every post starts "idle".
+    let favoriteFor: number | undefined
+    const favorite = van.state<FavoriteStatus>("idle")
+    const ensureFavorite = (post: PostDetailsData) => {
+        if (favoriteFor !== post.id) {
+            favoriteFor = post.id
+            favorite.val = "idle"
+        }
+    }
+
     // Sidebar slot: per-post content inside the static aside. Runs before the
     // column slot (created first), so its showOriginal reset propagates to
     // the media within the same update.
@@ -478,7 +559,8 @@ function buildShell(): Node {
         const state = details.val
         if (state.status !== "ready") return TagListSkeleton()
         ensureShowOriginal(state.post)
-        return Sidebar({ post: state.post, showOriginal })
+        ensureFavorite(state.post)
+        return Sidebar({ post: state.post, showOriginal, favorite })
     }
 
     // Media slot: a stable wrapper (media holder + arrow overlay) whose

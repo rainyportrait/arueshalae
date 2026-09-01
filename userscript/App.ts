@@ -64,7 +64,13 @@ function screenReady(t: Route["type"]): boolean {
 
 van.derive(() => {
     const t = route.val.type
-    if (t !== shownType.val && screenReady(t)) shownType.val = t
+    if (t !== shownType.val && screenReady(t)) {
+        shownType.val = t
+        // A different page type is a full page change; start it at the top.
+        // (Same-type navigations — search, page turns, gallery steps — keep
+        // the current scroll position.)
+        window.scrollTo(0, 0)
+    }
 })
 
 function makePage(type: Route["type"]): Node {

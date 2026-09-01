@@ -602,14 +602,21 @@ function buildShell(): Node {
     )
     // Mobile gallery swipe: a decisive horizontal drag starting on the media
     // steps to the adjacent post (left = next). Vertical scrolls that begin
-    // on the media are left alone (horizontal-dominance check), and gestures
-    // on a video's native controls never reach us at all — the browser
-    // consumes them before page JavaScript sees them.
+    // on the media are left alone (horizontal-dominance check). On Chrome a
+    // video's native controls consume the gesture before it reaches the page,
+    // but Safari also delivers touches over them — a scrub on the seek bar
+    // would read as a swipe. A scrub additionally fires `seeking` on the
+    // video, so a seek while a touch is down is the signal that the gesture
+    // was aimed at the controls, and it suppresses navigation.
     let swipeStart: { x: number; y: number } | undefined
+    let videoSeeking = false
     mediaBox.addEventListener("touchstart", (event) => {
         const touch = event.touches[0]
         if (touch === undefined) return
         swipeStart = { x: touch.clientX, y: touch.clientY }
+        // A seek from a previous, already-ended touch can't belong to this
+        // one — clear it, otherwise it would suppress this swipe.
+        videoSeeking = false
     })
     mediaBox.addEventListener("touchend", (event) => {
         const start = swipeStart
@@ -620,10 +627,14 @@ function buildShell(): Node {
         const dx = touch.clientX - start.x
         const dy = touch.clientY - start.y
         if (Math.abs(dx) < 48 || Math.abs(dx) < 1.5 * Math.abs(dy)) return
+        const suppress = shown?.el instanceof HTMLVideoElement && videoSeeking
+        videoSeeking = false
+        if (suppress) return
         step(dx > 0 ? -1 : 1)
     })
     mediaBox.addEventListener("touchcancel", () => {
         swipeStart = undefined
+        videoSeeking = false
     })
     let shown: { id: number; el: HTMLElement; fill: boolean } | undefined
     const swapMedia = (post: PostDetailsData, fill: boolean): void => {
@@ -642,6 +653,12 @@ function buildShell(): Node {
         next.el.style.opacity = "0"
         mediaHolder.append(next.el)
         shown = { id: post.id, el: next.el, fill }
+        if (next.el instanceof HTMLVideoElement)
+            next.el.addEventListener("seeking", () => {
+                // Only the currently shown video counts (a superseded
+                // outgoing element can still settle for a moment).
+                if (shown?.el === next.el) videoSeeking = true
+            })
         void next.whenReady.then(() => {
             if (shown?.el !== next.el) {
                 // Superseded by another step before it was ready.

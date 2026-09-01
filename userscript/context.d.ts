@@ -1,7 +1,3 @@
-// The userscript runs in the page's window, but GM/TS expose it as
-// `unsafeWindow` (the raw window, not a sandbox proxy).
-declare var unsafeWindow: Window
-
 // Injected as a global by the build banner (see build-userscript.ts).
 declare var TAILWIND_CSS: string
 

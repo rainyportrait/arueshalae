@@ -17,7 +17,7 @@ export function isChallengeBody(body: string): boolean {
 
 // True when the current document is a bot-challenge page.
 export function isChallengePage(): boolean {
-    const url = unsafeWindow.location.href.toLowerCase()
+    const url = location.href.toLowerCase()
     const body = (document.body?.textContent ?? "").toLowerCase()
     return url.includes(CHALLENGE_URL_TOKEN) || isChallengeBody(body)
 }
@@ -65,12 +65,12 @@ let captchaResolve: (() => void) | null = null
 // True when this window is not the top window (i.e. we are inside the modal
 // iframe).
 export function isInIframe(): boolean {
-    return unsafeWindow.top !== unsafeWindow
+    return top !== window
 }
 
 // Tell the top window the challenge was solved.
 export function signalCaptchaResolved(): void {
-    unsafeWindow.top?.postMessage(CAPTCHA_SOLVED, "*")
+    top?.postMessage(CAPTCHA_SOLVED, "*")
 }
 
 // Gate a request on the challenge being solved. Returns the shared promise so
@@ -96,7 +96,7 @@ export function solveCaptchaResolved(): void {
 // Bridge the iframe boundary: the solved iframe posts the sentinel to the top
 // window, which resolves the pending promise. Set up in the top window only.
 export function listenForCaptchaSolved(): void {
-    unsafeWindow.addEventListener("message", (event: MessageEvent) => {
+    addEventListener("message", (event: MessageEvent) => {
         if (event.data === CAPTCHA_SOLVED) solveCaptchaResolved()
     })
 }

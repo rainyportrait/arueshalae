@@ -60,17 +60,16 @@ async function runBuild() {
     const iconCss = buildIconStyles()
     const tailwindStyles = `${tailwindCss}\n${iconCss}`.replace(/\\/g, "\\\\").replace(/`/g, "\\`")
 
-    esbuild
-        .build({
-            entryPoints: ["userscript/index.ts"],
-            bundle: true,
-            outfile: "target/userscript/arueshalae.user.js",
-            format: "iife",
-            platform: "browser",
-            target: "es2020",
-            minify: false,
-            banner: {
-                js: `// ==UserScript==
+    await esbuild.build({
+        entryPoints: ["userscript/index.ts"],
+        bundle: true,
+        outfile: "target/userscript/arueshalae.user.js",
+        format: "iife",
+        platform: "browser",
+        target: "es2020",
+        minify: false,
+        banner: {
+            js: `// ==UserScript==
 // @name         Arueshalae
 // @version      ${version}
 // @description  Replaces the default rule34.xxx UI
@@ -81,11 +80,21 @@ async function runBuild() {
 // Inject Tailwind CSS into global variable
 const TAILWIND_CSS = \`${tailwindStyles}\`;
 `,
-            },
-        })
-        .catch((err) => {
-            throw err
-        })
+        },
+    })
 }
 
-runBuild()
+async function main() {
+    const started = Date.now()
+    await runBuild()
+    const { size } = await fs.stat("target/userscript/arueshalae.user.js")
+    const seconds = (Date.now() - started) / 1000
+    console.log(
+        `Built target/userscript/arueshalae.user.js (${(size / 1024).toFixed(1)} KB) in ${seconds.toFixed(1)}s`,
+    )
+}
+
+main().catch((err) => {
+    console.error(err)
+    process.exit(1)
+})

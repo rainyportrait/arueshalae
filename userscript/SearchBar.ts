@@ -79,11 +79,13 @@ export function SearchBar() {
             },
         },
         field,
+        // The field already carries a search icon, so the button stays a text
+        // label; it just tightens up on narrow screens.
         button(
             {
                 type: "submit",
                 class: clsx(
-                    "shrink-0 rounded-lg bg-rose-500 px-4 py-2 text-sm font-medium text-white",
+                    "shrink-0 rounded-lg bg-rose-500 px-3 py-2 text-sm font-medium text-white sm:px-4",
                     "transition-colors hover:bg-rose-400",
                 ),
             },

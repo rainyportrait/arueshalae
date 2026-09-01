@@ -10,6 +10,9 @@ export function initHead(): void {
     van.add(document.head, [
         title("Rule34.xxx - Arueshalae"),
         style(TAILWIND_CSS),
-        meta({ name: "viewport", content: "width=device-width, initial-scale=1.0" }),
+        meta({
+            name: "viewport",
+            content: "width=device-width, initial-scale=1.0, maximum-scale=1.0",
+        }),
     ])
 }

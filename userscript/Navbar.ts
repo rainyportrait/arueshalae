@@ -101,13 +101,22 @@ function UserMenu(): HTMLDivElement {
                 }
             },
         },
-        span({ "icon-name": "user", class: clsx("text-lg text-zinc-400") }),
+        // The highlighted icon doubles as the logged-in indicator.
+        span({
+            "icon-name": "user",
+            class: () =>
+                clsx(
+                    "text-lg",
+                    auth.val.status === "authenticated" ? "text-rose-500" : "text-zinc-400",
+                ),
+        }),
         // The username appears only when the profile is ready, so the trigger
-        // doesn't grow/shrink as the name arrives (just the icon meanwhile).
+        // doesn't grow/shrink as the name arrives (just the icon meanwhile),
+        // and drops off entirely on narrow screens.
         () => {
             const ui = userInfo.val
             return ui.status === "ready"
-                ? span({ class: clsx("max-w-40 truncate") }, ui.profile.username)
+                ? span({ class: clsx("hidden max-w-40 truncate sm:inline") }, ui.profile.username)
                 : document.createComment("")
         },
         // The chevron signals that this opens a menu; it flips while open.
@@ -234,8 +243,14 @@ export function Navbar() {
                     "aria-label": "Arueshalae home",
                 },
                 span({ class: clsx("text-sm leading-none text-rose-500") }, "◆"),
+                // The wordmark drops off on narrow screens; the diamond alone
+                // is enough to identify the app there.
                 span(
-                    { class: clsx("text-lg font-semibold tracking-tight text-zinc-100") },
+                    {
+                        class: clsx(
+                            "hidden text-lg font-semibold tracking-tight text-zinc-100 sm:inline",
+                        ),
+                    },
                     "Arueshalae",
                 ),
             ),

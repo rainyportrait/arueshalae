@@ -189,7 +189,9 @@ function mediaElementClass(fill: boolean): string {
     // then resolves against that inflated track instead of the viewport.
     return clsx(
         fill ? "h-full object-contain" : "max-h-[80vh]",
-        "w-auto max-w-full rounded-lg transition-opacity duration-200",
+        // pan-y lets the page see horizontal swipes (gallery navigation) while
+        // the browser keeps handling vertical page scroll from the media.
+        "w-auto max-w-full touch-pan-y rounded-lg transition-opacity duration-200",
     )
 }
 
@@ -598,6 +600,31 @@ function buildShell(): Node {
             GalleryArrow({ dir: 1 }),
         ),
     )
+    // Mobile gallery swipe: a decisive horizontal drag starting on the media
+    // steps to the adjacent post (left = next). Vertical scrolls that begin
+    // on the media are left alone (horizontal-dominance check), and gestures
+    // on a video's native controls never reach us at all — the browser
+    // consumes them before page JavaScript sees them.
+    let swipeStart: { x: number; y: number } | undefined
+    mediaBox.addEventListener("touchstart", (event) => {
+        const touch = event.touches[0]
+        if (touch === undefined) return
+        swipeStart = { x: touch.clientX, y: touch.clientY }
+    })
+    mediaBox.addEventListener("touchend", (event) => {
+        const start = swipeStart
+        swipeStart = undefined
+        if (start === undefined) return
+        const touch = event.changedTouches[0]
+        if (touch === undefined) return
+        const dx = touch.clientX - start.x
+        const dy = touch.clientY - start.y
+        if (Math.abs(dx) < 48 || Math.abs(dx) < 1.5 * Math.abs(dy)) return
+        step(dx > 0 ? -1 : 1)
+    })
+    mediaBox.addEventListener("touchcancel", () => {
+        swipeStart = undefined
+    })
     let shown: { id: number; el: HTMLElement; fill: boolean } | undefined
     const swapMedia = (post: PostDetailsData, fill: boolean): void => {
         if (shown?.id === post.id) {

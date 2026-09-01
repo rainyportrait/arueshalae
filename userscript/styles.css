@@ -21,6 +21,18 @@ html {
     scrollbar-gutter: stable;
 }
 
+/*
+ * Focus mode makes the document non-scrollable. The html/body min-heights
+ * above resolve against the *large* viewport, which on mobile Safari is
+ * taller than the visible area — the page would scroll by the address bar's
+ * height even though the app root is pinned to h-dvh. Body overflow
+ * propagates to the viewport (html's overflow is visible), so hiding it here
+ * is enough; the vertical filmstrip scrolls on its own.
+ */
+body.arue-focus {
+    overflow: hidden;
+}
+
 /* Subtle, theme-matched scrollbar. */
 ::-webkit-scrollbar {
     width: 5px;

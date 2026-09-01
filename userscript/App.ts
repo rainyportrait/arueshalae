@@ -103,7 +103,18 @@ function ArueApp() {
     }
 
     return div(
-        { class: clsx("flex min-h-screen flex-col bg-zinc-950 text-zinc-100") },
+        {
+            // In focus mode the root is pinned to the *dynamic* viewport
+            // (h-dvh): min-h-screen would size it to 100vh, which on mobile
+            // Safari is the large viewport — taller than the visible area
+            // while the address bar is showing — and flex-1 would stretch
+            // main to it, making the page scrollable below the media.
+            class: () =>
+                clsx(
+                    "flex flex-col bg-zinc-950 text-zinc-100",
+                    galleryFocus.val ? "h-dvh" : "min-h-screen",
+                ),
+        },
         Navbar(),
         LoadingBar(),
         main(
@@ -121,4 +132,11 @@ export function initApp(): void {
     document.body.innerHTML = ""
     van.add(document.body, ArueApp())
     van.add(document.body, CaptchaModal())
+    // Focus mode also needs the document itself non-scrollable: html/body
+    // carry min-height: 100% against the large viewport, which alone would
+    // keep the page scrollable (see the body.arue-focus rule in
+    // styles.css).
+    van.derive(() => {
+        document.body.classList.toggle("arue-focus", galleryFocus.val)
+    })
 }

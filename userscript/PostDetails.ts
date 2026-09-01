@@ -717,12 +717,28 @@ function buildShell(): Node {
         div(
             {
                 // In focus mode the column fills the viewport exactly
-                // (h-screen): main drops its padding and the navbar is hidden,
-                // so nothing offsets it. The media takes the remaining width
-                // the remaining width next to the vertical filmstrip on
-                // the right, all without page scroll.
+                // (h-dvh, not h-screen): main drops its padding and the
+                // navbar is hidden, so nothing offsets it. The media takes
+                // the remaining width next to the vertical filmstrip on the
+                // right, all without page scroll. On mobile Safari 100vh is
+                // the *large* viewport (Safari chrome collapsed), so it
+                // overflows the visible area while the bottom URL bar is
+                // showing; 100dvh tracks the visible height and updates as
+                // the bar shows/hides.
                 class: () =>
-                    clsx("order-first min-w-0 flex-1", galleryFocus.val && "flex h-screen gap-3"),
+                    clsx(
+                        "order-first min-w-0",
+                        // flex-1 only from lg: on mobile the column is a
+                        // flex item of the flex-col shell, where flex-1's
+                        // flex-basis: 0% overrides the h-dvh height (basis
+                        // wins over height on the main axis) and the column
+                        // grew to the media's natural size. Below lg the
+                        // height is the definite 100dvh and the row fills
+                        // the width regardless; at lg the shell is flex-row
+                        // and flex-1 is what stretches the column to fill
+                        // the width next to the vertical strip.
+                        galleryFocus.val ? "flex h-dvh gap-3 lg:flex-1" : "flex-1",
+                    ),
             },
             mediaSlot,
             stripSlot,

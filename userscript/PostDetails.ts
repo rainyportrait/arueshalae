@@ -210,6 +210,9 @@ function buildMediaEl(
             loop: true,
             muted: true,
             autoplay: true,
+            // Without playsinline, mobile Safari autoplays videos in its
+            // native fullscreen player instead of inline.
+            playsinline: true,
             class: elementClass,
             style: "grid-area: 1 / 1",
         })

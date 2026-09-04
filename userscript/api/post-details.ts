@@ -126,6 +126,6 @@ function postedText(DOM: Document): string {
 }
 
 function parseScore(raw: string): number {
-    const match = /\d+/.exec(raw)
+    const match = /-?\d+/.exec(raw)
     return match ? Number(match[0]) : 0
 }

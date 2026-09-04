@@ -3,7 +3,9 @@
     "version": "0.1.0",
     "scripts": {
         "format": "prettier --write .",
-        "format:check": "prettier --check ."
+        "format:check": "prettier --check .",
+        "test": "vitest run",
+        "test:watch": "vitest"
     },
     "devEngines": {
         "packageManager": {
@@ -23,7 +25,8 @@
         "linkedom": "0.18.13",
         "prettier": "^3.9.6",
         "prettier-plugin-tailwindcss": "^0.8.1",
-        "typescript": "^7.0.2"
+        "typescript": "^7.0.2",
+        "vitest": "^5.0.0"
     },
     "dependencies": {
         "tailwindcss": "^4.3.3",

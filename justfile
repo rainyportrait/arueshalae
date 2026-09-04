@@ -4,6 +4,9 @@ watch-and-serve-userscript: watch-userscript serve-userscript
 build-userscript:
 	node build-userscript.ts
 
+test:
+	pnpm test
+
 watch-userscript:
 	watchexec -r -e ts,css,tsx -- just build-userscript
 

@@ -5,7 +5,6 @@ import { CenteredState } from "./CenteredState.ts"
 import { Link } from "./Link.ts"
 import { TagList, TagListSkeleton } from "./TagList.ts"
 import { Toggle } from "./Toggle.ts"
-import { addFavorite } from "./api/favorites.ts"
 import type { PostDetails as PostDetailsData } from "./api/post-details.ts"
 import type { Post } from "./api/post-list.ts"
 import { isAnimated } from "./api/tags.ts"
@@ -13,6 +12,7 @@ import clsx from "./clsx.ts"
 import { type PostOrigin, postHref, route } from "./router.ts"
 import { auth } from "./state/auth.ts"
 import { details, reloadDetails } from "./state/details.ts"
+import { type FavoriteStatus, addFavoriteWithStatus } from "./state/favorite-action.ts"
 import { loadedPosts, originKey } from "./state/gallery-collection.ts"
 import { canStep, gallery, galleryFocus, reloadGallery, step } from "./state/gallery.ts"
 import { preferOriginal } from "./state/settings.ts"
@@ -100,10 +100,6 @@ function OriginalImageToggle({
     )
 }
 
-// The favorite button's lifecycle for the currently shown post: available,
-// in flight, or settled into one of the two disabled end states.
-type FavoriteStatus = "idle" | "adding" | "added" | "already"
-
 // "Add to favorites" button. Rule34 exposes no way to check whether a post is
 // already in the user's favorites, so the button always starts out available
 // and settles into a disabled end state only once the API has replied for the
@@ -142,19 +138,7 @@ function AddFavoriteButton({
                 ),
                 onclick: () => {
                     if (favorite.val !== "idle") return
-                    favorite.val = "adding"
-                    addFavorite(post.id)
-                        .then((result) => {
-                            if (!isCurrent()) return
-                            if (result.ok) favorite.val = "added"
-                            else if (result.reason === "already-in-favorites")
-                                favorite.val = "already"
-                            else favorite.val = "idle" // not logged in (stale session)
-                        })
-                        .catch(() => {
-                            if (!isCurrent()) return
-                            favorite.val = "idle" // network error; keep it retryable
-                        })
+                    void addFavoriteWithStatus(post.id, favorite, isCurrent)
                 },
             },
             label,

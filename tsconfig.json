@@ -14,5 +14,5 @@
             "*": ["./node_modules/*"]
         }
     },
-    "include": ["userscript/**/*", "build-userscript.ts"]
+    "include": ["userscript/**/*", "tests/**/*", "build-userscript.ts", "vitest.config.ts"]
 }

@@ -118,10 +118,21 @@ export function AutocompleteInput({
     // overlay's text scrolled to match.
     inputEl.addEventListener("scroll", bump)
 
-    function dismiss(): void {
+    function clearSuggestions(): void {
         visible.val = false
         suggestions.val = []
         highlighted.val = -1
+    }
+
+    function dismiss(): void {
+        if (debounceTimer) {
+            clearTimeout(debounceTimer)
+            debounceTimer = undefined
+        }
+        // Invalidate both an in-flight request and a request waiting for the
+        // debounce timer, so a late response cannot reopen the dropdown.
+        fetchSeq++
+        clearSuggestions()
     }
 
     // Walk back from the cursor to the nearest space (or index 0). That index
@@ -138,6 +149,11 @@ export function AutocompleteInput({
     // stale and Tab could accept a suggestion into the wrong fragment.
     function refreshSuggestions(): void {
         if (debounceTimer) clearTimeout(debounceTimer)
+        debounceTimer = undefined
+        const seq = ++fetchSeq
+        // The old list belongs to the previous fragment and must not remain
+        // available for acceptance while the new query is debounced.
+        clearSuggestions()
         const value = inputEl.value
         const selStart = inputEl.selectionStart ?? value.length
         const start = fragmentStartOf(value, selStart)
@@ -148,11 +164,10 @@ export function AutocompleteInput({
         if (query.length === 0) {
             // Caret at the start, right after a space, or a lone `-`: nothing
             // to complete.
-            dismiss()
             return
         }
         debounceTimer = setTimeout(() => {
-            const seq = ++fetchSeq
+            debounceTimer = undefined
             fetchAutocomplete(query)
                 .then((items) => {
                     if (seq !== fetchSeq) return

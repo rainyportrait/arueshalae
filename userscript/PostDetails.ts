@@ -10,7 +10,7 @@ import type { PostDetails as PostDetailsData } from "./api/post-details.ts"
 import type { Post } from "./api/post-list.ts"
 import { isAnimated } from "./api/tags.ts"
 import clsx from "./clsx.ts"
-import { type PostOrigin, postHref } from "./router.ts"
+import { type PostOrigin, postHref, route } from "./router.ts"
 import { auth } from "./state/auth.ts"
 import { details, reloadDetails } from "./state/details.ts"
 import { loadedPosts, originKey } from "./state/gallery-collection.ts"
@@ -113,9 +113,11 @@ type FavoriteStatus = "idle" | "adding" | "added" | "already"
 function AddFavoriteButton({
     post,
     favorite,
+    isCurrent,
 }: {
     post: PostDetailsData
     favorite: State<FavoriteStatus>
+    isCurrent: () => boolean
 }) {
     return () => {
         if (auth.val.status !== "authenticated") return document.createComment("")
@@ -143,12 +145,14 @@ function AddFavoriteButton({
                     favorite.val = "adding"
                     addFavorite(post.id)
                         .then((result) => {
+                            if (!isCurrent()) return
                             if (result.ok) favorite.val = "added"
                             else if (result.reason === "already-in-favorites")
                                 favorite.val = "already"
                             else favorite.val = "idle" // not logged in (stale session)
                         })
                         .catch(() => {
+                            if (!isCurrent()) return
                             favorite.val = "idle" // network error; keep it retryable
                         })
                 },
@@ -162,14 +166,16 @@ function Sidebar({
     post,
     showOriginal,
     favorite,
+    isCurrent,
 }: {
     post: PostDetailsData
     showOriginal: State<boolean>
     favorite: State<FavoriteStatus>
+    isCurrent: () => boolean
 }) {
     return div(
         { class: clsx("flex flex-col gap-6") },
-        AddFavoriteButton({ post, favorite }),
+        AddFavoriteButton({ post, favorite, isCurrent }),
         OriginalImageToggle({ post, showOriginal }),
         StatsSection({ post }),
         TagList({ tags: post.tags }),
@@ -574,7 +580,15 @@ function buildShell(): Node {
         if (state.status !== "ready") return TagListSkeleton()
         ensureShowOriginal(state.post)
         ensureFavorite(state.post)
-        return Sidebar({ post: state.post, showOriginal, favorite })
+        return Sidebar({
+            post: state.post,
+            showOriginal,
+            favorite,
+            isCurrent: () =>
+                favoriteFor === state.post.id &&
+                route.val.type === "postdetails" &&
+                route.val.id === state.post.id,
+        })
     }
 
     // Media slot: a stable wrapper (media holder + arrow overlay) whose

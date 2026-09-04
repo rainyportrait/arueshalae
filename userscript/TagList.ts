@@ -153,9 +153,6 @@ export function TagListSkeleton() {
     )
 }
 
-// Reusable, presentational tag list. Takes a flat list of tags and renders them
-// grouped by type, each as a link that searches for that single tag.
-// Groups are collapsible via their heading (see `TagGroup`).
 export function TagList({ tags }: { tags: Tag[] }) {
     if (tags.length === 0) return div()
     return div(

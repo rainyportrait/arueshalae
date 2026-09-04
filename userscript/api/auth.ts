@@ -76,7 +76,6 @@ export function parseLoginError(doc: Document): string {
 // exactly the profile page).
 export type ProfileRef = { id: number } | { uname: string }
 
-// Fetch and parse the profile view for a user, addressed by id or username.
 export async function fetchProfile(ref: ProfileRef): Promise<UserProfile> {
     // The account route serializes to exactly the profile page (id or
     // uname), so the shared serializer doubles as the URL builder here.

@@ -97,14 +97,12 @@ function statLi(DOM: Document, label: string): Element | null {
     return null
 }
 
-// The text of a stat li with the leading "Label:" stripped, whitespace collapsed.
 function statText(DOM: Document, label: string): string {
     const li = statLi(DOM, label)
     if (!li) return ""
     return (li.textContent ?? "").replace(label, "").replace(/\s+/g, " ").trim()
 }
 
-// The first anchor inside a stat li, as { href, text }, or null when absent.
 function statAnchor(DOM: Document, label: string): { href: string; text: string } | null {
     const a = statLi(DOM, label)?.querySelector("a")
     if (!a) return null

@@ -36,8 +36,7 @@ function enqueueRequest<T>(run: () => Promise<T>): Promise<T> {
 
 // Fetch a URL, transparently solving a bot challenge (a 4xx challenge page) if
 // the first response is one, and return a successful (200) Response. The 200
-// body is left unread so the caller can parse it as text/JSON. Used for every
-// `fetch`-based request path.
+// body is left unread so the caller can parse it as text/JSON.
 export async function fetchCleared(url: string, options: FetchOptions = {}): Promise<Response> {
     for (;;) {
         const response = await enqueueRequest(() => fetch(url, options))
@@ -64,7 +63,6 @@ export async function fetchDocument(url: string, options: FetchOptions = {}): Pr
     return retry<Document>(() => baseFetchDocument(url, options))
 }
 
-// Retry helper with exponential backoff.
 export async function retry<T>(
     fetchFn: () => Promise<T>,
     maxRetries: number = 5,

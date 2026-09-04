@@ -11,9 +11,8 @@ type Props = {
     action?: { label: string; onclick: () => void }
 }
 
-// A centered status view: an icon, a title, an optional message, and an
-// optional primary action button. Shared by the post list and post details
-// error/empty states, the 404 page, and the route placeholder.
+// Shared by the post list and post details error/empty states, the 404 page,
+// and the route placeholder.
 export function CenteredState({ icon, title, message, action }: Props): HTMLDivElement {
     return div(
         { class: clsx("flex flex-col items-center justify-center gap-2 py-24 text-center") },

@@ -11,8 +11,8 @@ import { type Loadable } from "./state/load.ts"
 
 const { div } = van.tags
 
-// Placeholder heights (px) so the skeleton mimics the masonry flow. Each item's
-// grid span is its height plus the row gap, exactly as real cards are sized.
+// Each skeleton item's grid span is its height plus the row gap, exactly as
+// real cards are sized.
 const SKELETON_HEIGHTS = [160, 256, 128, 224, 192, 240, 176, 208, 144, 256, 160, 224]
 
 function SkeletonGrid() {

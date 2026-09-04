@@ -9,13 +9,10 @@ import clsx from "./clsx.ts"
 const CHALLENGE_URL_TOKEN = "__cf_chl_rt_tk"
 const CHALLENGE_BODY_MARKERS = ["please enter the captcha to continue to rule34.xxx"]
 
-// True when a response body looks like a bot-challenge page. The network layer
-// uses this to detect a challenge on any resource type.
 export function isChallengeBody(body: string): boolean {
     return CHALLENGE_BODY_MARKERS.some((marker) => body.toLowerCase().includes(marker))
 }
 
-// True when the current document is a bot-challenge page.
 export function isChallengePage(): boolean {
     const url = location.href.toLowerCase()
     const body = (document.body?.textContent ?? "").toLowerCase()
@@ -52,9 +49,8 @@ export function styleChallengePage(): void {
 const CAPTCHA_SOLVED = "CAPTCHA_SOLVED"
 
 // The current challenge URL, or null while no modal is showing. The UI renders
-// the modal only while this is non-null. This is the reactive stand-in for the
-// reference implementation's `__showCaptcha` / `__captchaResolved` events: the
-// network layer writes it, the modal reads it.
+// the modal only while this is non-null; the network layer writes it, the
+// modal reads it.
 export const captchaUrl = van.state<string | null>(null)
 
 // Single-flight: one promise gates every request that hits a challenge, so
@@ -62,19 +58,14 @@ export const captchaUrl = van.state<string | null>(null)
 let captchaPromise: Promise<void> | null = null
 let captchaResolve: (() => void) | null = null
 
-// True when this window is not the top window (i.e. we are inside the modal
-// iframe).
 export function isInIframe(): boolean {
     return top !== window
 }
 
-// Tell the top window the challenge was solved.
 export function signalCaptchaResolved(): void {
     top?.postMessage(CAPTCHA_SOLVED, "*")
 }
 
-// Gate a request on the challenge being solved. Returns the shared promise so
-// concurrent requests queue behind one modal.
 export function solveCaptcha(url: string): Promise<void> {
     if (captchaPromise) return captchaPromise
     captchaPromise = new Promise<void>((resolve) => {
@@ -84,8 +75,6 @@ export function solveCaptcha(url: string): Promise<void> {
     return captchaPromise
 }
 
-// Resolve the pending promise, clear the single-flight state, and close the
-// modal.
 export function solveCaptchaResolved(): void {
     captchaResolve?.()
     captchaResolve = null

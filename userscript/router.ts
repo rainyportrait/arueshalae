@@ -55,13 +55,12 @@ export function postHref(link: string, origin: PostOrigin): string {
 
 const BASE = "/index.php"
 
-// The page offset from a `pid` query parameter; 0 when absent or invalid.
 function pidParam(raw: string | null): number {
     const n = raw === null ? 0 : Number(raw)
     return Number.isFinite(n) && n > 0 ? Math.trunc(n) : 0
 }
 
-// Total URL -> Route parser. Accepts a relative or absolute URL.
+// Accepts a relative or absolute URL.
 export function parseRoute(url: string): Route {
     const params = new URL(url, window.location.origin).searchParams
     const page = params.get("page")

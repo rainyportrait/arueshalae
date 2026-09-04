@@ -4,7 +4,6 @@ import { type PostOrigin } from "../router.ts"
 import { FAVORITES_PAGE_SIZE } from "./favorites.ts"
 import { PAGE_SIZE } from "./list.ts"
 
-// A loaded page of the collection.
 export type GalleryPage = { pid: number; posts: Post[] }
 
 // The public shape of the collection (no in-flight map); this is what the
@@ -64,8 +63,6 @@ export function snapshot(col: Collection): Gallery {
     return { origin: col.origin, pages: [...col.pages], lastPagePID: col.lastPagePID }
 }
 
-// Return the collection for this origin, creating a fresh one if the live
-// collection is for a different origin.
 export function collectionFor(origin: PostOrigin): Collection {
     if (collection !== null && originKey(collection.origin) === originKey(origin)) return collection
     collection = { origin, pages: [], lastPagePID: -1, pending: new Map(), version: 0 }

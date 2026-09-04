@@ -9,7 +9,6 @@ import type { Post } from "../api/post-list.ts"
 // per-account.
 const PREFIX = "arue-"
 
-// Read a JSON value from localStorage, tolerating absence and corruption.
 function readJSON<T>(key: string, fallback: T): T {
     try {
         const raw = localStorage.getItem(key)
@@ -71,9 +70,8 @@ export const preferOriginal = persisted<boolean>(`${PREFIX}prefer-original`, fal
 
 export const showHiddenPosts = van.state(false)
 
-// Split a list of posts into those that match the blacklist (hidden) and those
-// that don't (visible). With an empty blacklist everything is visible. A post
-// is hidden if it carries *any* blacklisted tag.
+// A post is hidden if it carries *any* blacklisted tag; with an empty
+// blacklist everything is visible.
 export function filterByBlacklist(
     posts: Post[],
     blacklist: string[],

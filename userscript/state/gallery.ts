@@ -151,8 +151,7 @@ export function step(delta: 1 | -1): void {
 }
 
 // At a page boundary, fetch the adjacent page, publish it (so the filmstrip
-// grows), then land on its first/last post. A failed boundary fetch is silent;
-// the button stays enabled and the next press retries.
+// grows), then land on its first/last post.
 function boundaryStep(
     col: Collection,
     pid: number,
@@ -175,7 +174,6 @@ function boundaryStep(
     )
 }
 
-// Whether a step in the given direction is possible right now.
 export function canStep(delta: 1 | -1): boolean {
     const ctx = stepContext()
     if (ctx === null) return false

@@ -116,8 +116,7 @@ function ProfileView({ data }: { data: UserProfile }) {
     )
 }
 
-// One topic section of the skeleton. A factory (not a shared node) so each
-// call yields a fresh element — a DOM node can't be parented twice.
+// A factory (not a shared node) so each call yields a fresh skeleton.
 function panelSkeleton() {
     return div(
         { class: clsx("flex flex-col gap-3") },

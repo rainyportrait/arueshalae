@@ -70,10 +70,9 @@ interface PageJumpProps {
     routeForPage: (page: number) => Route
 }
 
-// The "…" button: opens a small popover with a number input for jumping to
-// any page. A document-level click listener (attached only while open) closes
-// it on outside clicks; it removes itself once the node leaves the document,
-// so an unmount while open doesn't leak the listener.
+// A document-level click listener (attached only while open) closes the
+// popover on outside clicks; it removes itself once the node leaves the
+// document, so an unmount while open doesn't leak the listener.
 function PageJump({ totalPages, routeForPage }: PageJumpProps) {
     const open = van.state(false)
     const field = input({

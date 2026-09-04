@@ -17,7 +17,8 @@ export const favoritesPid = van.derive<number>(() =>
 )
 
 // The favorites page data (posts + the site's last-page offset) plus the
-// route parameters it was loaded with (see FavoritesReady).
+// route parameters it was loaded with, so pagination keeps working from the
+// page on screen while the next one loads.
 export type FavoritesReady = Favorites & { id: number; pid: number }
 
 export const favorites = van.state<Loadable<FavoritesReady>>({ status: "loading" })

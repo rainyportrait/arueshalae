@@ -7,8 +7,8 @@ export type Post = {
     id: number
     link: string
     thumbnail: string
-    // The post's full tag list, parsed from the thumbnail's `alt` text. Empty
-    // when the thumb exposes none (e.g. some profile/favorites shapes).
+    // The post's full tag list, parsed from the thumbnail's `title` text.
+    // Empty when the thumb exposes none.
     tags: string[]
 }
 
@@ -62,7 +62,6 @@ function parsePostTags(img: Element): string[] {
     return normalizeTags(img.getAttribute("title") ?? "").filter((tag) => !tag.includes(":"))
 }
 
-// Read the post id out of a post-view href (`…&id=N`); 0 when absent.
 function parsePostIdFromHref(href: string): number {
     return positiveInt(queryParam(href, "id")) ?? 0
 }

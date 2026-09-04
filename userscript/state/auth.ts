@@ -11,9 +11,7 @@ import { type Loadable, createLoader } from "./load.ts"
 
 // Are we logged in, and if so who (by id)? `userId` is the signal that
 // establishes authentication; nothing else lives here.
-export type AuthState =
-    | { status: "guest" } // not logged in
-    | { status: "authenticated"; userId: number }
+export type AuthState = { status: "guest" } | { status: "authenticated"; userId: number }
 
 // The site sets a JavaScript-readable `user_id` cookie on login (it lives and
 // dies with the session), so the auth state is known synchronously from the

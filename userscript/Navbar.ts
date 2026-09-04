@@ -211,8 +211,6 @@ function UserMenu(): HTMLDivElement {
         )
     }
 
-    // The "Favorites" menu item shows the count once the profile is ready, and
-    // just the bare word while loading or on error.
     function favoritesLabel(): string {
         const ui = userInfo.val
         return ui.status === "ready" ? `Favorites (${ui.profile.favorites})` : "Favorites"

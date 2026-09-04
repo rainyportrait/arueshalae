@@ -34,9 +34,6 @@ function HiddenPostsToggle({ count }: { count: number }): ChildDom {
     )
 }
 
-// Shared layout: a fixed-width tag sidebar on the left (desktop only) with the
-// post grid filling the rest. The sidebar is hidden on small screens, where the
-// grid takes the full width.
 function PostListLayout({ sidebar, main }: { sidebar: ChildDom; main: ChildDom }) {
     return div(
         { class: clsx("flex gap-6") },

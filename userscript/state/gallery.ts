@@ -31,6 +31,7 @@ export const gallery = van.state<GalleryState>({ status: "loading" })
 export const galleryFocus = van.state(false)
 
 type PostDetailsRoute = Extract<Route, { type: "postdetails" }>
+type GalleryPostDetailsRoute = PostDetailsRoute & { origin: PostOrigin }
 
 // Everything a gallery step needs to know about the current position: the
 // route, its collection, the loaded posts, the active post's index, the page
@@ -39,7 +40,7 @@ type PostDetailsRoute = Extract<Route, { type: "postdetails" }>
 // before the collection exists, when the collection is for another origin,
 // or when the active post isn't among the loaded posts.
 function stepContext(): {
-    r: PostDetailsRoute
+    r: GalleryPostDetailsRoute
     col: Collection
     posts: Post[]
     index: number
@@ -49,17 +50,18 @@ function stepContext(): {
 } | null {
     const r = route.val
     if (r.type !== "postdetails" || r.origin === undefined) return null
+    const origin = r.origin
     const col = getCollection()
-    if (col === null || originKey(col.origin) !== originKey(r.origin)) return null
+    if (col === null || originKey(col.origin) !== originKey(origin)) return null
     const posts = loadedPosts(col)
     const index = posts.findIndex((p) => p.id === r.id)
     if (index === -1) return null
     return {
-        r,
+        r: { ...r, origin },
         col,
         posts,
         index,
-        size: pageSize(r.origin),
+        size: pageSize(origin),
         first: col.pages[0],
         last: col.pages[col.pages.length - 1],
     }
@@ -138,9 +140,23 @@ export function step(delta: 1 | -1): void {
     if (ctx === null) return
     const target = ctx.index + delta
     if (target >= 0 && target < ctx.posts.length) {
+        const targetPost = ctx.posts[target]
+        const targetPage = ctx.col.pages.find((page) =>
+            page.posts.some((post) => post.id === targetPost.id),
+        )
         // Replace, not push: gallery steps shouldn't pile up in the history,
         // so the browser back button exits the gallery to the list.
-        navigate({ ...ctx.r, id: ctx.posts[target].id }, { replace: true })
+        navigate(
+            {
+                ...ctx.r,
+                id: targetPost.id,
+                origin:
+                    targetPage === undefined
+                        ? ctx.r.origin
+                        : { ...ctx.r.origin, pid: targetPage.pid },
+            },
+            { replace: true },
+        )
         return
     }
     if (delta === 1 && ctx.last !== undefined && ctx.last.pid + ctx.size <= ctx.col.lastPagePID) {
@@ -155,7 +171,7 @@ export function step(delta: 1 | -1): void {
 function boundaryStep(
     col: Collection,
     pid: number,
-    r: PostDetailsRoute,
+    r: GalleryPostDetailsRoute,
     pick: (posts: Post[]) => Post | undefined,
 ): void {
     void ensurePage(col, pid).then(
@@ -165,7 +181,8 @@ function boundaryStep(
             if (!isCurrent(col)) return
             publish()
             const target = pick(pageData.posts)
-            if (target !== undefined) navigate({ ...r, id: target.id }, { replace: true })
+            if (target !== undefined)
+                navigate({ ...r, id: target.id, origin: { ...r.origin, pid } }, { replace: true })
         },
         () => {
             // A failed boundary fetch is silent; the button stays enabled

@@ -111,7 +111,7 @@ export function ensurePage(col: Collection, pid: number): Promise<GalleryPage> {
                 // Pages are sorted by pid, so the highest loaded page is the
                 // last one (the empty page itself is not stored).
                 const highest = col.pages[col.pages.length - 1]
-                col.lastPagePID = Math.max(col.lastPagePID, highest?.pid ?? 0)
+                col.lastPagePID = highest?.pid ?? 0
                 return { pid, posts: [] }
             }
             col.lastPagePID = Math.max(col.lastPagePID, result.lastPagePID)

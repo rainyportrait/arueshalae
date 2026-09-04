@@ -358,7 +358,16 @@ function Filmstrip({
         }
         return div(
             { class: clsx("contents") },
-            loadedPosts(g).map((post) => Thumb({ post, origin, activeId, vertical })),
+            g.pages.flatMap((page) =>
+                page.posts.map((post) =>
+                    Thumb({
+                        post,
+                        origin: { ...origin, pid: page.pid },
+                        activeId,
+                        vertical,
+                    }),
+                ),
+            ),
         )
     }
     // Scroll the active thumb into view whenever the active post or the

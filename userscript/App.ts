@@ -17,6 +17,7 @@ import { favorites, favoritesLoading } from "./state/favorites.ts"
 import { galleryFocus } from "./state/gallery.ts"
 import { list, listLoading } from "./state/list.ts"
 import { pageLoading } from "./state/loading.ts"
+import { applyRestore, rememberScroll, scrollRestore } from "./state/scroll.ts"
 
 const { div, main } = van.tags
 
@@ -41,16 +42,26 @@ function LoadingBar() {
 // settled, so the error screen (with retry) replaces the old page instead of
 // holding it forever.
 //
-// A stale "ready" payload can never satisfy screenReady: the state modules
-// are imported before this one, so their trigger derives are registered first
-// and bump their pending flag before this derive evaluates, right after a
-// route change.
+// screenReady asks for a payload that belongs to the current route (the ready
+// payload records the route it was loaded with — the list's `pid`/`query`),
+// not merely for "not loading": a replay (state/list.ts) can therefore flip
+// the screen instantly to a cached page, revalidation in flight or not,
+// while a fetch for a different route keeps the previous page up until it
+// settles. (Without a replay, a ready payload always belongs to the previous
+// route right after a route change, so the two formulations agree.)
 const shownType = van.state<Route["type"]>(route.val.type)
 
 function screenReady(t: Route["type"]): boolean {
     switch (t) {
-        case "postlist":
-            return !listLoading.val && list.val.status !== "loading"
+        case "postlist": {
+            const r = route.val
+            return (
+                r.type === "postlist" &&
+                list.val.status === "ready" &&
+                list.val.pid === r.pid &&
+                list.val.query === r.tags
+            )
+        }
         case "postdetails":
             return !detailsLoading.val && details.val.status !== "loading"
         case "favorites":
@@ -66,12 +77,44 @@ van.derive(() => {
     const t = route.val.type
     if (t !== shownType.val && screenReady(t)) {
         shownType.val = t
-        // A different page type is a full page change; start it at the top.
-        // (Same-type navigations — search, page turns, gallery steps — keep
-        // the current scroll position.)
-        window.scrollTo(0, 0)
+        // A different page type is a full page change; start it at the top —
+        // unless a back/forward restore is pending: this settle just
+        // satisfied it, and the restore derive below scrolls to the
+        // remembered offset instead. (Same-type navigations — search, page
+        // turns, gallery steps — keep the current scroll position.)
+        if (scrollRestore.val === null) window.scrollTo(0, 0)
     }
 })
+
+// Apply the pending back/forward scroll restore (state/scroll.ts) as soon as
+// the page the route points at is on screen: the shown type has caught up
+// (a cross-type back waits for the target to settle or replay) and its data
+// isn't loading. A same-type back (a page turn) never flips the shown type,
+// so only this derive restores there.
+van.derive(() => {
+    if (scrollRestore.val === null) return
+    const t = route.val.type
+    if (shownType.val === t && screenReady(t)) applyRestore()
+})
+
+// Keep the current history entry's remembered offset fresh (state/scroll.ts):
+// rAF-throttled, and only while the screen shows the current route's settled
+// page — mid-fetch it still shows the previous page, and that offset belongs
+// to that page's entry, not the one the route already points at.
+let scrollCaptureQueued = false
+window.addEventListener(
+    "scroll",
+    () => {
+        if (scrollCaptureQueued) return
+        scrollCaptureQueued = true
+        requestAnimationFrame(() => {
+            scrollCaptureQueued = false
+            const t = route.val.type
+            if (shownType.val === t && screenReady(t)) rememberScroll()
+        })
+    },
+    { passive: true },
+)
 
 function makePage(type: Route["type"]): Node {
     switch (type) {

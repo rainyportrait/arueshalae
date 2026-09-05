@@ -3,7 +3,7 @@ import van from "vanjs-core"
 import { type PostList, extractPostList, fetchPostList } from "../api/post-list.ts"
 import { type Tag, extractTags } from "../api/tags.ts"
 import { navigate, route } from "../router.ts"
-import { type Loadable, routeLoader } from "./load.ts"
+import { type Loadable, type Replay, routeLoader } from "./load.ts"
 
 // The rule34.xxx post list is paginated 42 posts per page (pid = 42 * (page - 1)).
 export const PAGE_SIZE = 42
@@ -34,6 +34,47 @@ export type ListState = Loadable<ListReady>
 
 export const list = van.state<ListState>({ status: "loading" })
 
+// The last few list pages, keyed by route, so a back/forward to a page that
+// was already loaded renders from the stale payload instantly (routeLoader
+// replays it) and revalidates in the background. The feed moves, so entries
+// expire: a stale hit still replays instantly but also refetches, and a
+// revalidation whose posts list is unchanged settles without re-rendering.
+const REPLAY_CAP = 5
+const REPLAY_FRESH_FOR_MS = 30_000
+const replay = new Map<string, { at: number; data: ListReady }>()
+
+function replayKey(r: { pid: number; tags: string | undefined }): string {
+    return `${r.pid}\u0000${r.tags ?? ""}`
+}
+function replayGet(key: string): { at: number; data: ListReady } | undefined {
+    const entry = replay.get(key)
+    if (entry === undefined) return undefined
+    // LRU: re-insert so the cap evicts the least recently used page.
+    replay.delete(key)
+    replay.set(key, entry)
+    return entry
+}
+function replaySet(key: string, data: ListReady): void {
+    replay.delete(key)
+    replay.set(key, { at: Date.now(), data })
+    while (replay.size > REPLAY_CAP) {
+        const oldest = replay.keys().next().value
+        if (oldest === undefined) break
+        replay.delete(oldest)
+    }
+}
+
+// A revalidated page is "the same" when it shows the same posts in the same
+// order (and the same page count): scores and tag counts drift invisibly,
+// only the post sequence is what the user is looking at.
+function sameList(fetched: ListReady, cached: ListReady): boolean {
+    if (fetched.posts.length !== cached.posts.length) return false
+    for (let i = 0; i < fetched.posts.length; i += 1) {
+        if (fetched.posts[i].id !== cached.posts[i].id) return false
+    }
+    return fetched.lastPagePID === cached.lastPagePID
+}
+
 export const { pending: listLoading, reload: reloadList } = routeLoader<ListReady, "postlist">(
     list,
     "postlist",
@@ -54,6 +95,13 @@ export const { pending: listLoading, reload: reloadList } = routeLoader<ListRead
         if (!document.querySelector(".image-list")) return null
         const { posts, lastPagePID } = extractPostList(document, r.pid)
         return { posts, lastPagePID, tags: extractTags(document), pid: r.pid, query: r.tags }
+    },
+    {
+        key: replayKey,
+        get: replayGet,
+        set: replaySet,
+        freshFor: REPLAY_FRESH_FOR_MS,
+        same: sameList,
     },
 )
 

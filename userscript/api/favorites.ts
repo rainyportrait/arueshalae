@@ -17,9 +17,22 @@ export async function fetchFavorites(id: number, pid: number): Promise<Favorites
 // Extract the posts and the last page offset from a favorites page. The posts
 // reuse the shared `.thumb` extraction (the per-post anchors carry real
 // hrefs, and the "Remove" link sits outside the `.thumb` span, so it is
-// skipped automatically).
+// skipped automatically), then repair the tag list the site corrupts.
 export function extractFavorites(doc: Document, currentPid: number): Favorites {
-    return { posts: collectImageLists(doc), lastPagePID: extractLastPagePID(doc, currentPid) }
+    const posts = collectImageLists(doc).map(repairTruncatedLastTag)
+    return { posts, lastPagePID: extractLastPagePID(doc, currentPid) }
+}
+
+// The favorites view mangles each post's tag string: the full list is
+// stripped of exactly one character from the front and one from the back
+// (the front drop is unrecoverable — `1080p` renders as `080p`, `1boy` as
+// `boy`). The back drop always truncates the last tag by one character, and a
+// last token of `vide` can only be `video` cut that way, so we restore it.
+// Left alone, a post whose list ends in `video` silently loses the animated
+// highlight on the favorites grid.
+function repairTruncatedLastTag(post: Post): Post {
+    if (post.tags[post.tags.length - 1] !== "vide") return post
+    return { ...post, tags: [...post.tags.slice(0, -1), "video"] }
 }
 
 // --- Mutations ------------------------------------------------------------

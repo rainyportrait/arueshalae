@@ -1,6 +1,7 @@
 import van from "vanjs-core"
 
 import { positiveInt } from "./api/parse.ts"
+import { scrollRestore } from "./state/scroll.ts"
 
 // Where a post was opened from: a post list search (or the home feed, whose
 // tags are undefined) or a user's favorites page. Rides on the post's URL so
@@ -165,8 +166,17 @@ export const returnTo = van.state<Route | null>(null)
 // SPA navigation: push the new URL onto the history and update the route.
 // With replace set, the current entry is replaced instead — used by the
 // gallery, whose steps shouldn't pile up: the browser back button exits the
-// gallery to the list it came from rather than stepping back one post. The
-// guard avoids a redundant entry when the URL is unchanged.
+// gallery to the list it came from rather than stepping back one post.
+//
+// Scroll contract (state/scroll.ts): history traversal restores the
+// remembered offset, content-driven navigation starts the target page at
+// the top — this is the latter half. The top is published after the push,
+// whose enter() just voided any pending restore (a traversal's offset
+// belongs to the entry being left), and the restore machinery applies it
+// only when the target page settles or replays, so the old page — still up
+// during the fetch — never visibly jumps. Every link, form, and keyboard
+// navigation in the app flows through here, so no caller has to know about
+// it. The guard avoids a redundant entry when the URL is unchanged.
 export function navigate(next: Route, opts: { replace?: boolean } = {}): void {
     const url = routeToUrl(next)
     if (url === window.location.pathname + window.location.search) return
@@ -181,17 +191,25 @@ export function navigate(next: Route, opts: { replace?: boolean } = {}): void {
         // can bring the user back here.
         if (next.type === "login") returnTo.val = route.val
         route.val = next
+        // The content-driven half of the scroll contract: set after the
+        // push, whose enter() (state/scroll.ts) just voided any pending
+        // restore — this navigation supersedes it.
+        scrollRestore.val = 0
     }
     if (isGalleryStep && document.startViewTransition) document.startViewTransition(update)
     else update()
 }
 
 // Replace the current URL and route without adding a history entry. Used for
-// normalization redirects where the current URL is an alias or invalid for the
-// current state (the bare site root, the login route while authenticated).
+// normalization redirects where the current URL is an alias or invalid for
+// the current state (the bare site root, the login route while authenticated).
+// App-driven like navigate, so it starts the target at the top and
+// supersedes any traversal restore pending for the entry it rewrites (the
+// login bounce rewrites a pre-login entry the back button just arrived on).
 export function redirect(next: Route): void {
     window.history.replaceState(null, "", routeToUrl(next))
     route.val = next
+    scrollRestore.val = 0
 }
 
 // Browser back/forward: the URL has already changed, just re-parse it.

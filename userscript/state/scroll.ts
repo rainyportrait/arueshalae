@@ -13,10 +13,12 @@ import van from "vanjs-core"
 //
 // The current offset is remembered continuously (the app's gated scroll
 // listener calls rememberScroll) and snapshotted before every push, so a
-// click can never lose the last frame's scroll. Back/forward publishes the
-// arriving entry's offset to scrollRestore; the app applies it once that
-// page is actually on screen (App.ts), since the visible page lags the route
-// until its data settles or replays.
+// click can never lose the last frame's scroll. History traversal publishes
+// the arriving entry's offset to scrollRestore; every content-driven
+// navigation (the router's navigate/redirect) publishes 0, so its target
+// page starts at the top. The app applies the offset once that page is
+// actually on screen (App.ts), since the visible page lags the route until
+// its data settles or replays.
 
 const KEY = "arue-scroll"
 const positions = new Map<number, number>()
@@ -39,8 +41,11 @@ function stamp(): number {
 
 current = stamp()
 
-// The offset a back/forward wants the page restored to; null while nothing
-// is pending. A navigation (push or replace) supersedes it.
+// The offset the window should scroll to once the current entry's page is
+// on screen: a history traversal publishes the arriving entry's remembered
+// offset, and every content-driven navigation publishes 0 (the new page
+// starts at the top). Null while nothing is pending. A navigation (push or
+// replace) supersedes it.
 export const scrollRestore = van.state<number | null>(null)
 
 // Record the current window offset under the current entry.

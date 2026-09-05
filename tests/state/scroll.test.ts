@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest"
 // evaluation in this file, so the modules are imported once (no resetModules)
 // and only the DOM/history is reset between tests; the popstate below then
 // re-syncs the route with the reset URL, as a real navigation would.
-import { navigate } from "../../userscript/router.ts"
+import { navigate, redirect } from "../../userscript/router.ts"
 import { applyRestore, rememberScroll, scrollRestore } from "../../userscript/state/scroll.ts"
 import { flushVan, pushForeignEntry, resetDom, setEntryState, setTestScrollY } from "../dom.ts"
 
@@ -63,18 +63,52 @@ describe("scroll memory", () => {
         expect(scrollRestore.val).toBe(100)
     })
 
-    it("clears a pending restore when a push navigation supersedes it", async () => {
+    it("queues a top restore for a page turn and keeps the outgoing offset for back", async () => {
+        setTestScrollY(100)
+        rememberScroll()
+        navigate({ type: "postlist", tags: undefined, pid: 42 })
+        expect(location.pathname + location.search).toBe("/index.php?page=post&s=list&pid=42")
+        expect(scrollRestore.val).toBe(0)
+
+        applyRestore()
+        await flushVan()
+
+        expect(scrollRestore.val).toBeNull()
+        expect(window.scrollY).toBe(0)
+
+        history.back()
+        expect(scrollRestore.val).toBe(100)
+    })
+
+    it("queues a top restore for a favorites page turn too", async () => {
+        setTestScrollY(300)
+        rememberScroll()
+        navigate({ type: "favorites", id: 1, pid: 50 })
+        expect(location.pathname + location.search).toBe(
+            "/index.php?page=favorites&s=view&id=1&pid=50",
+        )
+        expect(scrollRestore.val).toBe(0)
+
+        applyRestore()
+        await flushVan()
+
+        expect(window.scrollY).toBe(0)
+    })
+
+    it("supersedes a pending back/forward restore with its own top request", () => {
         setTestScrollY(77)
         rememberScroll()
         navigate(post(2))
         history.back()
         expect(scrollRestore.val).toBe(77)
 
+        // The push voids the pending back/forward restore; the navigation's
+        // own top request is set afterwards, so it wins.
         navigate({ type: "postlist", tags: "fresh", pid: 0 })
-        expect(scrollRestore.val).toBeNull()
+        expect(scrollRestore.val).toBe(0)
     })
 
-    it("clears a pending restore when the current entry is replaced", async () => {
+    it("a replace navigation supersedes a pending back/forward restore too", async () => {
         setTestScrollY(200)
         rememberScroll()
         navigate(post(7))
@@ -83,7 +117,30 @@ describe("scroll memory", () => {
 
         setTestScrollY(350)
         navigate(post(8), { replace: true })
-        expect(scrollRestore.val).toBeNull()
+        expect(scrollRestore.val).toBe(0)
+    })
+
+    it("starts every content-driven navigation at the top", async () => {
+        setTestScrollY(600)
+        rememberScroll()
+        navigate(post(9))
+        expect(scrollRestore.val).toBe(0)
+
+        applyRestore()
+        await flushVan()
+
+        expect(window.scrollY).toBe(0)
+
+        // The outgoing offset is still remembered for back.
+        history.back()
+        expect(scrollRestore.val).toBe(600)
+    })
+
+    it("a redirect also starts its target at the top", () => {
+        setTestScrollY(600)
+        rememberScroll()
+        redirect(post(9))
+        expect(scrollRestore.val).toBe(0)
     })
 
     it("stamps an untracked entry on arrival, merging foreign state, and restores nothing", async () => {
@@ -134,6 +191,7 @@ describe("scroll memory", () => {
         setTestScrollY(0)
         applyRestore() // schedules the microtask for the list entry
         navigate({ type: "postlist", tags: "moved-on", pid: 0 })
+        expect(scrollRestore.val).toBe(0) // the new page's own top request
 
         await flushVan()
         expect(window.scrollY).toBe(0)

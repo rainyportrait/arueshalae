@@ -77,20 +77,22 @@ van.derive(() => {
     const t = route.val.type
     if (t !== shownType.val && screenReady(t)) {
         shownType.val = t
-        // A different page type is a full page change; start it at the top —
-        // unless a back/forward restore is pending: this settle just
-        // satisfied it, and the restore derive below scrolls to the
-        // remembered offset instead. (Same-type navigations — search, page
-        // turns, gallery steps — keep the current scroll position.)
+        // A different page type is a full page change. Every content-driven
+        // navigation queues a top restore (router.ts), which the restore
+        // derive below applies; this immediate scroll is only the fallback
+        // for a traversal onto a different-type page with no remembered
+        // offset (an entry the app never navigated to itself).
         if (scrollRestore.val === null) window.scrollTo(0, 0)
     }
 })
 
-// Apply the pending back/forward scroll restore (state/scroll.ts) as soon as
-// the page the route points at is on screen: the shown type has caught up
-// (a cross-type back waits for the target to settle or replay) and its data
-// isn't loading. A same-type back (a page turn) never flips the shown type,
-// so only this derive restores there.
+// Apply the pending scroll restore (state/scroll.ts) — the remembered
+// offset of a history traversal or the top that every content-driven
+// navigation asks for — as soon as the page the route points at is on
+// screen: the shown type has caught up (a cross-type back waits for the
+// target to settle or replay) and its data isn't loading. A same-type
+// traversal (back one page) never flips the shown type, so only this derive
+// restores there.
 van.derive(() => {
     if (scrollRestore.val === null) return
     const t = route.val.type

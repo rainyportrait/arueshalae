@@ -39,10 +39,26 @@ export function pageSize(origin: PostOrigin): number {
     return origin.kind === "list" ? PAGE_SIZE : FAVORITES_PAGE_SIZE
 }
 
+// A loaded post together with the pid of the page it came from: the
+// filmstrip's thumb links and the step's origin need the page, not just the
+// post.
+export type LoadedPost = { post: Post; pid: number }
+
 // The collection's loaded posts in gallery order (the pages flattened in pid
-// order). Shared by the step/boundary logic, the prefetch, and the filmstrip.
-export function loadedPosts(g: Gallery): Post[] {
-    return g.pages.flatMap((p) => p.posts)
+// order). The feed can shift between page fetches (new posts land, others are
+// removed), so the same post can sit in two stored pages — the first
+// occurrence (lowest pid) wins, so the flattened order never contains a post
+// twice. Shared by the step/boundary logic, the prefetch, and the filmstrip.
+export function loadedPosts(g: Gallery): LoadedPost[] {
+    const seen = new Set<number>()
+    const posts: LoadedPost[] = []
+    for (const page of g.pages)
+        for (const post of page.posts)
+            if (!seen.has(post.id)) {
+                seen.add(post.id)
+                posts.push({ post, pid: page.pid })
+            }
+    return posts
 }
 
 // The live collection, or null before the first gallery route.

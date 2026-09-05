@@ -91,6 +91,86 @@ describe("gallery pagination", () => {
         })
         expect(window.location.search).toContain("pid=42")
     })
+
+    it("deduplicates a post that the feed shift put into two pages", async () => {
+        api.fetchPostList.mockImplementation((_tags: string | undefined, pid: number) =>
+            Promise.resolve({
+                // The feed shifted between the two fetches: page 42's window
+                // starts inside page 0's id range, so posts 2 and 3 repeat.
+                posts: pid === 0 ? [post(1), post(2), post(3)] : [post(2), post(3), post(4)],
+                lastPagePID: 42,
+                tags: [],
+            }),
+        )
+        const collectionModule = await import("../../userscript/state/gallery-collection.ts")
+        const col = collectionModule.collectionFor({ kind: "list", tags: "test", pid: 0 })
+
+        await collectionModule.ensurePage(col, 0)
+        await collectionModule.ensurePage(col, 42)
+
+        const loaded = collectionModule.loadedPosts(col)
+        expect(loaded.map((entry) => entry.post.id)).toEqual([1, 2, 3, 4])
+        // The repeat keeps the first page's copy (and its pid for the links).
+        expect(loaded.map((entry) => entry.pid)).toEqual([0, 0, 0, 42])
+    })
+
+    it("lands a boundary step on the first unseen post of a shifted page", async () => {
+        api.fetchPostList.mockImplementation((_tags: string | undefined, pid: number) =>
+            Promise.resolve({
+                // Posts 2 and 3 repeat on page 42: the boundary post (2) is
+                // already in the strip, so the step must skip past it.
+                posts: pid === 0 ? [post(1), post(2), post(3)] : [post(2), post(3), post(4)],
+                lastPagePID: 42,
+                tags: [],
+            }),
+        )
+        const collectionModule = await import("../../userscript/state/gallery-collection.ts")
+        const origin = { kind: "list" as const, tags: "test", pid: 0 }
+        const col = collectionModule.collectionFor(origin)
+        await collectionModule.ensurePage(col, 0)
+
+        const { route } = await import("../../userscript/router.ts")
+        route.val = { type: "postdetails", id: 3, tags: "test", origin }
+        const { step } = await import("../../userscript/state/gallery.ts")
+        step(1)
+        await flushVan()
+
+        expect(route.val).toEqual({
+            type: "postdetails",
+            id: 4,
+            tags: "test",
+            origin: { kind: "list", tags: "test", pid: 42 },
+        })
+    })
+
+    it("keeps fetching past a fully duplicated boundary page", async () => {
+        api.fetchPostList.mockImplementation((_tags: string | undefined, pid: number) =>
+            Promise.resolve({
+                // The feed shifted a full page: page 42 repeats page 0
+                // entirely, so the fresh post only appears on page 84.
+                posts: pid === 84 ? [post(2)] : [post(1)],
+                lastPagePID: 84,
+                tags: [],
+            }),
+        )
+        const collectionModule = await import("../../userscript/state/gallery-collection.ts")
+        const origin = { kind: "list" as const, tags: "test", pid: 0 }
+        const col = collectionModule.collectionFor(origin)
+        await collectionModule.ensurePage(col, 0)
+
+        const { route } = await import("../../userscript/router.ts")
+        route.val = { type: "postdetails", id: 1, tags: "test", origin }
+        const { step } = await import("../../userscript/state/gallery.ts")
+        step(1)
+        await flushVan()
+
+        expect(route.val).toEqual({
+            type: "postdetails",
+            id: 2,
+            tags: "test",
+            origin: { kind: "list", tags: "test", pid: 84 },
+        })
+    })
 })
 
 describe("finding the active post after the origin page loads", () => {

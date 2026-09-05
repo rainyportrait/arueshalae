@@ -312,7 +312,7 @@ function Filmstrip({
     const activeIndex = () => {
         const g = gallery.val
         if (g.status !== "ready") return -1
-        return loadedPosts(g).findIndex((p) => p.id === activeId())
+        return loadedPosts(g).findIndex((entry) => entry.post.id === activeId())
     }
     // The position counter. A live node: passed to the header as a function
     // (never called) so vanjs wraps it in a binding — re-running on post
@@ -354,17 +354,17 @@ function Filmstrip({
                 ),
             )
         }
+        // loadedPosts dedupes posts the feed shift put into two pages, so
+        // the strip never shows a thumb twice.
         return div(
             { class: clsx("contents") },
-            g.pages.flatMap((page) =>
-                page.posts.map((post) =>
-                    Thumb({
-                        post,
-                        origin: { ...origin, pid: page.pid },
-                        activeId,
-                        vertical,
-                    }),
-                ),
+            loadedPosts(g).map(({ post, pid }) =>
+                Thumb({
+                    post,
+                    origin: { ...origin, pid },
+                    activeId,
+                    vertical,
+                }),
             ),
         )
     }

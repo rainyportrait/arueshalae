@@ -88,6 +88,42 @@ describe("PostDetails gallery", () => {
         ])
     })
 
+    it("shows a post the feed shift put into two pages only once", async () => {
+        const origin = { kind: "list" as const, tags: "test", pid: 0 }
+        const { details: detailsState } = await import("../../userscript/state/details.ts")
+        const { gallery } = await import("../../userscript/state/gallery.ts")
+        detailsState.val = { status: "ready", post: details(3), origin }
+        gallery.val = {
+            status: "ready",
+            origin,
+            pages: [
+                { pid: 0, posts: [post(1), post(2), post(3)] },
+                // The feed shifted before page 42 fetched: its window starts
+                // inside page 0's id range, so posts 2 and 3 repeat.
+                { pid: 42, posts: [post(2), post(3), post(4)] },
+            ],
+            lastPagePID: 42,
+        }
+        const { PostDetails } = await import("../../userscript/PostDetails.ts")
+
+        document.body.append(PostDetails())
+        await flushVan()
+
+        const links = [...document.querySelectorAll<HTMLAnchorElement>('a[title^="Post #"]')]
+        // Each post once, with the pid of the first page that carries it.
+        expect(links.map((link) => link.getAttribute("href"))).toEqual([
+            "/index.php?page=post&s=view&id=1&tags=test&pid=0",
+            "/index.php?page=post&s=view&id=2&tags=test&pid=0",
+            "/index.php?page=post&s=view&id=3&tags=test&pid=0",
+            "/index.php?page=post&s=view&id=4&tags=test&pid=42",
+        ])
+        // The counter counts deduped posts (the active one is post 3).
+        const counter = [...document.querySelectorAll("span")].find((span) =>
+            /^\d+ \/ \d+$/.test(span.textContent ?? ""),
+        )
+        expect(counter?.textContent).toBe("3 / 4")
+    })
+
     it("shows the counter and enables the arrows once the search finds the active post", async () => {
         // The active post is not on the origin page: the gallery's post
         // search loads the following page, which contains it. The route stays

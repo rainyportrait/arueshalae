@@ -1,11 +1,11 @@
 import van from "vanjs-core"
 
-import { type Post } from "../api/post-list.ts"
 import { type PostOrigin, type Route, navigate, route } from "../router.ts"
 import {
     type Collection,
     type Gallery,
     type GalleryPage,
+    type LoadedPost,
     collectionFor,
     ensurePage,
     getCollection,
@@ -42,7 +42,7 @@ type GalleryPostDetailsRoute = PostDetailsRoute & { origin: PostOrigin }
 function stepContext(): {
     r: GalleryPostDetailsRoute
     col: Collection
-    posts: Post[]
+    posts: LoadedPost[]
     index: number
     size: number
     first: GalleryPage | undefined
@@ -54,7 +54,7 @@ function stepContext(): {
     const col = getCollection()
     if (col === null || originKey(col.origin) !== originKey(origin)) return null
     const posts = loadedPosts(col)
-    const index = posts.findIndex((p) => p.id === r.id)
+    const index = posts.findIndex((entry) => entry.post.id === r.id)
     if (index === -1) return null
     return {
         r: { ...r, origin },
@@ -129,7 +129,8 @@ function loadOrigin(origin: PostOrigin): void {
     )
 }
 
-// A hard cap on the page search below. The origin page is a fresh fetch, but
+// A hard cap on the page searches below (the active-post search and boundary
+// steps). The origin page is a fresh fetch, but
 // the list page the post was opened from is an older snapshot: on a busy feed
 // newer posts may have pushed the post onto a later page in between. The post
 // is then missing from the collection, stepContext() bails, and both arrows
@@ -173,64 +174,103 @@ export function reloadGallery(): void {
     if (r.type === "postdetails" && r.origin !== undefined) loadOrigin(r.origin)
 }
 
-// Step to the adjacent post in the collection. Inside a loaded page this is
-// a replace navigation (the URL changes but no history entry is added, so
-// the browser back button exits the gallery); at a page boundary the
-// adjacent page is fetched first and the step lands on its first/last post.
+// Step to the adjacent post in the collection. Each step is a replace
+// navigation (the URL changes but no history entry is added, so the browser
+// back button exits the gallery); at a page boundary the adjacent page is
+// fetched first and the step lands on the first post in the direction that
+// the filmstrip doesn't show yet (see boundaryStep).
 export function step(delta: 1 | -1): void {
     const ctx = stepContext()
     if (ctx === null) return
-    const target = ctx.index + delta
-    if (target >= 0 && target < ctx.posts.length) {
-        const targetPost = ctx.posts[target]
-        const targetPage = ctx.col.pages.find((page) =>
-            page.posts.some((post) => post.id === targetPost.id),
-        )
-        // Replace, not push: gallery steps shouldn't pile up in the history,
-        // so the browser back button exits the gallery to the list.
+    const target = ctx.posts[ctx.index + delta]
+    if (target !== undefined) {
         navigate(
             {
                 ...ctx.r,
-                id: targetPost.id,
-                origin:
-                    targetPage === undefined
-                        ? ctx.r.origin
-                        : { ...ctx.r.origin, pid: targetPage.pid },
+                id: target.post.id,
+                // The entry carries the page the post came from, so the
+                // origin pid can follow the post without a page lookup.
+                origin: { ...ctx.r.origin, pid: target.pid },
             },
             { replace: true },
         )
         return
     }
     if (delta === 1 && ctx.last !== undefined && ctx.last.pid + ctx.size <= ctx.col.lastPagePID) {
-        void boundaryStep(ctx.col, ctx.last.pid + ctx.size, ctx.r, (page) => page[0])
+        startBoundaryStep(ctx.col, ctx.last.pid + ctx.size, ctx.r, 1)
     } else if (delta === -1 && ctx.first !== undefined && ctx.first.pid - ctx.size >= 0) {
-        void boundaryStep(ctx.col, ctx.first.pid - ctx.size, ctx.r, (page) => page.at(-1))
+        startBoundaryStep(ctx.col, ctx.first.pid - ctx.size, ctx.r, -1)
     }
 }
 
-// At a page boundary, fetch the adjacent page, publish it (so the filmstrip
-// grows), then land on its first/last post.
-function boundaryStep(
+// Boundary searches in flight, per collection: rapid presses shouldn't
+// stack redundant fetch loops on the same boundary (a second press would
+// land on the same post as the first anyway).
+const boundaryStepsInFlight = new Set<Collection>()
+
+function startBoundaryStep(
     col: Collection,
     pid: number,
     r: GalleryPostDetailsRoute,
-    pick: (posts: Post[]) => Post | undefined,
+    dir: 1 | -1,
 ): void {
-    void ensurePage(col, pid).then(
-        (pageData) => {
-            // The collection may have been replaced while the page loaded
-            // (the user searched something else); only act if it didn't.
-            if (!isCurrent(col)) return
-            publish()
-            const target = pick(pageData.posts)
-            if (target !== undefined)
-                navigate({ ...r, id: target.id, origin: { ...r.origin, pid } }, { replace: true })
-        },
-        () => {
+    if (boundaryStepsInFlight.has(col)) return
+    boundaryStepsInFlight.add(col)
+    void boundaryStep(col, pid, r, dir).finally(() => {
+        boundaryStepsInFlight.delete(col)
+    })
+}
+
+// At a page boundary, fetch the adjacent page, publish it (so the filmstrip
+// grows), then land on its first post in the step direction that the filmstrip
+// doesn't show yet. The feed can shift between fetches, so the new page's edge
+// posts can duplicate already-loaded pages (the same post in two pid windows):
+// the step skips those to the first fresh post. A page that is entirely
+// duplicates (the feed shifted more than a page size) fetches the next one in
+// the step direction instead — the same bounded search as findActivePost.
+async function boundaryStep(
+    col: Collection,
+    pid: number,
+    r: GalleryPostDetailsRoute,
+    dir: 1 | -1,
+): Promise<void> {
+    const size = pageSize(r.origin)
+    for (let attempt = 0; attempt < FIND_POST_PAGE_LIMIT; attempt++) {
+        if (!isCurrent(col)) return
+        let page: GalleryPage
+        try {
+            page = await ensurePage(col, pid)
+        } catch {
             // A failed boundary fetch is silent; the button stays enabled
             // and the next press retries.
-        },
-    )
+            return
+        }
+        // The collection may have been replaced while the page loaded
+        // (the user searched something else); only act if it didn't.
+        if (!isCurrent(col)) return
+        publish()
+        // Everything the filmstrip already showed: all loaded pages except
+        // this one (a shifted feed can repeat this page's posts under other
+        // pids; those copies are visible, so they count as seen).
+        const seen = new Set<number>()
+        for (const stored of col.pages)
+            if (stored.pid !== page.pid) for (const post of stored.posts) seen.add(post.id)
+        const candidates = dir === 1 ? page.posts : [...page.posts].reverse()
+        const target = candidates.find((post) => !seen.has(post.id))
+        if (target !== undefined) {
+            navigate(
+                { ...r, id: target.id, origin: { ...r.origin, pid: page.pid } },
+                { replace: true },
+            )
+            return
+        }
+        // The whole page is duplicates: nothing fresh to land on. An empty
+        // page marks the collection's edge; otherwise keep fetching in the
+        // step direction.
+        if (page.posts.length === 0) return
+        pid += dir * size
+        if (pid < 0) return
+    }
 }
 
 export function canStep(delta: 1 | -1): boolean {
@@ -253,12 +293,12 @@ van.derive(() => {
     const g = gallery.val
     if (g.status !== "ready") return
     const posts = loadedPosts(g)
-    const index = posts.findIndex((p) => p.id === r.id)
+    const index = posts.findIndex((entry) => entry.post.id === r.id)
     if (index === -1) return
     const prev = posts[index - 1]
     const next = posts[index + 1]
-    if (prev !== undefined) void cachedPostDetails(prev.id)
-    if (next !== undefined) void cachedPostDetails(next.id)
+    if (prev !== undefined) void cachedPostDetails(prev.post.id)
+    if (next !== undefined) void cachedPostDetails(next.post.id)
 })
 
 // Gallery keys. Installed once at module load; the handler bails outside a

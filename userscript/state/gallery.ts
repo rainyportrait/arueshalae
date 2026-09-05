@@ -63,7 +63,7 @@ function stepContext(): {
         index,
         size: pageSize(origin),
         first: col.pages[0],
-        last: col.pages[col.pages.length - 1],
+        last: col.pages.at(-1),
     }
 }
 
@@ -162,7 +162,7 @@ export function step(delta: 1 | -1): void {
     if (delta === 1 && ctx.last !== undefined && ctx.last.pid + ctx.size <= ctx.col.lastPagePID) {
         void boundaryStep(ctx.col, ctx.last.pid + ctx.size, ctx.r, (page) => page[0])
     } else if (delta === -1 && ctx.first !== undefined && ctx.first.pid - ctx.size >= 0) {
-        void boundaryStep(ctx.col, ctx.first.pid - ctx.size, ctx.r, (page) => page[page.length - 1])
+        void boundaryStep(ctx.col, ctx.first.pid - ctx.size, ctx.r, (page) => page.at(-1))
     }
 }
 

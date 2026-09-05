@@ -31,7 +31,7 @@ export function extractFavorites(doc: Document, currentPid: number): Favorites {
 // Left alone, a post whose list ends in `video` silently loses the animated
 // highlight on the favorites grid.
 function repairTruncatedLastTag(post: Post): Post {
-    if (post.tags[post.tags.length - 1] !== "vide") return post
+    if (post.tags.at(-1) !== "vide") return post
     return { ...post, tags: [...post.tags.slice(0, -1), "video"] }
 }
 

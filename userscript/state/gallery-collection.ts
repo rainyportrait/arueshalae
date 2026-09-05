@@ -110,7 +110,7 @@ export function ensurePage(col: Collection, pid: number): Promise<GalleryPage> {
                 // attempt (e.g. after new favorites) refetches it.
                 // Pages are sorted by pid, so the highest loaded page is the
                 // last one (the empty page itself is not stored).
-                const highest = col.pages[col.pages.length - 1]
+                const highest = col.pages.at(-1)
                 col.lastPagePID = highest?.pid ?? 0
                 return { pid, posts: [] }
             }
@@ -118,7 +118,7 @@ export function ensurePage(col: Collection, pid: number): Promise<GalleryPage> {
             col.pages = [
                 ...col.pages.filter((p) => p.pid !== pid),
                 { pid, posts: result.posts },
-            ].sort((a, b) => a.pid - b.pid)
+            ].toSorted((a, b) => a.pid - b.pid)
             return col.pages.find((p) => p.pid === pid)!
         },
         (error: unknown) => {

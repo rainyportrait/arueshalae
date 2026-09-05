@@ -66,7 +66,7 @@ async function runBuild() {
         outfile: "target/userscript/arueshalae.user.js",
         format: "iife",
         platform: "browser",
-        target: "es2020",
+        target: "es2024",
         minify: false,
         banner: {
             js: `// ==UserScript==

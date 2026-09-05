@@ -24,18 +24,7 @@ export const TAG_META: Record<TagType, TagMeta> = {
 // Group a flat tag list by type, preserving first-seen order of each type and
 // the tag order within each type.
 function groupByType(tags: Tag[]): [TagType, Tag[]][] {
-    const order: TagType[] = []
-    const groups = new Map<TagType, Tag[]>()
-    for (const tag of tags) {
-        let group = groups.get(tag.type)
-        if (!group) {
-            group = []
-            groups.set(tag.type, group)
-            order.push(tag.type)
-        }
-        group.push(tag)
-    }
-    return order.map((type) => [type, groups.get(type)!])
+    return Object.entries(Object.groupBy(tags, (tag) => tag.type)) as [TagType, Tag[]][]
 }
 
 function TagLink({ tag }: { tag: Tag }) {

@@ -2,7 +2,7 @@ import van from "vanjs-core"
 
 import { Link } from "./Link.ts"
 import clsx from "./clsx.ts"
-import { type Route, navigate, routeToUrl } from "./router.ts"
+import { type Route, navigate, route, routeToUrl } from "./router.ts"
 
 const { button, div, form, input, nav, span } = van.tags
 
@@ -254,5 +254,38 @@ export function Pagination({ currentPage, totalPages, routeForPage }: Pagination
         }
     })
     observer.observe(el)
+
+    // Arrow-key paging: a document-level listener (like PageJump's click
+    // handler) steps the page on screen. It removes itself once the nav
+    // leaves the document, so a page swap doesn't leak it.
+    const onKeydown = (event: KeyboardEvent) => {
+        if (!el.isConnected) {
+            document.removeEventListener("keydown", onKeydown)
+            return
+        }
+        // The list stays on screen while a post details page loads; in that
+        // window the gallery owns the arrows, so only act on list routes.
+        const r = route.val
+        if (r.type !== "postlist" && r.type !== "favorites") return
+        // Unmodified keys only: Ctrl/Cmd/Alt + arrow is the browser's
+        // history navigation.
+        if (event.ctrlKey || event.metaKey || event.altKey) return
+        const target = event.target
+        if (
+            target instanceof HTMLElement &&
+            (target.tagName === "INPUT" ||
+                target.tagName === "TEXTAREA" ||
+                target.isContentEditable)
+        )
+            return
+        if (event.key === "ArrowLeft" && currentPage > 1) {
+            event.preventDefault()
+            navigate(routeForPage(currentPage - 1))
+        } else if (event.key === "ArrowRight" && currentPage < totalPages) {
+            event.preventDefault()
+            navigate(routeForPage(currentPage + 1))
+        }
+    }
+    document.addEventListener("keydown", onKeydown)
     return el
 }

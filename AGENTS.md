@@ -13,9 +13,9 @@ The source files can be found in `./userscript/`.
 
 ## Verification
 
-- There is no automated UI testing (it's a userscript injected into a live site); agents can use
-  chrome-devtools to access a live version of the script. Chrome is set up to automatically reload
-  the built userscript.
+- Run the relevant tests and checks before considering a change complete.
+- agents can use chrome-devtools to access a live version of the script. Chrome is set up to
+  automatically reload the built userscript.
 - Parsing/extraction logic can be verified against the sample HTML in `examples/*.html` (gitignored)
   with a DOM parser.
 - Standard green checks: `pnpm exec tsc --noEmit`, `just build-userscript`,

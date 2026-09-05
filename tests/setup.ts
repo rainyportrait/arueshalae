@@ -18,6 +18,16 @@ const localStorage = {
     },
 }
 
+// vanjs wraps a live binding that returns a non-node (e.g. a string label)
+// with `new Text(...)`. linkedom's Text facade refuses direct construction,
+// so the global is a factory: a constructor that returns an object yields
+// that object, so `new Text(s)` produces a real node. A plain function
+// declaration on purpose — object-method shorthands in this environment are
+// not constructible.
+function TestText(data: string) {
+    return testWindow.document.createTextNode(String(data))
+}
+
 const globals = {
     window: testWindow,
     document: testWindow.document,
@@ -25,6 +35,7 @@ const globals = {
     history: testWindow.history,
     localStorage,
     Node: testWindow.Node,
+    Text: TestText,
     Element: testWindow.Element,
     HTMLElement: testWindow.HTMLElement,
     HTMLAnchorElement: testWindow.HTMLAnchorElement,

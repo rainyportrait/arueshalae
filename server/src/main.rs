@@ -1,0 +1,137 @@
+mod database;
+mod media_processor;
+mod search;
+mod server;
+mod upload;
+
+use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
+use clap::Parser;
+use tokio::signal;
+use tokio_util::sync::CancellationToken;
+use tracing::info;
+
+use crate::{
+    database::Database,
+    server::{create_router, spawn_server},
+};
+
+#[derive(clap::Parser)]
+#[command(
+    name = "arueshalae",
+    about = "Downloads your rule34.xxx favorites",
+    version
+)]
+struct Args {
+    #[arg(default_value = "./rule34", index = 1)]
+    path: Utf8PathBuf,
+
+    #[arg(default_value = "127.0.0.1", long)]
+    host: String,
+
+    #[arg(default_value_t = 34343, long)]
+    port: u16,
+
+    #[arg(default_value_t = false, long)]
+    verbose: bool,
+}
+
+fn args() -> (Utf8PathBuf, String, bool) {
+    let args = Args::parse();
+    let path = normalize_path(&camino::absolute_utf8(args.path).expect("make path absolute"));
+    let address = format!("{}:{}", args.host, args.port);
+
+    std::fs::create_dir_all(path.join(".thumbs")).expect("create thumbs directory");
+    std::fs::create_dir_all(path.join(".minis")).expect("create mini directory");
+
+    if path.is_file() {
+        panic!("{path} is not a directory");
+    }
+
+    (path, address, args.verbose)
+}
+
+#[tokio::main]
+async fn main() {
+    let (path, address, verbose) = args();
+    let logging_level = if verbose {
+        tracing::Level::DEBUG
+    } else {
+        tracing::Level::INFO
+    };
+
+    tracing_subscriber::fmt::fmt()
+        .with_max_level(logging_level)
+        .init();
+
+    let shutdown_signal = shutdown_signal();
+    let shutdown_token = CancellationToken::new();
+
+    let database = Database::new(&path.join(".data.db"))
+        .await
+        .expect("open database");
+
+    let router = create_router(&database, &path);
+    let server_handle = spawn_server(router, &address, &shutdown_token).await;
+
+    info!("Arueshalae server listening on http://{address}");
+    info!(
+        "Your favorites can be viewed access by clicking on 'My Favorites' from this url: https://rule34.xxx/index.php?page=account&s=home"
+    );
+
+    shutdown_signal.await;
+    shutdown_token.cancel();
+    _ = server_handle.await;
+    database.pool.close().await;
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        signal::ctrl_c().await.expect("install Ctrl+c handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
+}
+
+// Stolen from: https://github.com/rust-lang/cargo/blob/fede83ccf973457de319ba6fa0e36ead454d2e20/src/cargo/util/paths.rs#L61
+// std::path::absolute doesn't resolve . and .. which seems kinda a nice thing to have for pretty
+// printing paths.
+pub fn normalize_path(path: &Utf8Path) -> Utf8PathBuf {
+    let mut components = path.components().peekable();
+    let mut ret = if let Some(c @ Utf8Component::Prefix(..)) = components.peek().cloned() {
+        components.next();
+        Utf8PathBuf::from(c.as_str())
+    } else {
+        Utf8PathBuf::new()
+    };
+
+    for component in components {
+        match component {
+            Utf8Component::Prefix(..) => unreachable!(),
+            Utf8Component::RootDir => {
+                ret.push(component.as_str());
+            }
+            Utf8Component::CurDir => {}
+            Utf8Component::ParentDir => {
+                ret.pop();
+            }
+            Utf8Component::Normal(c) => {
+                ret.push(c);
+            }
+        }
+    }
+    ret
+}

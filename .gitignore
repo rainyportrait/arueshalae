@@ -1,3 +1,5 @@
-node_modules/
-examples/
-target/
+userscript/node_modules/
+userscript/target/
+userscript/examples/
+server/target/
+server/dev.db

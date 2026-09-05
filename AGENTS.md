@@ -1,26 +1,39 @@
 # arueshalae
 
-A userscript that replaces the default rule34.xxx UI with a custom Van.js UI.
-
-Built with TypeScript, [van.js](https://vanjs.org/) (`vanjs-core`), and Tailwind CSS v4.
-
-The source files can be found in `./userscript/`.
+- `userscript/` — a userscript that replaces the default rule34.xxx UI with a custom Van.js UI.
+  Built with TypeScript, [van.js](https://vanjs.org/) (`vanjs-core`), and Tailwind CSS v4; source in
+  `userscript/src/`, tests in `userscript/tests/`.
+- `server/` — an axum/SQLite server that mirrors your downloaded rule34.xxx favorites.
 
 ## Build & dev loop
 
-- `node build-userscript.ts` to build the userscript end to end with tailwindcss and esbuild.
+Userscript (run pnpm commands from `userscript/`):
+
+- `just build-userscript` builds the userscript end to end with tailwindcss and esbuild (output in
+  `userscript/target/userscript/`).
 - The script runs at `document-end` and declares `@grant GM.xmlHttpRequest`.
+
+Server (the `server/` crate):
+
+- `just build-server` for a release build, `just run-server [args]` to run it. Args: a data
+  directory (positional, default `./rule34`; holds the SQLite database and downloaded media),
+  `--host` and `--port` (default `127.0.0.1` / `34343`), and `--verbose`.
+- The server has no authentication; it is meant to stay on localhost.
 
 ## Verification
 
-- Run the relevant tests and checks before considering a change complete.
+- Run the relevant tests and checks before considering a change complete. Server-only changes run
+  the cargo checks, userscript-only changes run the TypeScript checks, changes to both run both.
+- Userscript checks (from `userscript/`): `pnpm exec tsc --noEmit`, `pnpm test`,
+  `pnpm exec prettier --check .`, and `just build-userscript`.
+- Server checks (from `server/`): `cargo fmt --check`, `cargo check`, `cargo clippy`.
+- **esbuild does not type-check.** Run `pnpm exec tsc --noEmit` to verify userscript types.
 - agents can use chrome-devtools to access a live version of the script. Chrome is set up to
-  automatically reload the built userscript.
-- Parsing/extraction logic can be verified against the sample HTML in `examples/*.html` (gitignored)
-  with a DOM parser.
-- Standard green checks: `pnpm exec tsc --noEmit`, `just build-userscript`,
-  `pnpm exec prettier --check .`.
-- **esbuild does not type-check.** Run `pnpx tsc --noEmit` to verify types.
+  automatically reload the built userscript from `http://localhost:8080/arueshalae.user.js` (served
+  by `just serve-userscript`).
+- sqlx's compile-time `query!` macros check SQL against a scratch `server/dev.db`; `build.rs`
+  recreates it from the migration and injects `DATABASE_URL` via `cargo:rustc-env`, so a plain
+  `cargo build` is all that's needed.
 
 ## Commit messages
 

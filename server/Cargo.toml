@@ -1,0 +1,45 @@
+[package]
+name = "arueshalae"
+version = "0.2.2"
+edition = "2024"
+rust-version = "1.85.1"
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+opt-level = 3
+
+[dependencies]
+anyhow = "1.0.98"
+axum = "0.8.4"
+axum_typed_multipart = "0.16.3"
+bytes = "1.10.1"
+camino = "1.1.10"
+clap = { version = "4.5.41", features = ["derive"] }
+infer = "0.19.0"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.141"
+sqlx = { version = "0.8.6", features = ["chrono", "runtime-tokio", "sqlite"] }
+tempfile = "3.20.0"
+tokio = { version = "1.47.0", features = [
+  "rt-multi-thread",
+  "macros",
+  "fs",
+  "signal",
+  "process",
+] }
+tokio-util = { version = "0.7.15", features = ["io"] }
+tower-http = { version = "0.6.6", features = ["cors", "trace"] }
+tracing = "0.1.41"
+tracing-subscriber = "0.3.19"
+
+[build-dependencies]
+anyhow = "1.0.98"
+camino = "1.1.10"
+sqlx = { version = "0.8.6", features = ["chrono", "runtime-tokio", "sqlite"] }
+tokio = { version = "1.47.0", features = [
+  "rt-multi-thread",
+  "macros",
+  "fs",
+  "process",
+] }

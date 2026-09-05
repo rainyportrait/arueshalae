@@ -60,10 +60,16 @@ body.arue-focus {
  * gap is `column-gap`; the vertical gap is folded into each card's span, with
  * `align-self: start` so a card doesn't stretch down into that gap. The span in
  * CSS is a safe upper bound until each image reports its real height.
+ *
+ * Two columns are the minimum. `auto-fill` alone would collapse to one
+ * column on narrow containers (below 520px, i.e. two 252px tracks plus the
+ * 16px gap). Capping the track's min-size at half the available width (minus
+ * the single gap) keeps exactly two tracks fitting there, while staying at
+ * 252px once the container is wide enough for two of them.
  */
 .masonry {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(252px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(252px, calc((100% - 16px) / 2)), 1fr));
     grid-auto-rows: 1px;
     column-gap: 16px;
 }

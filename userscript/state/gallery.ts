@@ -302,13 +302,15 @@ van.derive(() => {
 })
 
 // Gallery keys. Installed once at module load; the handler bails outside a
-// gallery-enabled post details page and while the user is typing in a form
-// field (e.g. the search bar).
+// gallery-enabled post details page, while the user is typing in a form
+// field (e.g. the search bar), and on modified keys — the browser owns the
+// Ctrl/Cmd/Alt combinations (history navigation, in-page find, close).
 // - ArrowRight/ArrowLeft step through the gallery
 // - F toggles focus mode, Escape closes it
 document.addEventListener("keydown", (event) => {
     const r = route.val
     if (r.type !== "postdetails" || r.origin === undefined) return
+    if (event.ctrlKey || event.metaKey || event.altKey) return
     const el = event.target
     if (
         el instanceof HTMLElement &&

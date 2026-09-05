@@ -92,6 +92,48 @@ describe("gallery pagination", () => {
         expect(window.location.search).toContain("pid=42")
     })
 
+    it("leaves modified arrows to the browser's history navigation", async () => {
+        api.fetchPostList.mockImplementation((_tags: string | undefined, pid: number) =>
+            Promise.resolve({
+                posts: pid === 0 ? [post(1), post(2)] : [post(3), post(4)],
+                lastPagePID: 42,
+                tags: [],
+            }),
+        )
+        const collectionModule = await import("../../userscript/state/gallery-collection.ts")
+        const origin = { kind: "list" as const, tags: "test", pid: 0 }
+        const col = collectionModule.collectionFor(origin)
+        await collectionModule.ensurePage(col, 0)
+        await collectionModule.ensurePage(col, 42)
+
+        const { route } = await import("../../userscript/router.ts")
+        route.val = { type: "postdetails", id: 2, tags: "test", origin }
+        // Importing the module installs the document keydown listener.
+        await import("../../userscript/state/gallery.ts")
+
+        const press = (key: string, init: Record<string, unknown> = {}) => {
+            const event = new Event("keydown", { bubbles: true, cancelable: true })
+            Object.assign(event, { key, ...init })
+            document.dispatchEvent(event)
+            return event
+        }
+
+        // The modified key is left for the browser.
+        const modified = press("ArrowRight", { ctrlKey: true })
+        expect(route.val).toEqual({ type: "postdetails", id: 2, tags: "test", origin })
+        expect(modified.defaultPrevented).toBe(false)
+
+        // The unmodified arrow still steps: the listener is live and the
+        // guard is what bailed.
+        press("ArrowRight")
+        expect(route.val).toEqual({
+            type: "postdetails",
+            id: 3,
+            tags: "test",
+            origin: { kind: "list", tags: "test", pid: 42 },
+        })
+    })
+
     it("deduplicates a post that the feed shift put into two pages", async () => {
         api.fetchPostList.mockImplementation((_tags: string | undefined, pid: number) =>
             Promise.resolve({

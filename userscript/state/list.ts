@@ -1,7 +1,7 @@
 import van from "vanjs-core"
 
-import { type PostList, fetchPostList } from "../api/post-list.ts"
-import { type Tag } from "../api/tags.ts"
+import { type PostList, extractPostList, fetchPostList } from "../api/post-list.ts"
+import { type Tag, extractTags } from "../api/tags.ts"
 import { navigate, route } from "../router.ts"
 import { type Loadable, routeLoader } from "./load.ts"
 
@@ -45,6 +45,16 @@ export const { pending: listLoading, reload: reloadList } = routeLoader<ListRead
             pid: r.pid,
             query: r.tags,
         })),
+    // The initial route is a post list: the live document is the server's
+    // rendering of exactly this URL, so parse it instead of re-fetching.
+    // `null` when the document carries no list container — the bare site
+    // root serves a landing page for this route, and a zero-result search
+    // omits the container — in which case the page loads from the network.
+    (r) => {
+        if (!document.querySelector(".image-list")) return null
+        const { posts, lastPagePID } = extractPostList(document, r.pid)
+        return { posts, lastPagePID, tags: extractTags(document), pid: r.pid, query: r.tags }
+    },
 )
 
 export function search(newTags: string | undefined): void {

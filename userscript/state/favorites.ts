@@ -1,7 +1,7 @@
 import van from "vanjs-core"
 
 import { fetchProfile } from "../api/auth.ts"
-import { type Favorites, fetchFavorites } from "../api/favorites.ts"
+import { type Favorites, extractFavorites, fetchFavorites } from "../api/favorites.ts"
 import { route } from "../router.ts"
 import { type Loadable, createLoader, routeLoader } from "./load.ts"
 
@@ -26,8 +26,17 @@ export const favorites = van.state<Loadable<FavoritesReady>>({ status: "loading"
 export const { pending: favoritesLoading, reload: reloadFavorites } = routeLoader<
     FavoritesReady,
     "favorites"
->(favorites, "favorites", (r) =>
-    fetchFavorites(r.id, r.pid).then((result) => ({ ...result, id: r.id, pid: r.pid })),
+>(
+    favorites,
+    "favorites",
+    (r) => fetchFavorites(r.id, r.pid).then((result) => ({ ...result, id: r.id, pid: r.pid })),
+    // The initial route is a favorites page: the live document is that page.
+    // `null` when the document carries no list container (an error page),
+    // in which case the page loads from the network.
+    (r) =>
+        document.querySelector(".image-list")
+            ? { ...extractFavorites(document, r.pid), id: r.id, pid: r.pid }
+            : null,
 )
 
 // The favorites count from the user's profile page. The site's own favorites

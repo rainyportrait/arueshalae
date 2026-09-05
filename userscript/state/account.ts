@@ -1,6 +1,6 @@
 import van from "vanjs-core"
 
-import { type UserProfile, fetchProfile } from "../api/auth.ts"
+import { type UserProfile, extractUserProfile, fetchProfile } from "../api/auth.ts"
 import { route } from "../router.ts"
 import { type Loadable, routeLoader } from "./load.ts"
 
@@ -11,4 +11,12 @@ export const profile = van.state<Loadable<UserProfile>>({ status: "loading" })
 export const { pending: profileLoading, reload: reloadProfile } = routeLoader<
     UserProfile,
     "account"
->(profile, "account", (r) => fetchProfile("uname" in r ? { uname: r.uname } : { id: r.id }))
+>(
+    profile,
+    "account",
+    (r) => fetchProfile("uname" in r ? { uname: r.uname } : { id: r.id }),
+    // The initial route is a profile: the live document is that page.
+    // `null` when the document carries no profile heading (an error page),
+    // in which case the page loads from the network.
+    () => (document.querySelector("#content h2") ? extractUserProfile(document) : null),
+)

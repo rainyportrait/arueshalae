@@ -76,7 +76,7 @@ export function collectImageLists(container: ParentNode): Post[] {
     return posts
 }
 
-function extractPostList(
+export function extractPostList(
     DOM: Document,
     currentPid: number,
 ): { posts: Post[]; lastPagePID: number } {

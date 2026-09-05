@@ -1,9 +1,9 @@
 import van from "vanjs-core"
 
-import { type PostDetails } from "../api/post-details.ts"
+import { type PostDetails, extractPostDetails } from "../api/post-details.ts"
 import { type PostOrigin } from "../router.ts"
 import { type Loadable, routeLoader } from "./load.ts"
-import { cachedPostDetails } from "./post-details-cache.ts"
+import { cachedPostDetails, primePostDetails } from "./post-details-cache.ts"
 
 // The origin is stored in the ready payload (it rode on the URL when the post
 // was opened) so the details page has no dependency on the route and stays
@@ -20,6 +20,18 @@ export const details = van.state<DetailsState>({ status: "loading" })
 export const { pending: detailsLoading, reload: reloadDetails } = routeLoader<
     { post: PostDetails; origin: PostOrigin | undefined },
     "postdetails"
->(details, "postdetails", (r) =>
-    cachedPostDetails(r.id).then((post) => ({ post, origin: r.origin })),
+>(
+    details,
+    "postdetails",
+    (r) => cachedPostDetails(r.id).then((post) => ({ post, origin: r.origin })),
+    // The initial route is a post view: the live document is that exact page.
+    // Prime the cache with it, as if the fetch had settled. `null` when the
+    // document carries no post media (an error page, e.g. a deleted post),
+    // in which case the page loads from the network.
+    (r) => {
+        if (!document.querySelector("img#image, video#gelcomVideoPlayer")) return null
+        const post = extractPostDetails(document, r.id)
+        primePostDetails(r.id, post)
+        return { post, origin: r.origin }
+    },
 )

@@ -8,6 +8,13 @@ import { type PostDetails, fetchPostDetails } from "../api/post-details.ts"
 const cache = new Map<number, PostDetails>()
 const inflight = new Map<number, Promise<PostDetails>>()
 
+// Store a post recovered from the server's initial rendering (which the app
+// parses instead of fetching) so the cache treats it like any fetched entry:
+// a gallery step back to it and the neighbor prefetch find it cached.
+export function primePostDetails(id: number, post: PostDetails): void {
+    cache.set(id, post)
+}
+
 export function cachedPostDetails(id: number): Promise<PostDetails> {
     const hit = cache.get(id)
     if (hit !== undefined) return Promise.resolve(hit)

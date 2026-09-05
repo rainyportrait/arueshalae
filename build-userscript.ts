@@ -22,6 +22,7 @@ const iconNames = [
     "log-out",
     "maximize",
     "minimize",
+    "plus",
 ]
 
 function buildIconStyles(): string {

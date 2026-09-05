@@ -5,6 +5,7 @@ import { Link } from "./Link.ts"
 import type { Tag, TagType } from "./api/tags.ts"
 import clsx from "./clsx.ts"
 import { routeToUrl } from "./router.ts"
+import { appendTagToSearchField } from "./state/search-field.ts"
 
 const { div, button, span } = van.tags
 
@@ -27,22 +28,46 @@ function groupByType(tags: Tag[]): [TagType, Tag[]][] {
     return Object.entries(Object.groupBy(tags, (tag) => tag.type)) as [TagType, Tag[]][]
 }
 
+// One tag row: the link (name + count) plus a + button that appends the tag
+// to the search bar without navigating, so a query can be built up tag by
+// tag and submitted when it is ready. The row is a wrapper div so the button
+// sits next to the anchor rather than nested inside it (interactive content
+// inside an anchor is invalid and would inherit the navigation). The link
+// and the button are separate hover targets: the button is always visible
+// (a hover reveal would be unreachable on touch devices), and highlighting
+// the whole row on hover would blur which part is being pointed at.
 function TagLink({ tag }: { tag: Tag }) {
-    return Link(
-        {
-            href: routeToUrl({ type: "postlist", tags: tag.slug, pid: 0 }),
-            title: tag.slug,
-            class: clsx(
-                "flex items-baseline gap-2 rounded px-2 py-1",
-                "transition-colors hover:bg-zinc-800/60",
-            ),
-        },
-        span({ class: clsx("min-w-0 truncate text-sm", TAG_META[tag.type].color) }, tag.name),
-        span(
+    return div(
+        { class: clsx("flex min-w-0 items-center gap-1") },
+        Link(
             {
-                class: clsx("ml-auto shrink-0 text-xs text-zinc-500 tabular-nums"),
+                href: routeToUrl({ type: "postlist", tags: tag.slug, pid: 0 }),
+                title: tag.slug,
+                class: clsx(
+                    "flex min-w-0 flex-1 items-baseline gap-2 rounded px-2 py-1",
+                    "transition-colors hover:bg-zinc-800/60",
+                ),
             },
-            tag.count.toLocaleString(),
+            span({ class: clsx("min-w-0 truncate text-sm", TAG_META[tag.type].color) }, tag.name),
+            span(
+                {
+                    class: clsx("ml-auto shrink-0 text-xs text-zinc-500 tabular-nums"),
+                },
+                tag.count.toLocaleString(),
+            ),
+        ),
+        button(
+            {
+                type: "button",
+                title: "Add to search",
+                "aria-label": `Add ${tag.slug} to the search`,
+                class: clsx(
+                    "shrink-0 cursor-pointer rounded p-0.5 text-zinc-500",
+                    "transition-colors hover:bg-zinc-800/60 hover:text-zinc-200",
+                ),
+                onclick: () => appendTagToSearchField(tag.slug),
+            },
+            span({ "icon-name": "plus" }),
         ),
     )
 }

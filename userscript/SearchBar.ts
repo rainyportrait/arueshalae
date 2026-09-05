@@ -5,6 +5,7 @@ import { normalizeTags } from "./api/tags.ts"
 import clsx from "./clsx.ts"
 import { route } from "./router.ts"
 import { search } from "./state/list.ts"
+import { registerSearchField } from "./state/search-field.ts"
 
 const { button, form } = van.tags
 
@@ -34,6 +35,11 @@ export function SearchBar() {
         inputRef,
         resyncRef,
     })
+
+    // The tag sidebar's + buttons reach this field through the module channel
+    // (state/search-field.ts): they append a tag without submitting.
+    if (inputRef.current !== null && resyncRef.current !== null)
+        registerSearchField(inputRef.current, resyncRef.current)
 
     // Keep the field in step with the query carried by the route: direct
     // loads of a tagged list URL, back/forward, and post links (a

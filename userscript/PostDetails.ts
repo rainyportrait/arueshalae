@@ -235,9 +235,14 @@ function buildMediaEl(
 }
 
 // One side of the gallery: a live node returning a chevron button. Disabled
-// (and inert) when there is no post in that direction.
+// (and inert) when there is no post in that direction. canStep() reads the
+// live collection, which is not van state, so a page settling under an
+// unchanged route (the post search, a boundary publish) would leave
+// `enabled` stale: reading the published snapshot registers `gallery` as a
+// dependency, re-evaluating the button whenever the loaded pages change.
 function GalleryArrow({ dir }: { dir: 1 | -1 }) {
     return () => {
+        void gallery.val
         const enabled = canStep(dir)
         return button(
             {
@@ -309,8 +314,11 @@ function Filmstrip({
         if (g.status !== "ready") return -1
         return loadedPosts(g).findIndex((p) => p.id === activeId())
     }
-    // The position counter. Re-runs on post steps and page loads; swapping a
-    // tiny span is fine (only the scroller must not be swapped).
+    // The position counter. A live node: passed to the header as a function
+    // (never called) so vanjs wraps it in a binding — re-running on post
+    // steps and page loads. A called Counter() would run once at build time
+    // (while the gallery is still loading) and never update again. Swapping
+    // a tiny span is fine (only the scroller must not be swapped).
     const Counter = () => {
         const g = gallery.val
         const index = activeIndex()
@@ -390,12 +398,12 @@ function Filmstrip({
         ? div(
               { class: clsx("flex flex-col gap-1 px-0.5") },
               div({ class: clsx("flex items-center justify-between") }, headerLabel, FocusButton()),
-              Counter(),
+              Counter,
           )
         : div(
               { class: clsx("flex items-center justify-between px-0.5") },
               headerLabel,
-              div({ class: clsx("flex items-center gap-2") }, Counter(), FocusButton()),
+              div({ class: clsx("flex items-center gap-2") }, Counter, FocusButton()),
           )
     return div(
         { class: clsx("flex shrink-0 flex-col gap-1.5", vertical && "w-24") },

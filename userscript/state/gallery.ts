@@ -104,18 +104,21 @@ van.derive(() => {
 function loadOrigin(origin: PostOrigin): void {
     const current = ++seq
     const col = collectionFor(origin)
-    if (col.pages.some((p) => p.pid === origin.pid)) {
-        publish()
-        return
+    const originPage = col.pages.find((p) => p.pid === origin.pid)
+    if (originPage === undefined) {
+        // The loading state below bypasses publish()'s version tracking, so
+        // force the next publish() to run even if the collection's version is
+        // unchanged — its settle must replace the loading state.
+        published = null
+        gallery.val = { status: "loading" }
     }
-    // Not tracked as published: the next publish() must run even if the
-    // collection's version didn't change (e.g. a step onto an in-flight page
-    // came back via the cache-hit path above).
-    published = null
-    gallery.val = { status: "loading" }
-    void ensurePage(col, origin.pid).then(
+    void (
+        originPage === undefined ? ensurePage(col, origin.pid) : Promise.resolve(originPage)
+    ).then(
         () => {
-            if (current === seq) publish()
+            if (current !== seq) return
+            publish()
+            void findActivePost(col, origin, current)
         },
         (error: unknown) => {
             if (current === seq) {
@@ -124,6 +127,45 @@ function loadOrigin(origin: PostOrigin): void {
             }
         },
     )
+}
+
+// A hard cap on the page search below. The origin page is a fresh fetch, but
+// the list page the post was opened from is an older snapshot: on a busy feed
+// newer posts may have pushed the post onto a later page in between. The post
+// is then missing from the collection, stepContext() bails, and both arrows
+// sit disabled with no way to reach the post. Load the following pages until
+// the post turns up — each settled page is published, so the filmstrip grows
+// as it does on a boundary step — or the collection ends with an empty page,
+// the route moves on, or the limit is reached (a guard against runaway fetches
+// if the post is truly gone from the collection).
+const FIND_POST_PAGE_LIMIT = 10
+
+async function findActivePost(col: Collection, origin: PostOrigin, current: number): Promise<void> {
+    for (let offset = 1; offset <= FIND_POST_PAGE_LIMIT; offset++) {
+        if (current !== seq || !isCurrent(col)) return
+        const r = route.val
+        if (
+            r.type !== "postdetails" ||
+            r.origin === undefined ||
+            originKey(r.origin) !== originKey(origin)
+        )
+            return
+        if (stepContext() !== null) return
+        let page: GalleryPage
+        try {
+            page = await ensurePage(col, origin.pid + offset * pageSize(origin))
+        } catch {
+            // A failed fetch aborts the search; the arrows stay disabled.
+            return
+        }
+        // The route may have moved on while the page loaded. A step within
+        // the same origin still owns the collection: publish the page like
+        // boundaryStep does, so the filmstrip keeps growing. A different
+        // origin replaced the collection (the page was never stored): bail.
+        if (!isCurrent(col)) return
+        publish()
+        if (page.posts.length === 0 || current !== seq) return
+    }
 }
 
 export function reloadGallery(): void {

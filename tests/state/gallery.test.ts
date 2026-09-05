@@ -1,7 +1,8 @@
+import van from "vanjs-core"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { Post } from "../../userscript/api/post-list.ts"
-import { resetDom } from "../dom.ts"
+import { flushVan, resetDom } from "../dom.ts"
 
 const api = vi.hoisted(() => ({
     fetchFavorites: vi.fn(),
@@ -89,5 +90,159 @@ describe("gallery pagination", () => {
             origin: { kind: "list", tags: "test", pid: 42 },
         })
         expect(window.location.search).toContain("pid=42")
+    })
+})
+
+describe("finding the active post after the origin page loads", () => {
+    beforeEach(() => {
+        vi.resetModules()
+        api.fetchFavorites.mockReset()
+        api.fetchPostList.mockReset()
+        resetDom()
+    })
+
+    // Import the reactive modules against the initial (post list) route, so
+    // the only loads the tests trigger are their own. The list loader's
+    // module-load fetch is dropped with the clear below.
+    async function loadModules() {
+        const collectionModule = await import("../../userscript/state/gallery-collection.ts")
+        const { route } = await import("../../userscript/router.ts")
+        const galleryModule = await import("../../userscript/state/gallery.ts")
+        api.fetchPostList.mockClear()
+        return {
+            collectionModule,
+            route,
+            galleryModule,
+            origin: { kind: "list" as const, tags: "test", pid: 0 },
+        }
+    }
+
+    it("loads following pages until the active post is found", async () => {
+        api.fetchPostList.mockImplementation((_tags: string | undefined, pid: number) =>
+            Promise.resolve({
+                posts: pid === 0 ? [post(1), post(2)] : [post(3), post(4)],
+                lastPagePID: 42,
+                tags: [],
+            }),
+        )
+        const { collectionModule, route, galleryModule, origin } = await loadModules()
+        route.val = { type: "postdetails", id: 4, tags: "test", origin }
+        await flushVan()
+
+        // Origin page 0 plus one follow-up: the page the post drifted onto.
+        expect(api.fetchPostList.mock.calls.map((call) => call[1])).toEqual([0, 42])
+        const col = collectionModule.getCollection()
+        expect(col?.pages.map((page) => page.pid)).toEqual([0, 42])
+        // The arrows are live again: the post sits at the collection's end.
+        expect(galleryModule.canStep(-1)).toBe(true)
+        expect(galleryModule.canStep(1)).toBe(false)
+        expect(galleryModule.gallery.val.status).toBe("ready")
+    })
+
+    it("keeps the pages loaded while searching in the collection", async () => {
+        api.fetchPostList.mockImplementation((_tags: string | undefined, pid: number) =>
+            Promise.resolve({
+                // The active post is two pages down: the intermediate page
+                // settles before the one that holds it.
+                posts: pid === 84 ? [post(5), post(4), post(3)] : [post(1), post(2)],
+                lastPagePID: 84,
+                tags: [],
+            }),
+        )
+        const { collectionModule, route, origin } = await loadModules()
+        route.val = { type: "postdetails", id: 4, tags: "test", origin }
+        await flushVan()
+
+        // The intermediate page is kept, not discarded: the filmstrip shows
+        // the whole path from the origin page to the post.
+        const col = collectionModule.getCollection()
+        expect(col?.pages.map((page) => page.pid)).toEqual([0, 42, 84])
+    })
+
+    it("stops searching after the page limit", async () => {
+        api.fetchPostList.mockImplementation((_tags: string | undefined, pid: number) =>
+            Promise.resolve({ posts: [post(1)], lastPagePID: pid, tags: [] }),
+        )
+        const { route, origin } = await loadModules()
+        route.val = { type: "postdetails", id: 999, tags: "test", origin }
+        await flushVan()
+
+        // Origin page plus the ten follow-ups, nothing more.
+        expect(api.fetchPostList.mock.calls.map((call) => call[1])).toEqual([
+            0, 42, 84, 126, 168, 210, 252, 294, 336, 378, 420,
+        ])
+    })
+
+    it("stops the search at an empty page", async () => {
+        api.fetchPostList.mockImplementation((_tags: string | undefined, pid: number) =>
+            Promise.resolve({
+                posts: pid === 0 ? [post(1)] : [],
+                lastPagePID: 0,
+                tags: [],
+            }),
+        )
+        const { collectionModule, route, origin } = await loadModules()
+        route.val = { type: "postdetails", id: 999, tags: "test", origin }
+        await flushVan()
+
+        expect(api.fetchPostList.mock.calls.map((call) => call[1])).toEqual([0, 42])
+        const col = collectionModule.getCollection()
+        expect(col?.pages.map((page) => page.pid)).toEqual([0])
+        expect(col?.lastPagePID).toBe(0)
+    })
+
+    it("searches without a loading flash when the origin page is cached", async () => {
+        api.fetchPostList.mockImplementation((_tags: string | undefined, pid: number) =>
+            Promise.resolve({
+                posts: pid === 0 ? [post(1), post(2)] : [post(3)],
+                lastPagePID: 42,
+                tags: [],
+            }),
+        )
+        const { route, galleryModule, origin } = await loadModules()
+        route.val = { type: "postdetails", id: 1, tags: "test", origin }
+        await flushVan()
+        // The post was on the origin page: no follow-up fetches.
+        expect(api.fetchPostList.mock.calls.map((call) => call[1])).toEqual([0])
+        api.fetchPostList.mockClear()
+
+        // Another post of the same origin that is not on the loaded pages:
+        // the origin page is cached, so the load must skip the skeleton.
+        // Track every status the gallery state passes through — a sync check
+        // right after the route change would run before van processes it, and
+        // after the flush the loading state would already be gone again.
+        const statuses: string[] = []
+        van.derive(() => statuses.push(galleryModule.gallery.val.status))
+        route.val = { type: "postdetails", id: 3, tags: "test", origin }
+        await flushVan()
+
+        expect(statuses).not.toContain("loading")
+        expect(api.fetchPostList.mock.calls.map((call) => call[1])).toEqual([42])
+    })
+
+    it("stops the search when the route leaves the gallery", async () => {
+        // The gallery's origin fetch is deferred so the test can move the
+        // route while the page is still in flight, then settle it.
+        let settleOrigin: ((posts: Post[]) => void) | undefined
+        api.fetchPostList.mockImplementation(
+            (tags: string | undefined, pid: number) =>
+                new Promise((resolve) => {
+                    if (tags === "test" && pid === 0)
+                        settleOrigin = (posts) => resolve({ posts, lastPagePID: 0, tags: [] })
+                    else resolve({ posts: [post(1)], lastPagePID: 0, tags: [] })
+                }),
+        )
+        const { route, origin } = await loadModules()
+        route.val = { type: "postdetails", id: 999, tags: "test", origin }
+        await flushVan()
+        // Leave while the origin fetch is still in flight.
+        route.val = { type: "unknown" }
+        await flushVan()
+        // Settle the in-flight page: the search must not start.
+        settleOrigin?.([post(1)])
+        await flushVan()
+
+        // Only the origin page was loaded; the search never started.
+        expect(api.fetchPostList.mock.calls.map((call) => call[1])).toEqual([0])
     })
 })

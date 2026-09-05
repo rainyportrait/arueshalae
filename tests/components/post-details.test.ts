@@ -4,6 +4,19 @@ import type { PostDetails as PostDetailsData } from "../../userscript/api/post-d
 import type { Post } from "../../userscript/api/post-list.ts"
 import { flushVan, resetDom } from "../dom.ts"
 
+const api = vi.hoisted(() => ({
+    fetchFavorites: vi.fn(),
+    fetchPostDetails: vi.fn(),
+    fetchPostList: vi.fn(),
+}))
+
+vi.mock("../../userscript/api/favorites.ts", () => ({ fetchFavorites: api.fetchFavorites }))
+vi.mock("../../userscript/api/post-details.ts", async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    fetchPostDetails: api.fetchPostDetails,
+}))
+vi.mock("../../userscript/api/post-list.ts", () => ({ fetchPostList: api.fetchPostList }))
+
 function post(id: number): Post {
     return {
         id,
@@ -38,6 +51,12 @@ function details(id: number): PostDetailsData {
 describe("PostDetails gallery", () => {
     beforeEach(() => {
         vi.resetModules()
+        api.fetchFavorites.mockReset()
+        api.fetchPostDetails.mockReset()
+        api.fetchPostList.mockReset()
+        // The details loader and the gallery's neighbor prefetch fire for the
+        // postdetails routes the tests set: answer with the test's own fixture.
+        api.fetchPostDetails.mockImplementation((id: number) => Promise.resolve(details(id)))
         resetDom("https://rule34.xxx/index.php?page=account&s=options")
     })
 
@@ -67,5 +86,40 @@ describe("PostDetails gallery", () => {
             "/index.php?page=post&s=view&id=3&tags=test&pid=42",
             "/index.php?page=post&s=view&id=4&tags=test&pid=42",
         ])
+    })
+
+    it("shows the counter and enables the arrows once the search finds the active post", async () => {
+        // The active post is not on the origin page: the gallery's post
+        // search loads the following page, which contains it. The route stays
+        // put while both pages settle, so the counter and arrows must update
+        // through their gallery-state dependency, not a route change.
+        api.fetchPostList.mockImplementation((_tags: string | undefined, pid: number) =>
+            Promise.resolve({
+                posts: pid === 0 ? [post(1), post(2)] : [post(3), post(4)],
+                lastPagePID: 42,
+                tags: [],
+            }),
+        )
+        const { details: detailsState } = await import("../../userscript/state/details.ts")
+        const { route } = await import("../../userscript/router.ts")
+        const { PostDetails } = await import("../../userscript/PostDetails.ts")
+        const origin = { kind: "list" as const, tags: "test", pid: 0 }
+        detailsState.val = { status: "ready", post: details(4), origin }
+        document.body.append(PostDetails())
+        route.val = { type: "postdetails", id: 4, tags: "test", origin }
+        await flushVan()
+
+        const counter = [...document.querySelectorAll("span")].find((span) =>
+            /^\d+ \/ \d+$/.test(span.textContent ?? ""),
+        )
+        expect(counter?.textContent).toBe("4 / 4")
+        // The post sits at the loaded end: back is possible, forward isn't
+        // (the collection ends with page 42).
+        const [prev, next] = [
+            ...document.querySelectorAll<HTMLButtonElement>("button[title*='post']"),
+        ]
+        expect(prev?.className).toContain("cursor-pointer")
+        expect(prev?.className).not.toContain("opacity-30")
+        expect(next?.className).toContain("opacity-30")
     })
 })

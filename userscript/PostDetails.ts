@@ -405,19 +405,37 @@ function Filmstrip({
               headerLabel,
               div({ class: clsx("flex items-center gap-2") }, Counter, FocusButton()),
           )
+    // The scroll container, kept across gallery steps by the caller — so the
+    // wheel listener below is attached exactly once per strip.
+    const scroller = div(
+        {
+            class: clsx(
+                vertical
+                    ? "flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto"
+                    : "flex gap-1.5 overflow-x-auto pb-1",
+            ),
+        },
+        Thumbs,
+    )
+    if (!vertical)
+        scroller.addEventListener(
+            "wheel",
+            (event) => {
+                // Native horizontal scrolls (trackpad swipe, shift+wheel)
+                // already move the strip, and a strip that fits its width has
+                // nothing to scroll — in both cases the page keeps its
+                // normal wheel behaviour.
+                if (Math.abs(event.deltaX) >= Math.abs(event.deltaY)) return
+                if (scroller.scrollWidth <= scroller.clientWidth) return
+                event.preventDefault()
+                scroller.scrollLeft += event.deltaY
+            },
+            { passive: false },
+        )
     return div(
         { class: clsx("flex shrink-0 flex-col gap-1.5", vertical && "w-24") },
         header,
-        div(
-            {
-                class: clsx(
-                    vertical
-                        ? "flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto"
-                        : "flex gap-1.5 overflow-x-auto pb-1",
-                ),
-            },
-            Thumbs,
-        ),
+        scroller,
         ScrollActive,
     )
 }

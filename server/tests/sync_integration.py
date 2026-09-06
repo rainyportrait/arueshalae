@@ -43,7 +43,17 @@ with tempfile.TemporaryDirectory(prefix="arue-sync-test-") as folder:
     db = sqlite3.connect(folder / ".data.db")
     db.executescript((root / "server/src/migrations/202508291609-init.sql").read_text())
     db.executescript(
-        "INSERT INTO posts(id,external_id,extension,mime,original) VALUES(12,123,'png','image/png',1);INSERT INTO tags(id,name,kind) VALUES(1,'test','general');INSERT INTO post_tags VALUES(12,1);PRAGMA user_version=1;"
+        """
+        INSERT INTO posts (id, external_id, extension, mime, original)
+        VALUES (12, 123, 'png', 'image/png', 1);
+
+        INSERT INTO tags (id, name, kind)
+        VALUES (1, 'test', 'general');
+
+        INSERT INTO post_tags (post_id, tag_id) VALUES (12, 1);
+
+        PRAGMA user_version = 1;
+        """
     )
     db.close()
     (folder / "0000012_123.png").write_bytes(png)
@@ -63,31 +73,35 @@ with tempfile.TemporaryDirectory(prefix="arue-sync-test-") as folder:
         )
         base = f"http://127.0.0.1:{port}"
 
-        def req(path, data=None, headers={}):
+        def req(path, data=None, headers=None):
             with urllib.request.urlopen(
-                urllib.request.Request(base + path, data=data, headers=headers),
+                urllib.request.Request(base + path, data=data, headers=headers or {}),
                 timeout=10,
-            ) as r:
-                return r.read()
+            ) as response:
+                return response.read()
 
-        def command(action, **kw):
+        def command(action, **fields):
             return json.loads(
                 req(
                     "/api/sync",
-                    json.dumps(dict(userId=7, action=action, **kw)).encode(),
+                    json.dumps(dict(userId=7, action=action, **fields)).encode(),
                     {"Content-Type": "application/json"},
                 )
             )
 
-        def upload(id):
-            body = (
-                b'--test\r\nContent-Disposition: form-data; name="image"; filename="test.png"\r\nContent-Type: image/png\r\n\r\n'
-                + png
-                + b'\r\n--test\r\nContent-Disposition: form-data; name="tags"\r\n\r\n[{"name":"new_tag","kind":"general"}]\r\n--test--\r\n'
+        def upload(post_id):
+            image_headers = (
+                b'--test\r\nContent-Disposition: form-data; name="image"; '
+                b'filename="test.png"\r\nContent-Type: image/png\r\n\r\n'
             )
+            tags = (
+                b'\r\n--test\r\nContent-Disposition: form-data; name="tags"\r\n\r\n'
+                b'[{"name":"new_tag","kind":"general"}]\r\n--test--\r\n'
+            )
+            body = image_headers + png + tags
             return json.loads(
                 req(
-                    f"/api/posts/{id}?userId=7",
+                    f"/api/posts/{post_id}?userId=7",
                     body,
                     {"Content-Type": "multipart/form-data; boundary=test"},
                 )
@@ -128,7 +142,9 @@ with tempfile.TemporaryDirectory(prefix="arue-sync-test-") as folder:
                 "SELECT COUNT(*) FROM download_queue WHERE post_id=456"
             ).fetchone() == (0,)
             print(
-                "PASS: legacy migration, original filenames, retained media, re-favorite reuse, cancelled upload, real media upload/read, filtered IDs, tag links, foreign keys"
+                "PASS: legacy migration, original filenames, retained media, "
+                "re-favorite reuse, cancelled upload, real media upload/read, "
+                "filtered IDs, tag links, foreign keys"
             )
         finally:
             process.terminate()

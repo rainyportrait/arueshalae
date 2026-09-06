@@ -8,14 +8,16 @@ import {
     removeFavorite,
 } from "../api/favorites.ts"
 import type { PostDetails } from "../api/post-details.ts"
-import { unfavoriteOnServer } from "../api/server.ts"
 import { setFavoriteMembership } from "../api/sync.ts"
 import { auth } from "./auth.ts"
 import { refreshLibrary } from "./library.ts"
 import { serverSettings } from "./settings.ts"
 
-// "saving" covers the short membership write. Media is handled independently by
-// the persistent download queue; success here does not imply a downloaded copy.
+// The button mutates rule34 first, then mirrors the acknowledged membership to
+// the local server. "library-failed" and "removal-failed" mean the upstream
+// mutation succeeded but its membership write did not, so retries only repeat
+// the local write. Media downloads belong to the persistent queue and are not
+// part of this state machine.
 export type FavoriteStatus =
     | "idle"
     | "adding"
@@ -26,46 +28,63 @@ export type FavoriteStatus =
     | "removing"
     | "removal-failed"
     | "stale-session"
-export type SaveToLibrary = (post: PostDetails) => Promise<void>
-export type SessionCheck = (userId: number) => Promise<boolean>
-export type UnfavoriteInLibrary = (postId: number) => Promise<void>
-const productionSave: SaveToLibrary = (post) => setFavoriteMembership(post.id, true)
+
+type MembershipWriter = (post: PostDetails) => Promise<void>
+type UnfavoriteWriter = (postId: number) => Promise<void>
+type SessionCheck = (userId: number) => Promise<boolean>
+
+const productionFavorite: MembershipWriter = (post) => setFavoriteMembership(post.id, true)
+const productionUnfavorite: UnfavoriteWriter = (postId) => setFavoriteMembership(postId, false)
 const productionSessionCheck: SessionCheck = (userId) =>
     userId > 0 ? sessionAlive(userId) : Promise.resolve(false)
-export const librarySaves = van.state<Map<number, Promise<boolean>>>(new Map())
 
-let membershipWrites: Promise<void> = Promise.resolve()
+// Membership writes are serialized so rapid favorite actions cannot race on
+// the account revision. The public map also lets a remounted details page join
+// an in-flight write instead of offering a duplicate action.
+export const membershipWrites = van.state<Map<number, Promise<boolean>>>(new Map())
 
-async function startLibrarySave(post: PostDetails, save: SaveToLibrary): Promise<boolean> {
-    const existing = librarySaves.rawVal.get(post.id)
-    if (existing) return existing
-    const task = membershipWrites
-        .then(() => save(post))
-        .then(
-            () => {
-                void refreshLibrary([post.id]).catch(() => {})
-                return true
-            },
-            () => false,
-        )
-        .finally(() => {
-            const next = new Map(librarySaves.rawVal)
-            next.delete(post.id)
-            librarySaves.val = next
-        })
-    membershipWrites = task.then(() => {})
-    librarySaves.val = new Map(librarySaves.rawVal).set(post.id, task)
+let membershipWriteChain: Promise<void> = Promise.resolve()
+
+function startMembershipWrite(post: PostDetails, write: MembershipWriter): Promise<boolean> {
+    const existing = membershipWrites.rawVal.get(post.id)
+    if (existing !== undefined) return existing
+
+    // Resolve failures to false: the button owns retry presentation, and no
+    // rejected background promise should escape after its caller unmounts.
+    const run = membershipWriteChain.then(async (): Promise<boolean> => {
+        try {
+            await write(post)
+            void refreshLibrary([post.id]).catch(() => {})
+            return true
+        } catch {
+            return false
+        }
+    })
+    const task = run.finally(() => setMembershipWrite(post.id, undefined))
+
+    setMembershipWrite(post.id, task)
+    membershipWriteChain = task.then(() => undefined)
     return task
 }
 
+function setMembershipWrite(postId: number, task: Promise<boolean> | undefined): void {
+    const next = new Map(membershipWrites.rawVal)
+    if (task === undefined) next.delete(postId)
+    else next.set(postId, task)
+    membershipWrites.val = next
+}
+
+// The caller supplies an identity check because navigation may reuse the same
+// state object for another post while either request is in flight.
 export async function addFavoriteWithStatus(
     post: PostDetails,
     favorite: State<FavoriteStatus>,
     isCurrent: () => boolean,
     add: typeof addFavorite = addFavorite,
-    save: SaveToLibrary = productionSave,
+    write: MembershipWriter = productionFavorite,
 ): Promise<void> {
     favorite.val = "adding"
+
     let result: AddFavoriteResult
     try {
         result = await add(post.id)
@@ -74,88 +93,108 @@ export async function addFavoriteWithStatus(
         return
     }
     if (!isCurrent()) return
+
     if (!result.ok && result.reason === "not-logged-in") {
         favorite.val = "idle"
         return
     }
-    const end = result.ok ? "added" : "already"
+
+    const endState: FavoriteStatus = result.ok ? "added" : "already"
     if (!serverSettings.rawVal.enabled) {
-        favorite.val = end
+        favorite.val = endState
         return
     }
+
     favorite.val = "saving"
-    const saved = await startLibrarySave(post, save)
-    if (isCurrent()) favorite.val = saved ? end : "library-failed"
+    const saved = await startMembershipWrite(post, write)
+    if (isCurrent()) favorite.val = saved ? endState : "library-failed"
 }
 
-export async function retryLibrarySave(
+// Rule34 already holds this favorite; retry only the membership write.
+export async function retryFavoriteMembership(
     post: PostDetails,
     favorite: State<FavoriteStatus>,
     isCurrent: () => boolean,
-    save: SaveToLibrary = productionSave,
+    write: MembershipWriter = productionFavorite,
 ): Promise<void> {
     if (!serverSettings.rawVal.enabled) {
         favorite.val = "already"
         return
     }
+
     favorite.val = "saving"
-    const saved = await startLibrarySave(post, save)
+    const saved = await startMembershipWrite(post, write)
     if (isCurrent()) favorite.val = saved ? "already" : "library-failed"
 }
 
+// A removal failure is ambiguous: rule34 uses the same response when a post is
+// already absent and when the session expired. Only an authenticated session
+// lets us safely mirror the post as unfavorited locally.
 export async function removeFavoriteWithStatus(
     post: PostDetails,
     favorite: State<FavoriteStatus>,
     isCurrent: () => boolean,
-    remove: (id: number) => Promise<RemoveFavoriteResult> = removeFavorite,
-    sessionCheck: SessionCheck = productionSessionCheck,
-    del: UnfavoriteInLibrary = unfavoriteOnServer,
+    remove: (postId: number) => Promise<RemoveFavoriteResult> = removeFavorite,
+    checkSession: SessionCheck = productionSessionCheck,
+    unfavorite: UnfavoriteWriter = productionUnfavorite,
 ): Promise<void> {
-    const previous = favorite.val
+    const previousState = favorite.val
     favorite.val = "removing"
+
     let result: RemoveFavoriteResult
     try {
         result = await remove(post.id)
     } catch {
-        if (isCurrent()) favorite.val = previous
+        if (isCurrent()) favorite.val = previousState
         return
     }
     if (!isCurrent()) return
+
     if (!result.ok) {
-        const a = auth.rawVal
-        let alive: boolean
+        const account = auth.rawVal
+        const userId = account.status === "authenticated" ? account.userId : 0
+
+        let sessionIsAlive: boolean
         try {
-            alive = await sessionCheck(a.status === "authenticated" ? a.userId : 0)
+            sessionIsAlive = await checkSession(userId)
         } catch {
-            if (isCurrent()) favorite.val = previous
+            // The failed check leaves the upstream result unresolved. Keep the
+            // original button face and do not touch local membership.
+            if (isCurrent()) favorite.val = previousState
             return
         }
         if (!isCurrent()) return
-        if (!alive) {
+
+        if (!sessionIsAlive) {
             favorite.val = "stale-session"
             return
         }
     }
-    await retryLibraryRemoval(post, favorite, isCurrent, del)
+
+    await retryUnfavoriteMembership(post, favorite, isCurrent, unfavorite)
 }
 
-export async function retryLibraryRemoval(
+// Rule34 already dropped this favorite; retry only the membership write. Any
+// downloaded media is deliberately retained by the server.
+export async function retryUnfavoriteMembership(
     post: PostDetails,
     favorite: State<FavoriteStatus>,
     isCurrent: () => boolean,
-    del: UnfavoriteInLibrary = unfavoriteOnServer,
+    unfavorite: UnfavoriteWriter = productionUnfavorite,
 ): Promise<void> {
     if (!serverSettings.rawVal.enabled) {
         if (isCurrent()) favorite.val = "idle"
         return
     }
+
     favorite.val = "removing"
     try {
-        await del(post.id)
+        await unfavorite(post.id)
     } catch {
         if (isCurrent()) favorite.val = "removal-failed"
         return
     }
+
     await refreshLibrary([post.id]).catch(() => {})
     if (isCurrent()) favorite.val = "idle"
 }

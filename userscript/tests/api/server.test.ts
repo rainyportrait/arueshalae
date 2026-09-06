@@ -8,8 +8,8 @@ import {
     getDownloadCount,
     mediaUrlFor,
     savePostToServer,
-    unfavoriteOnServer,
 } from "../../src/api/server.ts"
+import { setFavoriteMembership } from "../../src/api/sync.ts"
 import type { Tag } from "../../src/api/tags.ts"
 import { resetDom } from "../dom.ts"
 
@@ -120,7 +120,7 @@ describe("server client", () => {
     it("marks membership unfavorited through the account-scoped endpoint", async () => {
         mockFetch(calls, () => jsonResponse({ ok: true }))
 
-        await expect(unfavoriteOnServer(123)).resolves.toBeUndefined()
+        await expect(setFavoriteMembership(123, false)).resolves.toBeUndefined()
 
         expect(calls).toHaveLength(1)
         expect(calls[0]?.url).toBe("http://127.0.0.1:34343/api/sync")
@@ -133,13 +133,13 @@ describe("server client", () => {
         })
     })
 
-    it("throws ServerError when the delete fails for another reason", async () => {
+    it("throws ServerError when the membership update fails", async () => {
         mockFetch(
             calls,
             () => ({ ok: false, status: 500, statusText: "Internal Server Error" }) as Response,
         )
 
-        await expect(unfavoriteOnServer(123)).rejects.toBeInstanceOf(ServerError)
+        await expect(setFavoriteMembership(123, false)).rejects.toBeInstanceOf(ServerError)
     })
 })
 
@@ -202,7 +202,7 @@ describe("savePostToServer", () => {
         calls = []
     })
 
-    it("downloads the original image and posts it to /api/posts/{id} with the post's tags", async () => {
+    it("uploads the original image and post tags", async () => {
         const bytes = new Uint8Array([1, 2, 3, 4])
         const fetchMedia = vi.fn<MediaFetcher>(async (url) => bytes.buffer)
         mockFetch(calls, () => jsonResponse({ ok: true }))

@@ -14,19 +14,20 @@ export type FetchOptions = {
 // request starts by at least MIN_REQUEST_GAP_MS, turning bursts into a
 // steady drip and spacing out retries for free.
 const MIN_REQUEST_GAP_MS = 350
+const BACKGROUND_TIMEOUT_MS = 30_000
 let lastRequestStart = 0
-const interactive: Array<() => Promise<void>> = []
-const background: Array<() => Promise<void>> = []
+const interactiveRequests: Array<() => Promise<void>> = []
+const backgroundRequests: Array<() => Promise<void>> = []
 let draining = false
 
 // Interactive work takes the next slot ahead of queued background work. An
 // already-running request is allowed to finish; every start still shares pacing.
-function enqueueRequest<T>(run: () => Promise<T>, lowPriority = false): Promise<T> {
+function enqueueRequest<T>(request: () => Promise<T>, background = false): Promise<T> {
     return new Promise<T>((resolve, reject) => {
-        const queue = lowPriority ? background : interactive
+        const queue = background ? backgroundRequests : interactiveRequests
         queue.push(async () => {
             try {
-                resolve(await run())
+                resolve(await request())
             } catch (error) {
                 reject(error)
             }
@@ -34,17 +35,21 @@ function enqueueRequest<T>(run: () => Promise<T>, lowPriority = false): Promise<
         void drainRequests()
     })
 }
+
 async function drainRequests(): Promise<void> {
     if (draining) return
     draining = true
+
     try {
-        while (interactive.length || background.length) {
+        while (interactiveRequests.length > 0 || backgroundRequests.length > 0) {
             const wait = lastRequestStart + MIN_REQUEST_GAP_MS - Date.now()
             if (wait > 0) await sleep(wait)
-            const run = interactive.shift() ?? background.shift()
-            if (!run) break
+
+            const request = interactiveRequests.shift() ?? backgroundRequests.shift()
+            if (request === undefined) break
+
             lastRequestStart = Date.now()
-            await run()
+            await request()
         }
     } finally {
         draining = false
@@ -101,7 +106,7 @@ export async function fetchDocument(url: string, options: FetchOptions = {}): Pr
 }
 
 export async function retry<T>(
-    fetchFn: () => Promise<T>,
+    request: () => Promise<T>,
     maxRetries: number = 5,
     baseDelay: number = 350,
 ): Promise<T> {
@@ -109,9 +114,9 @@ export async function retry<T>(
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
         try {
-            return await fetchFn()
-        } catch (e) {
-            lastError = e instanceof Error ? e : new Error(String(e))
+            return await request()
+        } catch (error) {
+            lastError = error instanceof Error ? error : new Error(String(error))
             const jitter = Math.random() * 30
             const delay = baseDelay * Math.pow(2, attempt) + jitter
             await sleep(delay)
@@ -133,6 +138,6 @@ export function fetchBackground(
 ): Promise<Response> {
     return enqueueRequest(() => {
         if (!isCurrent()) throw new Error("Background worker stopped")
-        return fetch(url, { signal: AbortSignal.timeout(30_000) })
+        return fetch(url, { signal: AbortSignal.timeout(BACKGROUND_TIMEOUT_MS) })
     }, true)
 }

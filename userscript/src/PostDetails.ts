@@ -15,10 +15,10 @@ import { details, reloadDetails } from "./state/details.ts"
 import {
     type FavoriteStatus,
     addFavoriteWithStatus,
-    librarySaves,
+    membershipWrites,
     removeFavoriteWithStatus,
-    retryLibraryRemoval,
-    retryLibrarySave,
+    retryFavoriteMembership,
+    retryUnfavoriteMembership,
 } from "./state/favorite-action.ts"
 import { loadedPosts, originKey } from "./state/gallery-collection.ts"
 import { canStep, gallery, galleryFocus, reloadGallery, step } from "./state/gallery.ts"
@@ -112,8 +112,9 @@ function OriginalImageToggle({
 // the user's favorites, so without the arueshalae server the button always
 // starts out "Add to favorites" and only becomes the "Remove from
 // favorites" face after the user added the post (the API's ack settles
-// Membership determines the favorite button; downloaded media has independent
-// status. Failed local updates retry without repeating the upstream mutation.
+// "added"). With the server enabled, its membership record supplies the
+// initial face. Downloaded media has independent status, and a failed local
+// membership update retries without repeating the upstream mutation.
 function AddFavoriteButton({
     post,
     favorite,
@@ -134,26 +135,10 @@ function AddFavoriteButton({
         // A save in flight (started by this or an earlier mount of the post)
         // shows as "saving" even on a fresh mount, where the per-post state
         // has reset to "idle".
-        const state = librarySaves.val.has(post.id) ? "saving" : base
+        const state = membershipWrites.val.has(post.id) ? "saving" : base
         // The "added"/"already" faces double as the "Remove from favorites"
         // face: the button is a toggle, and both mean "the post is in the
         // user's favorites".
-        const label =
-            state === "adding"
-                ? "Adding…"
-                : state === "saving"
-                  ? "Updating library…"
-                  : state === "removing"
-                    ? "Removing…"
-                    : state === "added" || state === "already"
-                      ? "Remove from favorites"
-                      : state === "library-failed"
-                        ? "Library update failed"
-                        : state === "removal-failed"
-                          ? "Library update failed"
-                          : state === "stale-session"
-                            ? "Session expired"
-                            : "Add to favorites"
         return button(
             {
                 type: "button",
@@ -174,30 +159,66 @@ function AddFavoriteButton({
                           ? "cursor-pointer border-rose-900/70 bg-rose-950/30 text-rose-300 hover:bg-rose-950/50"
                           : "cursor-default border-zinc-800 bg-zinc-900/40 text-zinc-500",
                 ),
-                title:
-                    state === "library-failed"
-                        ? "The favorite was added on rule34.xxx, but updating local membership failed. Click to retry."
-                        : state === "removal-failed"
-                          ? "The favorite was removed on rule34.xxx, but updating local membership failed. Click to retry."
-                          : state === "stale-session"
-                            ? "Your rule34 session has expired, so the removal failed. The post is still in your favorites — log in again to manage it."
-                            : "",
+                title: favoriteButtonTitle(state),
                 // The computed state (not the raw favorite.val) drives
                 // add/remove — that's what makes the "already" overlay work,
                 // where the raw state is still "idle".
                 onclick: () => {
-                    if (librarySaves.val.has(post.id)) return
+                    if (membershipWrites.val.has(post.id)) return
                     if (favorite.val === "library-failed")
-                        void retryLibrarySave(post, favorite, isCurrent)
+                        void retryFavoriteMembership(post, favorite, isCurrent)
                     else if (favorite.val === "removal-failed")
-                        void retryLibraryRemoval(post, favorite, isCurrent)
+                        void retryUnfavoriteMembership(post, favorite, isCurrent)
                     else if (state === "added" || state === "already")
                         void removeFavoriteWithStatus(post, favorite, isCurrent)
                     else if (state === "idle") void addFavoriteWithStatus(post, favorite, isCurrent)
                 },
             },
-            label,
+            favoriteButtonLabel(state),
         )
+    }
+}
+
+function favoriteButtonLabel(state: FavoriteStatus): string {
+    switch (state) {
+        case "adding":
+            return "Adding…"
+        case "saving":
+            return "Updating library…"
+        case "removing":
+            return "Removing…"
+        case "added":
+        case "already":
+            return "Remove from favorites"
+        case "library-failed":
+        case "removal-failed":
+            return "Library update failed"
+        case "stale-session":
+            return "Session expired"
+        case "idle":
+            return "Add to favorites"
+    }
+}
+
+function favoriteButtonTitle(state: FavoriteStatus): string {
+    switch (state) {
+        case "library-failed":
+            return [
+                "The favorite was added on rule34.xxx, but updating local membership failed.",
+                "Click to retry.",
+            ].join(" ")
+        case "removal-failed":
+            return [
+                "The favorite was removed on rule34.xxx, but updating local membership failed.",
+                "Click to retry.",
+            ].join(" ")
+        case "stale-session":
+            return [
+                "Your rule34 session has expired, so the removal failed.",
+                "The post is still in your favorites — log in again to manage it.",
+            ].join(" ")
+        default:
+            return ""
     }
 }
 
@@ -215,17 +236,22 @@ function Sidebar({
     return div(
         { class: clsx("flex flex-col gap-6") },
         AddFavoriteButton({ post, favorite, isCurrent }),
-        () =>
-            serverSettings.val.enabled
-                ? div(
-                      { class: clsx("text-sm text-zinc-400") },
-                      libraryPosts.val.get(post.id)?.downloadState ?? "Local status unknown",
-                  )
-                : document.createComment(""),
+        LibraryDownloadStatus(post.id),
         OriginalImageToggle({ post, showOriginal }),
         StatsSection({ post }),
         TagList({ tags: post.tags }),
     )
+}
+
+function LibraryDownloadStatus(postId: number) {
+    return () => {
+        if (!serverSettings.val.enabled) return document.createComment("")
+
+        return div(
+            { class: clsx("text-sm text-zinc-400") },
+            libraryPosts.val.get(postId)?.downloadState ?? "Local status unknown",
+        )
+    }
 }
 
 // Build the media element for a post without inserting it. The element

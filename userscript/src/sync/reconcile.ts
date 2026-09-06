@@ -1,58 +1,74 @@
-// After a reconciled prefix, remote order must be a subsequence of the baseline.
-// This function is pure so the search assumptions can be tested independently.
+const FAVORITES_PAGE_SIZE = 50
+
+// New and re-added favorites form a prefix. Move that observed prefix in front
+// of the previous order before searching for entries missing farther down.
 export function reconcilePrefix(baseline: number[], front: number[]): number[] {
     const moved = new Set(front)
-    return [...front, ...baseline.filter((id) => !moved.has(id))]
+    return [...front, ...baseline.filter((postId) => !moved.has(postId))]
 }
 
-export function missingBefore(local: number[], position: number, remoteId: number): number[] {
-    const index = local.indexOf(remoteId, position)
+export function missingBefore(local: number[], position: number, remotePostId: number): number[] {
+    const index = local.indexOf(remotePostId, position)
     if (index < position) throw new Error("Observed order contradicts the baseline")
+
     return local.slice(position, index)
 }
 
+// After the reconciled prefix, the remote order must be a subsequence of the
+// baseline. Find the first page that diverges, remove its local-only entries,
+// and repeat until the lengths agree. Availability checks happen outside this
+// pure ordering logic so the caller can distinguish removals from deletions.
 export async function reconcileRemovals(
     initial: number[],
     frontLength: number,
     count: number,
     readPage: (position: number) => Promise<number[]>,
-    checkMissing: (ids: number[]) => Promise<void>,
+    checkMissing: (postIds: number[]) => Promise<void>,
 ): Promise<number[]> {
     let local = [...initial]
+
     while (local.length > count) {
-        let low = Math.ceil(frontLength / 50),
-            high = Math.ceil(count / 50) - 1
-        let mismatch: number[] | null = null,
-            position = count
+        let low = Math.ceil(frontLength / FAVORITES_PAGE_SIZE)
+        let high = Math.ceil(count / FAVORITES_PAGE_SIZE) - 1
+        let mismatch: number[] | null = null
+        let position = count
+
         while (low <= high) {
-            const mid = Math.floor((low + high) / 2),
-                offset = mid * 50
-            const ids = await readPage(offset)
-            if (ids.every((id, i) => local[offset + i] === id)) low = mid + 1
-            else {
-                mismatch = ids
+            const middle = Math.floor((low + high) / 2)
+            const offset = middle * FAVORITES_PAGE_SIZE
+            const remote = await readPage(offset)
+
+            if (remote.every((postId, index) => local[offset + index] === postId)) {
+                low = middle + 1
+            } else {
+                mismatch = remote
                 position = offset
-                high = mid - 1
+                high = middle - 1
             }
         }
+
         const candidates: number[] = []
-        if (mismatch) {
-            for (let i = 0; i < mismatch.length; i++) {
-                const id = mismatch[i]!
-                if (local[position + i] !== id) {
-                    const gap = missingBefore(local, position + i, id)
-                    if (gap.length === 0) throw new Error("No progress resolving order")
-                    candidates.push(...gap)
-                    local.splice(position + i, gap.length)
-                }
+        if (mismatch !== null) {
+            for (const [index, remotePostId] of mismatch.entries()) {
+                if (local[position + index] === remotePostId) continue
+
+                const gap = missingBefore(local, position + index, remotePostId)
+                if (gap.length === 0) throw new Error("No progress resolving order")
+
+                candidates.push(...gap)
+                local.splice(position + index, gap.length)
             }
         } else {
             candidates.push(...local.slice(count))
             local = local.slice(0, count)
         }
+
         if (candidates.length === 0) throw new Error("No progress resolving discrepancy")
         await checkMissing(candidates)
     }
-    if (local.length !== count) throw new Error("Unresolved additions beyond the observed prefix")
+
+    if (local.length !== count) {
+        throw new Error("Unresolved additions beyond the observed prefix")
+    }
     return local
 }

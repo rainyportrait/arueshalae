@@ -18,7 +18,7 @@ describe("ordered reconciliation", () => {
 })
 
 describe("binary search against a stable ordered baseline", () => {
-    it("finds multiple removals after additions and re-additions across page boundaries", async () => {
+    it("finds removals across page boundaries", async () => {
         for (let seed = 1; seed <= 60; seed++) {
             const baseline = Array.from({ length: 150 + seed }, (_, i) => i + 1)
             const removed = baseline.filter((id) => (id + seed) % 17 === 0)

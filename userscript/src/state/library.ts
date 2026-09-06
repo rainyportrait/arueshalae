@@ -6,6 +6,8 @@ import { details } from "./details.ts"
 import { markDownloaded } from "./downloaded.ts"
 import { serverSettings } from "./settings.ts"
 
+const LIBRARY_POLL_INTERVAL_MS = 15_000
+
 export type LibraryPost = {
     postId: number
     membership: string
@@ -14,18 +16,28 @@ export type LibraryPost = {
     error: string | null
     downloadState?: string
 }
+
 export const libraryPosts = van.state<Map<number, LibraryPost>>(new Map())
-export async function refreshLibrary(ids: number[]): Promise<void> {
-    if (!serverSettings.rawVal.enabled || auth.rawVal.status !== "authenticated") return
+
+export async function refreshLibrary(postIds: number[]): Promise<void> {
     const account = auth.rawVal
-    const url = serverSettings.rawVal.url
-    const { posts } = await syncCommand<{ posts: LibraryPost[] }>("memberships", { ids })
+    const settings = serverSettings.rawVal
+    if (!settings.enabled || account.status !== "authenticated") return
+
+    const { posts } = await syncCommand<{ posts: LibraryPost[] }>("memberships", {
+        ids: postIds,
+    })
+
+    // Do not publish a response requested for an account or server which is
+    // no longer current.
     if (
         auth.rawVal !== account ||
-        serverSettings.rawVal.url !== url ||
+        serverSettings.rawVal.url !== settings.url ||
         !serverSettings.rawVal.enabled
-    )
+    ) {
         return
+    }
+
     const next = new Map(libraryPosts.rawVal)
     for (const post of posts) {
         next.set(post.postId, post)
@@ -33,16 +45,27 @@ export async function refreshLibrary(ids: number[]): Promise<void> {
     }
     libraryPosts.val = next
 }
-van.derive(() => {
-    const d = details.val
-    if (serverSettings.val.enabled && auth.val.status === "authenticated" && d.status === "ready")
-        void refreshLibrary([d.post.id]).catch(() => {})
-})
-setInterval(() => {
-    const d = details.rawVal
-    if (d.status === "ready") void refreshLibrary([d.post.id]).catch(() => {})
-}, 15000)
 
+// Load membership with the details page and poll while it remains open. This
+// lets background reconciliation change the button without rebuilding the page.
+van.derive(() => {
+    const page = details.val
+    if (
+        serverSettings.val.enabled &&
+        auth.val.status === "authenticated" &&
+        page.status === "ready"
+    ) {
+        void refreshLibrary([page.post.id]).catch(() => {})
+    }
+})
+
+setInterval(() => {
+    const page = details.rawVal
+    if (page.status === "ready") void refreshLibrary([page.post.id]).catch(() => {})
+}, LIBRARY_POLL_INTERVAL_MS)
+
+// Membership belongs to the selected account and server, so no cached entry
+// survives a context change.
 van.derive(() => {
     auth.val
     serverSettings.val

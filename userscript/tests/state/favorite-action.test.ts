@@ -7,26 +7,30 @@ import type { FavoriteStatus } from "../../src/state/favorite-action.ts"
 import { resetDom } from "../dom.ts"
 import { deferred } from "../helpers/deferred.ts"
 
-// The state machine only talks to the server through the (mocked) api module;
-// its production save is never called — every test injects `save`.
+// Background library refreshes and download checks stay local to the test. The
+// favorite actions themselves inject their membership writers below.
 const api = vi.hoisted(() => ({
     checkDownloads: vi.fn(),
-    unfavoriteOnServer: vi.fn(),
     getDownloadCount: vi.fn(),
+    syncCommand: vi.fn(),
+    setFavoriteMembership: vi.fn(),
 }))
 
 vi.mock("../../src/api/server.ts", () => ({
     checkDownloads: api.checkDownloads,
-    unfavoriteOnServer: api.unfavoriteOnServer,
     getDownloadCount: api.getDownloadCount,
     ServerError: class ServerError extends Error {},
-    savePostToServer: vi.fn(),
+}))
+
+vi.mock("../../src/api/sync.ts", () => ({
+    syncCommand: api.syncCommand,
+    setFavoriteMembership: api.setFavoriteMembership,
 }))
 
 type AddFn = (id: number) => Promise<AddFavoriteResult>
 type RemoveFn = (id: number) => Promise<RemoveFavoriteResult>
 type SessionCheckFn = (userId: number) => Promise<boolean>
-type DeleteFn = (postId: number) => Promise<void>
+type UnfavoriteFn = (postId: number) => Promise<void>
 type SaveFn = (post: PostDetails) => Promise<void>
 
 function makePost(id: number): PostDetails {
@@ -68,25 +72,27 @@ describe("favorite button lifecycle", () => {
     let add: Mock<AddFn>
     let remove: Mock<RemoveFn>
     let sessionCheck: Mock<SessionCheckFn>
-    let del: Mock<DeleteFn>
+    let unfavorite: Mock<UnfavoriteFn>
     let save: Mock<SaveFn>
 
     beforeEach(async () => {
         vi.resetModules()
         api.checkDownloads.mockReset()
         api.checkDownloads.mockResolvedValue(new Set())
-        api.unfavoriteOnServer.mockReset()
+        api.syncCommand.mockReset()
+        api.syncCommand.mockResolvedValue({ posts: [] })
+        api.setFavoriteMembership.mockReset()
         resetDom()
         favorite = van.state<FavoriteStatus>("idle")
         add = vi.fn<AddFn>()
         remove = vi.fn<RemoveFn>()
         sessionCheck = vi.fn<SessionCheckFn>()
-        del = vi.fn<DeleteFn>()
+        unfavorite = vi.fn<UnfavoriteFn>()
         save = vi.fn<SaveFn>()
     })
 
     it("adds the favorite, saves it to the library, and settles added", async () => {
-        const { addFavoriteWithStatus, librarySaves, downloaded, serverSettings } = await load()
+        const { addFavoriteWithStatus, membershipWrites, downloaded, serverSettings } = await load()
         serverSettings.val = { enabled: true, url: "http://127.0.0.1:34343" }
         const post = makePost(1)
         add.mockResolvedValue({ ok: true })
@@ -96,7 +102,7 @@ describe("favorite button lifecycle", () => {
         const done = addFavoriteWithStatus(post, favorite, () => true, add, save)
         await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(1))
         expect(favorite.val).toBe("saving")
-        expect(librarySaves.val.has(1)).toBe(true)
+        expect(membershipWrites.val.has(1)).toBe(true)
 
         saveGate.resolve(undefined)
         await done
@@ -105,7 +111,7 @@ describe("favorite button lifecycle", () => {
         expect(save).toHaveBeenCalledTimes(1)
         expect(favorite.val).toBe("added")
         expect(downloaded.val.has(1)).toBe(false)
-        expect(librarySaves.val.size).toBe(0)
+        expect(membershipWrites.val.size).toBe(0)
     })
 
     it("settles added without saving when the server is disabled", async () => {
@@ -177,7 +183,8 @@ describe("favorite button lifecycle", () => {
     })
 
     it("settles library-failed when the save fails, and a retry completes it", async () => {
-        const { addFavoriteWithStatus, retryLibrarySave, downloaded, serverSettings } = await load()
+        const { addFavoriteWithStatus, retryFavoriteMembership, downloaded, serverSettings } =
+            await load()
         serverSettings.val = { enabled: true, url: "http://127.0.0.1:34343" }
         const post = makePost(1)
         add.mockResolvedValue({ ok: true })
@@ -192,7 +199,7 @@ describe("favorite button lifecycle", () => {
         expect(downloaded.val.has(1)).toBe(false)
 
         save.mockResolvedValue(undefined)
-        await retryLibrarySave(post, favorite, () => true, save)
+        await retryFavoriteMembership(post, favorite, () => true, save)
 
         expect(favorite.val).toBe("already")
         expect(save).toHaveBeenCalledTimes(2)
@@ -200,12 +207,12 @@ describe("favorite button lifecycle", () => {
     })
 
     it("a retry with the server disabled settles already without saving", async () => {
-        const { retryLibrarySave, serverSettings } = await load()
+        const { retryFavoriteMembership, serverSettings } = await load()
         serverSettings.val = { enabled: false, url: "http://127.0.0.1:34343" }
         favorite.val = "library-failed"
         const post = makePost(1)
 
-        await retryLibrarySave(post, favorite, () => true, save)
+        await retryFavoriteMembership(post, favorite, () => true, save)
 
         expect(favorite.val).toBe("already")
         expect(save).not.toHaveBeenCalled()
@@ -265,26 +272,26 @@ describe("favorite button lifecycle", () => {
         const post = makePost(1)
         remove.mockResolvedValue({ ok: true })
 
-        await removeFavoriteWithStatus(post, favorite, () => true, remove, sessionCheck, del)
+        await removeFavoriteWithStatus(post, favorite, () => true, remove, sessionCheck, unfavorite)
 
         expect(remove).toHaveBeenCalledWith(1)
-        expect(del).toHaveBeenCalledTimes(1)
+        expect(unfavorite).toHaveBeenCalledTimes(1)
         expect(favorite.val).toBe("idle")
         expect(downloaded.val.has(1)).toBe(true)
         expect(sessionCheck).not.toHaveBeenCalled()
     })
 
-    it("settles idle without deleting when the server is disabled", async () => {
+    it("settles idle without writing locally when the server is disabled", async () => {
         const { removeFavoriteWithStatus, downloaded, serverSettings } = await load()
         serverSettings.val = { enabled: false, url: "http://127.0.0.1:34343" }
         downloaded.val = new Set([1])
         const post = makePost(1)
         remove.mockResolvedValue({ ok: true })
 
-        await removeFavoriteWithStatus(post, favorite, () => true, remove, sessionCheck, del)
+        await removeFavoriteWithStatus(post, favorite, () => true, remove, sessionCheck, unfavorite)
 
         expect(favorite.val).toBe("idle")
-        expect(del).not.toHaveBeenCalled()
+        expect(unfavorite).not.toHaveBeenCalled()
     })
 
     it("updates membership even before media is downloaded", async () => {
@@ -293,13 +300,13 @@ describe("favorite button lifecycle", () => {
         const post = makePost(1)
         remove.mockResolvedValue({ ok: true })
 
-        await removeFavoriteWithStatus(post, favorite, () => true, remove, sessionCheck, del)
+        await removeFavoriteWithStatus(post, favorite, () => true, remove, sessionCheck, unfavorite)
 
         expect(favorite.val).toBe("idle")
-        expect(del).toHaveBeenCalledTimes(1)
+        expect(unfavorite).toHaveBeenCalledTimes(1)
     })
 
-    it("deletes a drifted post on a 403 when the session is alive", async () => {
+    it("updates drifted membership on a 403 when the session is alive", async () => {
         const { removeFavoriteWithStatus, downloaded, serverSettings } = await load()
         serverSettings.val = { enabled: true, url: "http://127.0.0.1:34343" }
         downloaded.val = new Set([1])
@@ -307,14 +314,14 @@ describe("favorite button lifecycle", () => {
         remove.mockResolvedValue({ ok: false, reason: "forbidden" })
         sessionCheck.mockResolvedValue(true)
 
-        await removeFavoriteWithStatus(post, favorite, () => true, remove, sessionCheck, del)
+        await removeFavoriteWithStatus(post, favorite, () => true, remove, sessionCheck, unfavorite)
 
-        expect(del).toHaveBeenCalledTimes(1)
+        expect(unfavorite).toHaveBeenCalledTimes(1)
         expect(favorite.val).toBe("idle")
         expect(downloaded.val.has(1)).toBe(true)
     })
 
-    it("settles stale-session without deleting when the session is dead", async () => {
+    it("settles stale-session without writing when the session is dead", async () => {
         const { removeFavoriteWithStatus, downloaded, serverSettings } = await load()
         serverSettings.val = { enabled: true, url: "http://127.0.0.1:34343" }
         downloaded.val = new Set([1])
@@ -322,10 +329,10 @@ describe("favorite button lifecycle", () => {
         remove.mockResolvedValue({ ok: false, reason: "forbidden" })
         sessionCheck.mockResolvedValue(false)
 
-        await removeFavoriteWithStatus(post, favorite, () => true, remove, sessionCheck, del)
+        await removeFavoriteWithStatus(post, favorite, () => true, remove, sessionCheck, unfavorite)
 
         expect(favorite.val).toBe("stale-session")
-        expect(del).not.toHaveBeenCalled()
+        expect(unfavorite).not.toHaveBeenCalled()
         expect(downloaded.val.has(1)).toBe(true)
     })
 
@@ -337,10 +344,10 @@ describe("favorite button lifecycle", () => {
         remove.mockResolvedValue({ ok: false, reason: "forbidden" })
         sessionCheck.mockRejectedValue(new TypeError("fetch failed"))
 
-        await removeFavoriteWithStatus(post, favorite, () => true, remove, sessionCheck, del)
+        await removeFavoriteWithStatus(post, favorite, () => true, remove, sessionCheck, unfavorite)
 
         expect(favorite.val).toBe("added")
-        expect(del).not.toHaveBeenCalled()
+        expect(unfavorite).not.toHaveBeenCalled()
     })
 
     it("restores the pre-click face when rule34 can't be reached", async () => {
@@ -350,45 +357,45 @@ describe("favorite button lifecycle", () => {
         favorite.val = "added"
         remove.mockRejectedValue(new TypeError("fetch failed"))
 
-        await removeFavoriteWithStatus(post, favorite, () => true, remove, sessionCheck, del)
+        await removeFavoriteWithStatus(post, favorite, () => true, remove, sessionCheck, unfavorite)
 
         expect(favorite.val).toBe("added")
-        expect(del).not.toHaveBeenCalled()
+        expect(unfavorite).not.toHaveBeenCalled()
         expect(sessionCheck).not.toHaveBeenCalled()
     })
 
-    it("settles removal-failed when the delete fails, and a retry completes it", async () => {
-        const { removeFavoriteWithStatus, retryLibraryRemoval, downloaded, serverSettings } =
+    it("settles removal-failed when the membership write fails, then retries it", async () => {
+        const { removeFavoriteWithStatus, retryUnfavoriteMembership, downloaded, serverSettings } =
             await load()
         serverSettings.val = { enabled: true, url: "http://127.0.0.1:34343" }
         downloaded.val = new Set([1])
         const post = makePost(1)
         remove.mockResolvedValue({ ok: true })
-        del.mockRejectedValueOnce(new Error("server down"))
+        unfavorite.mockRejectedValueOnce(new Error("server down"))
 
-        await removeFavoriteWithStatus(post, favorite, () => true, remove, sessionCheck, del)
+        await removeFavoriteWithStatus(post, favorite, () => true, remove, sessionCheck, unfavorite)
 
         expect(favorite.val).toBe("removal-failed")
         expect(downloaded.val.has(1)).toBe(true)
 
-        del.mockResolvedValue(undefined)
-        await retryLibraryRemoval(post, favorite, () => true, del)
+        unfavorite.mockResolvedValue(undefined)
+        await retryUnfavoriteMembership(post, favorite, () => true, unfavorite)
 
         expect(favorite.val).toBe("idle")
-        expect(del).toHaveBeenCalledTimes(2)
+        expect(unfavorite).toHaveBeenCalledTimes(2)
         expect(downloaded.val.has(1)).toBe(true)
     })
 
-    it("a retry with the server disabled settles idle without deleting", async () => {
-        const { retryLibraryRemoval, serverSettings } = await load()
+    it("a retry with the server disabled settles idle without writing", async () => {
+        const { retryUnfavoriteMembership, serverSettings } = await load()
         serverSettings.val = { enabled: false, url: "http://127.0.0.1:34343" }
         favorite.val = "removal-failed"
         const post = makePost(1)
 
-        await retryLibraryRemoval(post, favorite, () => true, del)
+        await retryUnfavoriteMembership(post, favorite, () => true, unfavorite)
 
         expect(favorite.val).toBe("idle")
-        expect(del).not.toHaveBeenCalled()
+        expect(unfavorite).not.toHaveBeenCalled()
     })
 
     it("does not write stale state after a removal navigation", async () => {
@@ -397,17 +404,25 @@ describe("favorite button lifecycle", () => {
         downloaded.val = new Set([1])
         const post = makePost(1)
         remove.mockResolvedValue({ ok: true })
-        const delGate = deferred<void>()
-        del.mockReturnValue(delGate.promise)
+        const writeGate = deferred<void>()
+        unfavorite.mockReturnValue(writeGate.promise)
         let current = true
         const isCurrent = () => current
 
-        const done = removeFavoriteWithStatus(post, favorite, isCurrent, remove, sessionCheck, del)
-        await vi.waitFor(() => expect(del).toHaveBeenCalledTimes(1))
-        // The user stepped to the next post: the per-post state reset...
+        const done = removeFavoriteWithStatus(
+            post,
+            favorite,
+            isCurrent,
+            remove,
+            sessionCheck,
+            unfavorite,
+        )
+        await vi.waitFor(() => expect(unfavorite).toHaveBeenCalledTimes(1))
+
+        // The user stepped to the next post: the per-post state reset.
         current = false
         favorite.val = "idle"
-        delGate.resolve(undefined)
+        writeGate.resolve(undefined)
         await done
 
         expect(favorite.val).toBe("idle")

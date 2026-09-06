@@ -57,31 +57,28 @@ export async function fetchServer(
     init?: RequestInit,
     timeoutMs = TIMEOUT_MS,
 ): Promise<Response> {
-    const res = await fetchServerResponse(path, init, timeoutMs)
-    if (!res.ok) throw new ServerError(`The server responded with ${res.status} ${res.statusText}`)
-    return res
+    const response = await fetchServerResponse(path, init, timeoutMs)
+    if (!response.ok) {
+        throw new ServerError(`The server responded with ${response.status} ${response.statusText}`)
+    }
+    return response
 }
 
 // The number of posts the server has downloaded. Used as the connection test:
 // reaching this endpoint also proves we're talking to an arueshalae server.
 export async function getDownloadCount(): Promise<number> {
-    const res = await fetchServer("api/posts/count")
-    return ((await res.json()) as { count: number }).count
+    const response = await fetchServer("api/posts/count")
+    return ((await response.json()) as { count: number }).count
 }
 
 // Downloaded media is independent of current membership. This includes retained
 // unfavorited and upstream-deleted copies.
 export async function checkDownloads(postIds: number[]): Promise<Set<number>> {
     if (postIds.length === 0) return new Set()
-    const res = await fetchServer(`api/posts/downloaded?ids=${postIds.join(",")}`)
-    const { postIds: downloaded } = (await res.json()) as { postIds: number[] }
-    return new Set(downloaded)
-}
 
-// Update account membership while retaining any downloaded media.
-export async function unfavoriteOnServer(postId: number): Promise<void> {
-    const { setFavoriteMembership } = await import("./sync.ts")
-    await setFavoriteMembership(postId, false)
+    const response = await fetchServer(`api/posts/downloaded?ids=${postIds.join(",")}`)
+    const { postIds: downloaded } = (await response.json()) as { postIds: number[] }
+    return new Set(downloaded)
 }
 
 // --- Saving posts -----------------------------------------------------------
@@ -118,12 +115,15 @@ export async function savePostToServer(
 ): Promise<void> {
     const account = auth.rawVal
     if (account.status !== "authenticated") throw new Error("Not signed in")
+
     const url = mediaUrlFor(post.media)
     if (url === "") throw new Error("the post has no media URL")
+
     const bytes = await fetchMedia(url, timeoutMs)
     const form = new FormData()
     form.append("image", new Blob([bytes], { type: mimeFromUrl(url) }), fileNameFromUrl(url))
     form.append("tags", JSON.stringify(serverTags(post.tags)))
+
     // The upload leg streams the media to a localhost server: the default 5s
     // control-plane budget is far too short for a large file.
     const response = await fetchServer(
@@ -132,6 +132,7 @@ export async function savePostToServer(
         timeoutMs,
     )
     const result = (await response.json()) as { cancelled?: boolean }
+
     if (result.cancelled) throw new Error("Download cancelled: post was unfavorited")
 }
 

@@ -193,15 +193,20 @@ pub async fn serve_media(
     let (name, path, mime) = match database.get_post(post_id).await {
         Ok(post) => {
             let name = file_name(post.id, post.external_id, &post.extension);
-            let path = if post.mime.starts_with("image") {
-                base_path.join(&name)
+            let (path, mime) = if post.mime.starts_with("image") {
+                (base_path.join(&name), post.mime)
             } else {
-                base_path.join(".thumbs").join(format!("{name}.jpeg"))
+                // Videos are served as the JPEG poster ffmpeg generated at
+                // upload time, not as the video itself.
+                (
+                    base_path.join(".thumbs").join(format!("{name}.jpeg")),
+                    "image/jpeg".to_string(),
+                )
             };
             if !path.is_file() {
                 return Err((StatusCode::NOT_FOUND, "file not found on disk"));
             }
-            (name, path, post.mime)
+            (name, path, mime)
         }
         Err(_) => return Err((StatusCode::NOT_FOUND, "post not found in database")),
     };

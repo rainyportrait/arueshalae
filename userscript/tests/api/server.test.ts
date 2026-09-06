@@ -51,20 +51,26 @@ describe("server client", () => {
         vi.unstubAllGlobals()
     })
 
-    it("posts the ids to /check and returns the downloaded subset", async () => {
-        mockFetch(calls, () => jsonResponse({ downloaded: [3], notDownloaded: [1, 2] }))
+    it("gets the held ids from /api/posts/downloaded?ids= and returns them", async () => {
+        mockFetch(calls, () => jsonResponse({ postIds: [3] }))
 
         await expect(checkDownloads([1, 2, 3])).resolves.toEqual(new Set([3]))
 
         expect(calls).toHaveLength(1)
-        expect(calls[0]?.url).toBe("http://127.0.0.1:34343/check")
-        expect(calls[0]?.init.method).toBe("POST")
-        expect(calls[0]?.init.headers).toEqual({ "Content-Type": "application/json" })
-        expect(JSON.parse(calls[0]?.init.body as string)).toEqual({ postIds: [1, 2, 3] })
+        expect(calls[0]?.url).toBe("http://127.0.0.1:34343/api/posts/downloaded?ids=1,2,3")
+        expect(calls[0]?.init.method).toBeUndefined()
+        expect(calls[0]?.init.body).toBeUndefined()
+    })
+
+    it("skips the request entirely when given no ids", async () => {
+        mockFetch(calls, () => jsonResponse({ postIds: [] }))
+
+        await expect(checkDownloads([])).resolves.toEqual(new Set())
+        expect(calls).toHaveLength(0)
     })
 
     it("survives an all-absent answer with an empty set", async () => {
-        mockFetch(calls, () => jsonResponse({ downloaded: [], notDownloaded: [1] }))
+        mockFetch(calls, () => jsonResponse({ postIds: [] }))
 
         await expect(checkDownloads([1])).resolves.toEqual(new Set())
     })
@@ -104,16 +110,16 @@ describe("server client", () => {
         mockFetch(calls, () => jsonResponse({ count: 42 }))
 
         await expect(getDownloadCount()).resolves.toBe(42)
-        expect(calls[0]?.url).toBe("http://127.0.0.1:34343/count")
+        expect(calls[0]?.url).toBe("http://127.0.0.1:34343/api/posts/count")
     })
 
-    it("deletes a post with DELETE /post/{id} and treats a 404 as a no-op", async () => {
+    it("deletes a post with DELETE /api/posts/{id} and treats a 404 as a no-op", async () => {
         mockFetch(calls, () => ({ ok: false, status: 404, statusText: "Not Found" }) as Response)
 
         await expect(deletePostFromServer(123)).resolves.toBeUndefined()
 
         expect(calls).toHaveLength(1)
-        expect(calls[0]?.url).toBe("http://127.0.0.1:34343/post/123")
+        expect(calls[0]?.url).toBe("http://127.0.0.1:34343/api/posts/123")
         expect(calls[0]?.init.method).toBe("DELETE")
     })
 
@@ -186,7 +192,7 @@ describe("savePostToServer", () => {
         calls = []
     })
 
-    it("downloads the original image and posts it to /upload with the post's tags", async () => {
+    it("downloads the original image and posts it to /api/posts/{id} with the post's tags", async () => {
         const bytes = new Uint8Array([1, 2, 3, 4])
         const fetchMedia = vi.fn<MediaFetcher>(async (url) => bytes.buffer)
         mockFetch(calls, () => jsonResponse({ ok: true }))
@@ -195,10 +201,9 @@ describe("savePostToServer", () => {
 
         expect(fetchMedia).toHaveBeenCalledWith("https://wimg.rule34.xxx/img/2025/123.jpg", 1000)
         expect(calls).toHaveLength(1)
-        expect(calls[0]?.url).toBe("http://127.0.0.1:34343/upload")
+        expect(calls[0]?.url).toBe("http://127.0.0.1:34343/api/posts/123")
         expect(calls[0]?.init.method).toBe("POST")
         const body = calls[0]?.init.body as FormData
-        expect(body.get("id")).toBe("123")
         const file = body.get("image") as File
         expect(file.name).toBe("123.jpg")
         expect(file.type).toBe("image/jpeg")

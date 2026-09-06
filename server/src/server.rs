@@ -10,6 +10,7 @@ use axum::{
     routing::{delete, get, post},
 };
 use camino::{Utf8Path, Utf8PathBuf};
+use serde::Deserialize;
 use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
@@ -17,8 +18,10 @@ use tracing::error;
 
 use crate::{
     database::Database,
-    search::{autocomplete, search, serve_image, serve_mini},
-    upload::{check_download_status, delete_post, get_download_count, upload},
+    posts::{
+        create_post, delete_post, get_download_count, list_downloaded_posts, search, serve_media,
+    },
+    tags::search_tags,
 };
 
 #[macro_export]
@@ -41,17 +44,22 @@ pub struct AppState {
     pub base_path: Utf8PathBuf,
 }
 
+// The `term` query filter shared by the search endpoints.
+#[derive(Deserialize)]
+pub struct SearchQuery {
+    pub term: String,
+}
+
 pub fn create_router(database: &Database, base_path: &Utf8Path) -> Router {
     Router::new()
-        .route("/upload", post(upload))
+        .route("/api/posts/{post_id}", post(create_post))
         .layer(DefaultBodyLimit::max(1024 * 1024 * 1024))
-        .route("/check", post(check_download_status))
-        .route("/count", get(get_download_count))
-        .route("/post/{post_id}", delete(delete_post))
-        .route("/search", get(search))
-        .route("/search/autocomplete", get(autocomplete))
-        .route("/image/{post_id}", get(serve_image))
-        .route("/image/mini/{post_id}", get(serve_mini))
+        .route("/api/posts/{post_id}", delete(delete_post))
+        .route("/api/posts/downloaded", get(list_downloaded_posts))
+        .route("/api/posts/search", get(search))
+        .route("/api/posts/count", get(get_download_count))
+        .route("/api/posts/{post_id}/media", get(serve_media))
+        .route("/api/tags", get(search_tags))
         .layer(
             CorsLayer::new()
                 .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::OPTIONS])

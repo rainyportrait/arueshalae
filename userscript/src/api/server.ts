@@ -64,7 +64,7 @@ export async function fetchServer(
 // The number of posts the server has downloaded. Used as the connection test:
 // reaching this endpoint also proves we're talking to an arueshalae server.
 export async function getDownloadCount(): Promise<number> {
-    const res = await fetchServer("count")
+    const res = await fetchServer("api/posts/count")
     return ((await res.json()) as { count: number }).count
 }
 
@@ -72,12 +72,9 @@ export async function getDownloadCount(): Promise<number> {
 // user's downloaded favorites, so an id it returns is (and was) favorited.
 // Returns the ids the server has (a subset of the input, in no order).
 export async function checkDownloads(postIds: number[]): Promise<Set<number>> {
-    const res = await fetchServer("check", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ postIds }),
-    })
-    const { downloaded } = (await res.json()) as { downloaded: number[] }
+    if (postIds.length === 0) return new Set()
+    const res = await fetchServer(`api/posts/downloaded?ids=${postIds.join(",")}`)
+    const { postIds: downloaded } = (await res.json()) as { postIds: number[] }
     return new Set(downloaded)
 }
 
@@ -85,14 +82,14 @@ export async function checkDownloads(postIds: number[]): Promise<Set<number>> {
 // A 404 (the server doesn't hold it) is a successful no-op, so duplicate or
 // out-of-order deletes are harmless.
 export async function deletePostFromServer(postId: number): Promise<void> {
-    const res = await fetchServerResponse(`post/${postId}`, { method: "DELETE" })
+    const res = await fetchServerResponse(`api/posts/${postId}`, { method: "DELETE" })
     if (!res.ok && res.status !== 404)
         throw new ServerError(`The server responded with ${res.status} ${res.statusText}`)
 }
 
 // --- Saving posts -----------------------------------------------------------
 
-// The tag shape the server's /upload endpoint expects. `name` is the tag's
+// The tag shape the server's /api/posts endpoint expects. `name` is the tag's
 // slug — rule34's canonical identifier, which the server matches searches
 // exactly against — and `kind` reuses the userscript tag type (same values).
 export type ServerTag = { name: string; kind: string }
@@ -111,9 +108,10 @@ export function mediaUrlFor(media: PostMedia): string {
 }
 
 // Download the post's media (cross-origin, so through the injected GM fetcher
-// — see gm-fetch.ts) and upload it to the /upload endpoint as multipart form
-// data. The server infers the media type and extension from the bytes; the
-// Blob's mime and file name are best-effort from the URL, useful in logs.
+// — see gm-fetch.ts) and upload it to the /api/posts/{post_id} endpoint as
+// multipart form data. The server infers the media type and extension from
+// the bytes; the Blob's mime and file name are best-effort from the URL,
+// useful in logs.
 export type MediaFetcher = (url: string, timeoutMs: number) => Promise<ArrayBuffer>
 
 export async function savePostToServer(
@@ -125,12 +123,11 @@ export async function savePostToServer(
     if (url === "") throw new Error("the post has no media URL")
     const bytes = await fetchMedia(url, timeoutMs)
     const form = new FormData()
-    form.append("id", String(post.id))
     form.append("image", new Blob([bytes], { type: mimeFromUrl(url) }), fileNameFromUrl(url))
     form.append("tags", JSON.stringify(serverTags(post.tags)))
     // The upload leg streams the media to a localhost server: the default 5s
     // control-plane budget is far too short for a large file.
-    await fetchServer("upload", { method: "POST", body: form }, timeoutMs)
+    await fetchServer(`api/posts/${post.id}`, { method: "POST", body: form }, timeoutMs)
 }
 
 function mimeFromUrl(url: string): string {

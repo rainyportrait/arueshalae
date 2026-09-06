@@ -1,8 +1,8 @@
 mod database;
 mod media_processor;
-mod search;
+mod posts;
 mod server;
-mod upload;
+mod tags;
 
 use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
 use clap::Parser;

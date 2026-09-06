@@ -32,7 +32,8 @@ function cardHref(post: Post): string {
 // The "in your library" badge: a heart in the card's corner for posts the
 // arueshalae server holds, over a soft darkening of the corner that keeps it
 // readable on bright thumbnails. A live child of the card anchor, so a
-// settled /check (or a server toggle, or a navigation) swaps just this node
+// settled /api/posts/downloaded (or a server toggle, or a navigation) swaps
+// just this node
 // — never the card or its img, a swap of which would reload the thumbnail.
 // It reads route/auth only inside its own binding, so navigation re-runs the
 // badge, not the grid. Hidden on the logged-in user's own favorites page,

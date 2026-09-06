@@ -3,35 +3,39 @@ use std::io::Write;
 use anyhow::{Context, Result};
 use axum::{
     Json,
-    extract::{Multipart, Path, State},
-    http::StatusCode,
+    body::Body,
+    extract::{Multipart, Path, Query, State},
+    http::{StatusCode, header},
     response::IntoResponse,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tempfile::NamedTempFile;
+use tokio::fs::File;
+use tokio_util::io::ReaderStream;
 use tracing::{error, info, warn};
 
 use crate::{
     database::Database,
     json_ok,
-    media_processor::{MediaProcessor, file_name},
-    server::{AppResult, AppState},
+    media_processor::{MediaProcessor, file_name, mini_thumb},
+    server::{AppResult, AppState, SearchQuery},
 };
 
-pub async fn upload(
+pub async fn create_post(
     State(AppState {
         database,
         base_path,
         ..
     }): State<AppState>,
+    Path(post_id): Path<i64>,
     multipart: Multipart,
 ) -> AppResult<Json<Value>> {
     let data = PostData::from_multipart(multipart).await?;
     let processor = MediaProcessor::process(data.image).await?;
-    let post_id = database
+    let row_id = database
         .insert_post(
-            data.id,
+            post_id,
             processor.extension,
             processor.mime,
             processor.original,
@@ -40,31 +44,10 @@ pub async fn upload(
         .await?;
     info!(
         "Saved https://rule34.xxx/index.php?page=post&s=view&id={}",
-        data.id
+        post_id
     );
-    processor.commit(&base_path, post_id, data.id).await?;
+    processor.commit(&base_path, row_id, post_id).await?;
     json_ok!({"ok": true})
-}
-
-pub async fn check_download_status(
-    State(AppState { database, .. }): State<AppState>,
-    Json(PostIdsContainer { post_ids }): Json<PostIdsContainer>,
-) -> AppResult<Json<CheckDownloadResponse>> {
-    let downloaded = database.filter_already_downloaded_posts(&post_ids).await?;
-    let not_downloaded = post_ids
-        .into_iter()
-        .filter(|post_id| !downloaded.contains(post_id))
-        .collect();
-    Ok(Json(CheckDownloadResponse {
-        downloaded,
-        not_downloaded,
-    }))
-}
-
-pub async fn get_download_count(
-    State(AppState { database, .. }): State<AppState>,
-) -> AppResult<Json<Value>> {
-    json_ok!({"count": database.get_download_count().await?})
 }
 
 pub async fn delete_post(
@@ -105,15 +88,164 @@ pub async fn delete_post(
     json_ok!({"ok": true})
 }
 
+#[derive(Deserialize)]
+pub struct DownloadedQuery {
+    #[serde(default, deserialize_with = "parse_id_list")]
+    ids: Option<Vec<i64>>,
+}
+
+// The `ids` filter is a comma-separated list (`?ids=1,2,3`); the query
+// deserializer wouldn't split it on its own. A value that isn't a list of
+// post ids fails the query extraction, which axum answers with a 400.
+fn parse_id_list<'de, D>(deserializer: D) -> Result<Option<Vec<i64>>, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    let Some(raw) = Option::<String>::deserialize(deserializer)? else {
+        return Ok(None);
+    };
+    let mut ids = Vec::new();
+    for part in raw.split(',') {
+        let part = part.trim();
+        if part.is_empty() {
+            continue;
+        }
+        let id = part
+            .parse::<i64>()
+            .map_err(|_| serde::de::Error::custom(format!("invalid post id {part:?} in ids")))?;
+        ids.push(id);
+    }
+    Ok(Some(ids))
+}
+
+pub async fn list_downloaded_posts(
+    State(AppState { database, .. }): State<AppState>,
+    Query(DownloadedQuery { ids }): Query<DownloadedQuery>,
+) -> AppResult<Json<PostIdsContainer>> {
+    let post_ids = database.downloaded_post_ids(ids.as_deref()).await?;
+    Ok(Json(PostIdsContainer { post_ids }))
+}
+
+pub struct Search<'a> {
+    include: Vec<&'a str>,
+    exclude: Vec<&'a str>,
+}
+
+impl<'a> Search<'a> {
+    fn new(input: &'a str) -> Self {
+        let mut result = Self {
+            include: Vec::new(),
+            exclude: Vec::new(),
+        };
+
+        for term in input.split_whitespace() {
+            if let Some(t) = term.strip_prefix("-") {
+                if !t.is_empty() {
+                    result.exclude.push(t)
+                }
+            } else {
+                result.include.push(term)
+            }
+        }
+
+        result
+    }
+}
+
+pub async fn search(
+    State(AppState { database, .. }): State<AppState>,
+    Query(SearchQuery { term }): Query<SearchQuery>,
+) -> AppResult<Json<PostIdsContainer>> {
+    let search = Search::new(&term);
+    let post_ids = database.search(&search).await?;
+    Ok(Json(PostIdsContainer { post_ids }))
+}
+
+pub async fn get_download_count(
+    State(AppState { database, .. }): State<AppState>,
+) -> AppResult<Json<Value>> {
+    json_ok!({"count": database.get_download_count().await?})
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum MediaKind {
+    #[default]
+    Image,
+    Mini,
+}
+
+#[derive(Deserialize)]
+pub struct MediaQuery {
+    #[serde(default, rename = "type")]
+    kind: MediaKind,
+}
+
+pub async fn serve_media(
+    State(AppState {
+        database,
+        base_path,
+        ..
+    }): State<AppState>,
+    Path(post_id): Path<i64>,
+    Query(MediaQuery { kind }): Query<MediaQuery>,
+) -> impl IntoResponse {
+    let (name, path, mime) = match database.get_post(post_id).await {
+        Ok(post) => {
+            let name = file_name(post.id, post.external_id, &post.extension);
+            let path = if post.mime.starts_with("image") {
+                base_path.join(&name)
+            } else {
+                base_path.join(".thumbs").join(format!("{name}.jpeg"))
+            };
+            if !path.is_file() {
+                return Err((StatusCode::NOT_FOUND, "file not found on disk"));
+            }
+            (name, path, post.mime)
+        }
+        Err(_) => return Err((StatusCode::NOT_FOUND, "post not found in database")),
+    };
+
+    let (path, mime) = match kind {
+        MediaKind::Image => (path, mime),
+        MediaKind::Mini => match mini_thumb(&name, &path, &base_path).await {
+            Ok(path) => (path, "image/jpeg".to_string()),
+            Err(_) => {
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "unable to create mini thumb",
+                ));
+            }
+        },
+    };
+
+    let file = match File::open(&path).await {
+        Ok(file) => file,
+        Err(_) => return Err((StatusCode::NOT_FOUND, "unable to open file")),
+    };
+
+    let stream = ReaderStream::new(file);
+    let body = Body::from_stream(stream);
+
+    Ok(([(header::CONTENT_TYPE, mime)], body))
+}
+
 impl Database {
-    pub async fn filter_already_downloaded_posts(&self, post_ids: &[i64]) -> Result<Vec<i64>> {
-        if post_ids.is_empty() {
+    // Which of the requested posts the library holds; without a request, the
+    // whole library. The ids come back in no particular order.
+    async fn downloaded_post_ids(&self, requested: Option<&[i64]>) -> Result<Vec<i64>> {
+        let Some(requested) = requested else {
+            return Ok(sqlx::query_scalar!("SELECT external_id FROM posts")
+                .fetch_all(&self.pool)
+                .await?);
+        };
+        if requested.is_empty() {
             return Ok(Vec::new());
         }
 
         let mut query_builder =
             sqlx::QueryBuilder::new("SELECT external_id FROM posts WHERE external_id IN (");
-        query_builder.push_values(post_ids, |mut builder, post_id| {
+        query_builder.push_values(requested, |mut builder, post_id| {
             builder.push_bind(post_id);
         });
         query_builder.push(") ");
@@ -227,13 +359,52 @@ impl Database {
             .fetch_one(&self.pool)
             .await?)
     }
+
+    async fn search(&self, search: &Search<'_>) -> Result<Vec<i64>> {
+        let mut query_builder = sqlx::QueryBuilder::new(
+            r#"SELECT p.external_id 
+            FROM posts p
+            JOIN post_tags pt ON p.id = pt.post_id
+            JOIN tags t ON t.id = pt.tag_id
+            WHERE t.name IN "#,
+        );
+        query_builder.push_tuples(&search.include, |mut builder, term| {
+            builder.push_bind(term);
+        });
+        query_builder.push(
+            r#" GROUP BY p.external_id
+            HAVING COUNT(1) = "#,
+        );
+        query_builder.push_bind(search.include.len() as i64);
+        query_builder.push(" ORDER BY p.id DESC");
+
+        Ok(query_builder
+            .build_query_scalar()
+            .fetch_all(&self.pool)
+            .await?)
+    }
+
+    async fn get_post(&self, external_id: i64) -> Result<PostMedia> {
+        Ok(sqlx::query_as!(
+            PostMedia,
+            r#"SELECT id, external_id, extension, mime
+            FROM posts
+            WHERE external_id = ?
+            "#,
+            external_id
+        )
+        .fetch_one(&self.pool)
+        .await?)
+    }
 }
 
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CheckDownloadResponse {
-    pub downloaded: Vec<i64>,
-    pub not_downloaded: Vec<i64>,
+// The stored media of a post: enough of the row to compute the file names
+// and pick the content type for serving.
+struct PostMedia {
+    id: i64,
+    external_id: i64,
+    extension: String,
+    mime: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -251,7 +422,6 @@ struct PostRow {
 }
 
 pub struct PostData {
-    pub id: i64,
     pub image: NamedTempFile,
     pub tags: Vec<Tag>,
 }
@@ -286,7 +456,6 @@ impl TagKind {
 
 impl PostData {
     pub async fn from_multipart(mut value: Multipart) -> Result<Self> {
-        let mut id: Option<i64> = None;
         let mut image: Option<NamedTempFile> = None;
         let mut tags: Option<Vec<Tag>> = None;
 
@@ -298,14 +467,6 @@ impl PostData {
             let name = field.name().unwrap_or("").to_string();
 
             match name.as_str() {
-                "id" => {
-                    let data = field.text().await?;
-                    id = Some(
-                        data.trim()
-                            .parse::<i64>()
-                            .context("Failed to parse id as i64")?,
-                    );
-                }
                 "image" => {
                     let mut tmp =
                         NamedTempFile::new().context("Failed to create temp file for image")?;
@@ -326,11 +487,9 @@ impl PostData {
             }
         }
 
-        // Validate required fields
-        let id = id.ok_or_else(|| anyhow::anyhow!("missing field: id"))?;
         let image = image.ok_or_else(|| anyhow::anyhow!("missing field: image"))?;
         let tags = tags.unwrap_or_default();
 
-        Ok(PostData { id, image, tags })
+        Ok(PostData { image, tags })
     }
 }

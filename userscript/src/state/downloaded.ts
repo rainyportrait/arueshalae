@@ -7,7 +7,8 @@ import { favorites } from "./favorites.ts"
 import { list } from "./list.ts"
 import { serverSettings } from "./settings.ts"
 
-// The post ids the server reports holding, learned from /check responses.
+// The post ids the server reports holding, learned from /api/posts/downloaded
+// responses.
 // Session-only (never persisted): the server's database only grows while a
 // session is alive, so an id in the set stays true for the whole session.
 // The UI gates its badges/buttons on this set *and* on `serverSettings`, so
@@ -15,14 +16,16 @@ import { serverSettings } from "./settings.ts"
 // restores it from memory without a new request.
 export const downloaded = van.state<Set<number>>(new Set())
 
-// The ids a /check already answered for this session, downloaded or not.
+// The ids /api/posts/downloaded already answered for this session, downloaded
+// or not.
 // Plain storage (not state): a back/forward replay republishes the same page,
 // and the ids it carries must not be re-queried. An id only lands here once
 // a check has *succeeded* — a failed check leaves its ids unanswered so the
 // next settle retries them (the server may have come back).
 const answered = new Set<number>()
 
-// Fold a /check result into the shared set. A no-op (no state write) when
+// Fold a /api/posts/downloaded result into the shared set. A no-op (no state
+// write) when
 // nothing new arrived, so an all-absent response never re-renders the grid.
 export function markDownloaded(ids: Iterable<number>): void {
     const current = downloaded.val

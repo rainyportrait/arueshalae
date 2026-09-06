@@ -17,6 +17,8 @@ import {
     type FavoriteStatus,
     addFavoriteWithStatus,
     librarySaves,
+    removeFavoriteWithStatus,
+    retryLibraryDelete,
     retryLibrarySave,
 } from "./state/favorite-action.ts"
 import { loadedPosts, originKey } from "./state/gallery-collection.ts"
@@ -106,17 +108,19 @@ function OriginalImageToggle({
     )
 }
 
-// "Add to favorites" button. Rule34 exposes no way to ask whether a post is
-// already in the user's favorites, so without the arueshalae server the
-// button always starts out available and settles into a disabled end state
-// only once the API has replied for the current post. With the server
-// enabled it starts in the "already" state for posts the server holds (it
-// mirrors downloaded favorites): display-only, derived from the shared set
-// in state/downloaded.ts, so a settled check or a server toggle re-renders
-// just the button while the per-post state stays untouched. The library
-// mirror (see state/favorite-action.ts) runs only after rule34 has acked the
-// favorite, so a failed save settles into the clickable "library-failed"
-// state, which retries just the save. Hidden entirely for guests. The button
+// The favorites toggle. Rule34 exposes no way to ask whether a post is in
+// the user's favorites, so without the arueshalae server the button always
+// starts out "Add to favorites" and only becomes the "Remove from
+// favorites" face after the user added the post (the API's ack settles
+// "added"). With the server enabled it starts in the "already" state for
+// posts the server holds (it mirrors downloaded favorites) — already the
+// "Remove from favorites" face: display-only, derived from the shared set in
+// state/downloaded.ts, so a settled check or a server toggle re-renders just
+// the button while the per-post state stays untouched. Either way the
+// library mirror (see state/favorite-action.ts) runs only after rule34 has
+// acked — adding saves its copy, removing deletes it — so a failed save or
+// delete settles into the clickable "library-failed"/"removal-failed" state,
+// which retries just the server part. Hidden entirely for guests. The button
 // is a live node reading `auth`, the per-post `favorite` (owned by the page
 // shell), the shared set, and the in-flight saves, so login/logout, a check,
 // a save, and a click re-render just this button, not the sidebar around it.
@@ -139,42 +143,65 @@ function AddFavoriteButton({
         // shows as "saving" even on a fresh mount, where the per-post state
         // has reset to "idle".
         const state = librarySaves.val.has(post.id) ? "saving" : base
+        // The "added"/"already" faces double as the "Remove from favorites"
+        // face: the button is a toggle, and both mean "the post is in the
+        // user's favorites".
         const label =
             state === "adding"
                 ? "Adding…"
                 : state === "saving"
                   ? "Saving to library…"
-                  : state === "added"
-                    ? "Added to favorites"
-                    : state === "already"
-                      ? "Already in favorites"
+                  : state === "removing"
+                    ? "Removing…"
+                    : state === "added" || state === "already"
+                      ? "Remove from favorites"
                       : state === "library-failed"
                         ? "Library save failed"
-                        : "Add to favorites"
+                        : state === "removal-failed"
+                          ? "Library delete failed"
+                          : state === "stale-session"
+                            ? "Session expired"
+                            : "Add to favorites"
         return button(
             {
                 type: "button",
-                // "library-failed" stays clickable: it retries the library
-                // save alone (rule34 already holds the favorite).
-                disabled: state !== "idle" && state !== "library-failed",
+                // The two failed faces stay clickable: they retry the server
+                // part alone (rule34 already holds the favorite, or already
+                // dropped it).
+                disabled:
+                    state !== "idle" &&
+                    state !== "added" &&
+                    state !== "already" &&
+                    state !== "library-failed" &&
+                    state !== "removal-failed",
                 class: clsx(
                     "w-full rounded-lg border px-3 py-2 text-sm transition-colors",
-                    state === "idle"
+                    state === "idle" || state === "added" || state === "already"
                         ? "cursor-pointer border-zinc-700 bg-zinc-900/60 text-zinc-200 hover:bg-zinc-800"
-                        : state === "library-failed"
+                        : state === "library-failed" || state === "removal-failed"
                           ? "cursor-pointer border-rose-900/70 bg-rose-950/30 text-rose-300 hover:bg-rose-950/50"
                           : "cursor-default border-zinc-800 bg-zinc-900/40 text-zinc-500",
                 ),
                 title:
                     state === "library-failed"
                         ? "The favorite was added on rule34.xxx, but saving it to your library failed. Click to retry."
-                        : "",
+                        : state === "removal-failed"
+                          ? "The favorite was removed on rule34.xxx, but deleting it from your library failed. Click to retry."
+                          : state === "stale-session"
+                            ? "Your rule34 session has expired, so the removal failed. The post is still in your favorites — log in again to manage it."
+                            : "",
+                // The computed state (not the raw favorite.val) drives
+                // add/remove — that's what makes the "already" overlay work,
+                // where the raw state is still "idle".
                 onclick: () => {
                     if (librarySaves.val.has(post.id)) return
                     if (favorite.val === "library-failed")
                         void retryLibrarySave(post, favorite, isCurrent)
-                    else if (favorite.val === "idle")
-                        void addFavoriteWithStatus(post, favorite, isCurrent)
+                    else if (favorite.val === "removal-failed")
+                        void retryLibraryDelete(post, favorite, isCurrent)
+                    else if (state === "added" || state === "already")
+                        void removeFavoriteWithStatus(post, favorite, isCurrent)
+                    else if (state === "idle") void addFavoriteWithStatus(post, favorite, isCurrent)
                 },
             },
             label,
@@ -614,7 +641,9 @@ function buildShell(): Node {
     // idempotently like showOriginal): rule34 can't tell us beforehand
     // whether a post is favorited, so every post starts "idle" — the server
     // "already" overlay (AddFavoriteButton) is display-only and rides on the
-    // shared downloaded set instead.
+    // shared downloaded set instead. The button is a toggle, so the
+    // "added"/"already" faces double as the "Remove from favorites" face;
+    // the reset also clears a per-mount terminal "stale-session".
     let favoriteFor: number | undefined
     const favorite = van.state<FavoriteStatus>("idle")
     const ensureFavorite = (post: PostDetailsData) => {

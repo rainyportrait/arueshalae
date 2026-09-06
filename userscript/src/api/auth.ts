@@ -31,6 +31,28 @@ export function parseUserIdFromCookie(cookie: string): number | null {
     return null
 }
 
+// --- Session check ----------------------------------------------------------
+
+// Is the cookie's session actually alive? The account home page carries a
+// "My Favorites" link pinned to the logged-in user's own id
+// (`index.php?page=favorites&s=view&id=<userId>`); the not-logged-in page
+// has no such link. A positive, id-pinned marker deliberately (not the
+// not-logged-in page's heading): it proves *our* account home, and any
+// future site change can only read as "not alive" — the safe direction, so
+// a false negative never deletes from the server. The href is `&`-escaped
+// (`&amp;`) in the raw page; after DOM parsing the attribute is unescaped,
+// so the plain-`&` selector matches.
+export function parseSessionAlive(doc: Document, userId: number): boolean {
+    return doc.querySelector(`a[href="index.php?page=favorites&s=view&id=${userId}"]`) !== null
+}
+
+// Ask the site whether the session is alive, going through the shared
+// network layer (queue, challenge solving, retry) like every other request.
+export async function sessionAlive(userId: number): Promise<boolean> {
+    const doc = await fetchDocument("/index.php?page=account&s=home")
+    return parseSessionAlive(doc, userId)
+}
+
 // --- Login ----------------------------------------------------------------
 
 export type LoginResponse = { ok: true; userId: number } | { ok: false; error: string }

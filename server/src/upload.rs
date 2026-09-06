@@ -3,17 +3,19 @@ use std::io::Write;
 use anyhow::{Context, Result};
 use axum::{
     Json,
-    extract::{Multipart, State},
+    extract::{Multipart, Path, State},
+    http::StatusCode,
+    response::IntoResponse,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tempfile::NamedTempFile;
-use tracing::info;
+use tracing::{error, info, warn};
 
 use crate::{
     database::Database,
     json_ok,
-    media_processor::MediaProcessor,
+    media_processor::{MediaProcessor, file_name},
     server::{AppResult, AppState},
 };
 
@@ -63,6 +65,44 @@ pub async fn get_download_count(
     State(AppState { database, .. }): State<AppState>,
 ) -> AppResult<Json<Value>> {
     json_ok!({"count": database.get_download_count().await?})
+}
+
+pub async fn delete_post(
+    State(AppState {
+        database,
+        base_path,
+        ..
+    }): State<AppState>,
+    Path(post_id): Path<i64>,
+) -> impl IntoResponse {
+    let post = match database.delete_post(post_id).await {
+        Ok(post) => post,
+        Err(err) => {
+            error!("failed to delete post {post_id}: {err}");
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, "failed to delete post"));
+        }
+    };
+    let Some(post) = post else {
+        return Err((StatusCode::NOT_FOUND, "post not found"));
+    };
+
+    // The files go after the commit, best-effort: an orphaned file can never
+    // be served (its row is gone) and there is no retry path, so a warn! is
+    // the right ceiling.
+    let name = file_name(post.id, post.external_id, &post.extension);
+    for path in [
+        base_path.join(&name),
+        base_path.join(".thumbs").join(format!("{name}.jpeg")),
+        base_path.join(".minis").join(format!("mini_{name}.jpeg")),
+    ] {
+        if let Err(err) = tokio::fs::remove_file(path.as_path()).await {
+            if err.kind() != std::io::ErrorKind::NotFound {
+                warn!("failed to remove {}: {err}", path);
+            }
+        }
+    }
+
+    json_ok!({"ok": true})
 }
 
 impl Database {
@@ -142,6 +182,46 @@ impl Database {
         Ok(id)
     }
 
+    async fn delete_post(&self, external_id: i64) -> Result<Option<PostRow>> {
+        let mut trx = self.pool.begin().await?;
+
+        let Some(post) = sqlx::query_as!(
+            PostRow,
+            r#"SELECT id, external_id, extension
+            FROM posts
+            WHERE external_id = ?"#,
+            external_id
+        )
+        .fetch_optional(&mut *trx)
+        .await?
+        else {
+            return Ok(None);
+        };
+
+        sqlx::query("DELETE FROM post_tags WHERE post_id = ?")
+            .bind(post.id)
+            .execute(&mut *trx)
+            .await?;
+
+        sqlx::query("DELETE FROM posts WHERE id = ?")
+            .bind(post.id)
+            .execute(&mut *trx)
+            .await?;
+
+        // Prune tags orphaned by this delete: deletion is the first thing
+        // that can orphan a tag, and autocomplete queries tags_with_uses
+        // without a uses > 0 filter, so unpruned orphans would become
+        // suggestable dead tags. (With post_tags empty, NOT IN matches every
+        // tag row — deleting them all is correct.)
+        sqlx::query("DELETE FROM tags WHERE id NOT IN (SELECT tag_id FROM post_tags)")
+            .execute(&mut *trx)
+            .await?;
+
+        trx.commit().await?;
+
+        Ok(Some(post))
+    }
+
     async fn get_download_count(&self) -> Result<i64> {
         Ok(sqlx::query_scalar!("SELECT COUNT(1) FROM posts")
             .fetch_one(&self.pool)
@@ -160,6 +240,14 @@ pub struct CheckDownloadResponse {
 #[serde(rename_all = "camelCase")]
 pub struct PostIdsContainer {
     pub post_ids: Vec<i64>,
+}
+
+// A post row: the ids and extension needed to compute the post's file names
+// after the row itself is deleted.
+struct PostRow {
+    id: i64,
+    external_id: i64,
+    extension: String,
 }
 
 pub struct PostData {

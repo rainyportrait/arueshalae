@@ -16,11 +16,11 @@ export function serverBaseUrl(): string {
     return serverSettings.val.url.trim().replace(/\/+$/, "")
 }
 
-// Fetch a server endpoint (relative path, no leading slash) with a bounded
-// timeout. Throws ServerError for bad URLs, network failures, timeouts, and
-// non-2xx responses. The timeout defaults to the short control-plane budget;
-// the media upload passes a much longer one (see savePostToServer).
-export async function fetchServer(
+// The core of fetchServer: resolves the URL and fetches with a bounded
+// timeout, returning the raw response. Throws ServerError for bad URLs,
+// network failures, and timeouts — never for the status code, so a caller
+// that needs to read a non-2xx (e.g. a 404 as a no-op) can inspect it.
+async function fetchServerResponse(
     path: string,
     init?: RequestInit,
     timeoutMs = TIMEOUT_MS,
@@ -38,17 +38,27 @@ export async function fetchServer(
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), timeoutMs)
     try {
-        const res = await fetch(url, { ...init, signal: controller.signal })
-        if (!res.ok)
-            throw new ServerError(`The server responded with ${res.status} ${res.statusText}`)
-        return res
+        return await fetch(url, { ...init, signal: controller.signal })
     } catch (err) {
-        if (err instanceof ServerError) throw err
         if (controller.signal.aborted) throw new ServerError(`Timed out after ${timeoutMs / 1000}s`)
         throw new ServerError("Could not reach the server")
     } finally {
         clearTimeout(timeout)
     }
+}
+
+// Fetch a server endpoint (relative path, no leading slash) with a bounded
+// timeout. Throws ServerError for bad URLs, network failures, timeouts, and
+// non-2xx responses. The timeout defaults to the short control-plane budget;
+// the media upload passes a much longer one (see savePostToServer).
+export async function fetchServer(
+    path: string,
+    init?: RequestInit,
+    timeoutMs = TIMEOUT_MS,
+): Promise<Response> {
+    const res = await fetchServerResponse(path, init, timeoutMs)
+    if (!res.ok) throw new ServerError(`The server responded with ${res.status} ${res.statusText}`)
+    return res
 }
 
 // The number of posts the server has downloaded. Used as the connection test:
@@ -69,6 +79,15 @@ export async function checkDownloads(postIds: number[]): Promise<Set<number>> {
     })
     const { downloaded } = (await res.json()) as { downloaded: number[] }
     return new Set(downloaded)
+}
+
+// Delete a post from the server's library (database row and media files).
+// A 404 (the server doesn't hold it) is a successful no-op, so duplicate or
+// out-of-order deletes are harmless.
+export async function deletePostFromServer(postId: number): Promise<void> {
+    const res = await fetchServerResponse(`post/${postId}`, { method: "DELETE" })
+    if (!res.ok && res.status !== 404)
+        throw new ServerError(`The server responded with ${res.status} ${res.statusText}`)
 }
 
 // --- Saving posts -----------------------------------------------------------

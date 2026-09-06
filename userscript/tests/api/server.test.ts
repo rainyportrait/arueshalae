@@ -5,6 +5,7 @@ import {
     type MediaFetcher,
     ServerError,
     checkDownloads,
+    deletePostFromServer,
     getDownloadCount,
     mediaUrlFor,
     savePostToServer,
@@ -104,6 +105,25 @@ describe("server client", () => {
 
         await expect(getDownloadCount()).resolves.toBe(42)
         expect(calls[0]?.url).toBe("http://127.0.0.1:34343/count")
+    })
+
+    it("deletes a post with DELETE /post/{id} and treats a 404 as a no-op", async () => {
+        mockFetch(calls, () => ({ ok: false, status: 404, statusText: "Not Found" }) as Response)
+
+        await expect(deletePostFromServer(123)).resolves.toBeUndefined()
+
+        expect(calls).toHaveLength(1)
+        expect(calls[0]?.url).toBe("http://127.0.0.1:34343/post/123")
+        expect(calls[0]?.init.method).toBe("DELETE")
+    })
+
+    it("throws ServerError when the delete fails for another reason", async () => {
+        mockFetch(
+            calls,
+            () => ({ ok: false, status: 500, statusText: "Internal Server Error" }) as Response,
+        )
+
+        await expect(deletePostFromServer(123)).rejects.toBeInstanceOf(ServerError)
     })
 })
 

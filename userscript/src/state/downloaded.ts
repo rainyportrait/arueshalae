@@ -37,6 +37,19 @@ export function markDownloaded(ids: Iterable<number>): void {
     if (changed) downloaded.val = next
 }
 
+// Drop an id from the shared set (its library copy was deleted). A no-op
+// (no state write) when absent, mirroring markDownloaded. `answered`
+// deliberately keeps the id: no later settle re-queries it this session, so
+// the removal is sticky (re-favoriting + re-saving re-adds the id via
+// markDownloaded).
+export function unmarkDownloaded(id: number): void {
+    const current = downloaded.val
+    if (!current.has(id)) return
+    const next = new Set(current)
+    next.delete(id)
+    downloaded.val = next
+}
+
 // Ask the server about a batch of post ids and fold the result into the
 // shared set. Already-answered ids are not re-queried; a failure (server
 // down, timeout, bad URL) is dropped silently — the badges simply stay

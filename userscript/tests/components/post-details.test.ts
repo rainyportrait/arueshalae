@@ -224,14 +224,16 @@ describe("PostDetails favorite button, server state", () => {
         expect(button?.disabled).toBe(false)
     })
 
-    it("starts in the disabled already state when the server holds the post", async () => {
+    it("starts in the remove face when the server holds the post", async () => {
+        // The "already" face is the toggle's "Remove from favorites" face,
+        // so the button is active, not a disabled end state.
         const { downloaded } = await import("../../src/state/downloaded.ts")
         downloaded.val = new Set([3])
         await mountDetails(3)
 
         const button = favoriteButton()
-        expect(button?.textContent).toBe("Already in favorites")
-        expect(button?.disabled).toBe(true)
+        expect(button?.textContent).toBe("Remove from favorites")
+        expect(button?.disabled).toBe(false)
     })
 
     it("settles into the already state when the post's check resolves", async () => {
@@ -246,15 +248,15 @@ describe("PostDetails favorite button, server state", () => {
         await flushVan()
 
         const button = favoriteButton()
-        expect(button?.textContent).toBe("Already in favorites")
-        expect(button?.disabled).toBe(true)
+        expect(button?.textContent).toBe("Remove from favorites")
+        expect(button?.disabled).toBe(false)
     })
 
     it("drops back to available when the server is disabled", async () => {
         const { downloaded } = await import("../../src/state/downloaded.ts")
         downloaded.val = new Set([3])
         const { serverSettings } = await mountDetails(3)
-        expect(favoriteButton()?.textContent).toBe("Already in favorites")
+        expect(favoriteButton()?.textContent).toBe("Remove from favorites")
 
         serverSettings.val = { ...serverSettings.val, enabled: false }
         await flushVan()

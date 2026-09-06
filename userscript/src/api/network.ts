@@ -53,6 +53,26 @@ export async function fetchCleared(url: string, options: FetchOptions = {}): Pro
     }
 }
 
+// Like fetchCleared, but returns the non-200 response (after any challenge
+// solving) instead of throwing, so the caller can inspect the status. For
+// mutations that report their outcome in the status code rather than the
+// body.
+export async function fetchClearedAny(url: string, options: FetchOptions = {}): Promise<Response> {
+    for (;;) {
+        const response = await enqueueRequest(() => fetch(url, options))
+        if (response.status === 200) return response
+        if (
+            response.status >= 400 &&
+            response.status < 500 &&
+            isChallengeBody(await response.text())
+        ) {
+            await solveCaptcha(url)
+            continue // the challenge cookie is set; retry now succeeds
+        }
+        return response
+    }
+}
+
 async function baseFetchDocument(url: string, options: FetchOptions): Promise<Document> {
     const response = await fetchCleared(url, options)
     const body = await response.text()

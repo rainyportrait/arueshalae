@@ -1,5 +1,5 @@
 import { routeToUrl } from "../router.ts"
-import { fetchCleared, fetchDocument } from "./network.ts"
+import { fetchCleared, fetchClearedAny, fetchDocument } from "./network.ts"
 import { positiveInt, queryParam } from "./parse.ts"
 import { type Post, collectImageLists } from "./post-list.ts"
 
@@ -51,6 +51,20 @@ export async function addFavorite(id: number): Promise<AddFavoriteResult> {
     if (body === "1") return { ok: false, reason: "already-in-favorites" }
     if (body === "2") return { ok: false, reason: "not-logged-in" }
     return { ok: true }
+}
+
+// Remove the post from the user's favorites. Unlike addFavorite the
+// outcome is the status code, not the body: 200 removed, 403 not removed —
+// where the 403 conflates "not logged in" and "not a favorite" (the caller
+// disambiguates with sessionAlive). One-shot mutation: no retry here, but
+// the request queue and challenge solving in network.ts still apply.
+export type RemoveFavoriteResult = { ok: true } | { ok: false; reason: "forbidden" }
+
+export async function removeFavorite(id: number): Promise<RemoveFavoriteResult> {
+    const response = await fetchClearedAny(`/index.php?page=favorites&s=delete&id=${id}`)
+    if (response.status === 200) return { ok: true }
+    if (response.status === 403) return { ok: false, reason: "forbidden" }
+    throw new Error(`remove favorite returned status ${response.status}`)
 }
 
 // Up/downvote a post. The response body is the post's new score (the site

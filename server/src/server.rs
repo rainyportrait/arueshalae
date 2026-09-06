@@ -7,8 +7,7 @@ use axum::{
     http::{HeaderValue, Method, StatusCode, header},
     response::IntoResponse,
     response::Response,
-    routing::get,
-    routing::post,
+    routing::{delete, get, post},
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use tokio::{net::TcpListener, task::JoinHandle};
@@ -19,7 +18,7 @@ use tracing::error;
 use crate::{
     database::Database,
     search::{autocomplete, search, serve_image, serve_mini},
-    upload::{check_download_status, get_download_count, upload},
+    upload::{check_download_status, delete_post, get_download_count, upload},
 };
 
 #[macro_export]
@@ -48,13 +47,14 @@ pub fn create_router(database: &Database, base_path: &Utf8Path) -> Router {
         .layer(DefaultBodyLimit::max(1024 * 1024 * 1024))
         .route("/check", post(check_download_status))
         .route("/count", get(get_download_count))
+        .route("/post/{post_id}", delete(delete_post))
         .route("/search", get(search))
         .route("/search/autocomplete", get(autocomplete))
         .route("/image/{post_id}", get(serve_image))
         .route("/image/mini/{post_id}", get(serve_mini))
         .layer(
             CorsLayer::new()
-                .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+                .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::OPTIONS])
                 .allow_origin("https://rule34.xxx".parse::<HeaderValue>().unwrap())
                 .allow_headers([header::CONTENT_TYPE])
                 .max_age(Duration::from_secs(60 * 60 * 2)),

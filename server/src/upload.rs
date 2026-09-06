@@ -46,11 +46,16 @@ pub async fn upload(
 
 pub async fn check_download_status(
     State(AppState { database, .. }): State<AppState>,
-    Json(PostIdsResponse { post_ids }): Json<PostIdsResponse>,
-) -> AppResult<Json<PostIdsResponse>> {
-    let existing_ids = database.filter_already_downloaded_posts(&post_ids).await?;
-    Ok(Json(PostIdsResponse {
-        post_ids: existing_ids,
+    Json(PostIdsContainer { post_ids }): Json<PostIdsContainer>,
+) -> AppResult<Json<CheckDownloadResponse>> {
+    let downloaded = database.filter_already_downloaded_posts(&post_ids).await?;
+    let not_downloaded = post_ids
+        .into_iter()
+        .filter(|post_id| !downloaded.contains(post_id))
+        .collect();
+    Ok(Json(CheckDownloadResponse {
+        downloaded,
+        not_downloaded,
     }))
 }
 
@@ -143,7 +148,14 @@ impl Database {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PostIdsResponse {
+pub struct CheckDownloadResponse {
+    pub downloaded: Vec<i64>,
+    pub not_downloaded: Vec<i64>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PostIdsContainer {
     pub post_ids: Vec<i64>,
 }
 

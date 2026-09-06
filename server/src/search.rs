@@ -16,7 +16,7 @@ use crate::{
     json_ok,
     media_processor::{file_name, mini_thumb},
     server::{AppResult, AppState},
-    upload::PostIdsResponse,
+    upload::PostIdsContainer,
 };
 
 pub struct Search<'a> {
@@ -52,10 +52,10 @@ pub struct SearchQuery {
 pub async fn search(
     State(AppState { database, .. }): State<AppState>,
     Query(SearchQuery { term }): Query<SearchQuery>,
-) -> AppResult<Json<PostIdsResponse>> {
+) -> AppResult<Json<PostIdsContainer>> {
     let search = Search::new(&term);
     let post_ids = database.search(&search).await?;
-    Ok(Json(PostIdsResponse { post_ids }))
+    Ok(Json(PostIdsContainer { post_ids }))
 }
 
 pub async fn autocomplete(

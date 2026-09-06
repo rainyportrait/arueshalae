@@ -51,3 +51,16 @@ export async function getDownloadCount(): Promise<number> {
     const res = await fetchServer("count")
     return ((await res.json()) as { count: number }).count
 }
+
+// Ask which of the given posts the server holds. Its database mirrors the
+// user's downloaded favorites, so an id it returns is (and was) favorited.
+// Returns the ids the server has (a subset of the input, in no order).
+export async function checkDownloads(postIds: number[]): Promise<Set<number>> {
+    const res = await fetchServer("check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ postIds }),
+    })
+    const { downloaded } = (await res.json()) as { downloaded: number[] }
+    return new Set(downloaded)
+}

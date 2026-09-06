@@ -12,10 +12,11 @@ import clsx from "./clsx.ts"
 import { type PostOrigin, postHref, route } from "./router.ts"
 import { auth } from "./state/auth.ts"
 import { details, reloadDetails } from "./state/details.ts"
+import { downloaded } from "./state/downloaded.ts"
 import { type FavoriteStatus, addFavoriteWithStatus } from "./state/favorite-action.ts"
 import { loadedPosts, originKey } from "./state/gallery-collection.ts"
 import { canStep, gallery, galleryFocus, reloadGallery, step } from "./state/gallery.ts"
-import { preferOriginal } from "./state/settings.ts"
+import { preferOriginal, serverSettings } from "./state/settings.ts"
 
 const { a, aside, button, div, h4, img, span, video } = van.tags
 
@@ -100,12 +101,17 @@ function OriginalImageToggle({
     )
 }
 
-// "Add to favorites" button. Rule34 exposes no way to check whether a post is
-// already in the user's favorites, so the button always starts out available
-// and settles into a disabled end state only once the API has replied for the
-// current post. Hidden entirely for guests. The button is a live node reading
-// `auth` and the per-post `favorite` (owned by the page shell), so login/logout
-// and a click re-render just this button, not the sidebar around it.
+// "Add to favorites" button. Rule34 exposes no way to ask whether a post is
+// already in the user's favorites, so without the arueshalae server the
+// button always starts out available and settles into a disabled end state
+// only once the API has replied for the current post. With the server
+// enabled it starts in the "already" state for posts the server holds (it
+// mirrors downloaded favorites): display-only, derived from the shared set
+// in state/downloaded.ts, so a settled check or a server toggle re-renders
+// just the button while the per-post state stays untouched. Hidden entirely
+// for guests. The button is a live node reading `auth`, the per-post
+// `favorite` (owned by the page shell), and the shared set, so login/logout,
+// a check, and a click re-render just this button, not the sidebar around it.
 function AddFavoriteButton({
     post,
     favorite,
@@ -117,22 +123,25 @@ function AddFavoriteButton({
 }) {
     return () => {
         if (auth.val.status !== "authenticated") return document.createComment("")
-        const current = favorite.val
+        const state =
+            favorite.val === "idle" && serverSettings.val.enabled && downloaded.val.has(post.id)
+                ? "already"
+                : favorite.val
         const label =
-            current === "adding"
+            state === "adding"
                 ? "Adding…"
-                : current === "added"
+                : state === "added"
                   ? "Added to favorites"
-                  : current === "already"
+                  : state === "already"
                     ? "Already in favorites"
                     : "Add to favorites"
         return button(
             {
                 type: "button",
-                disabled: current !== "idle",
+                disabled: state !== "idle",
                 class: clsx(
                     "w-full rounded-lg border px-3 py-2 text-sm transition-colors",
-                    current === "idle"
+                    state === "idle"
                         ? "cursor-pointer border-zinc-700 bg-zinc-900/60 text-zinc-200 hover:bg-zinc-800"
                         : "cursor-default border-zinc-800 bg-zinc-900/40 text-zinc-500",
                 ),
@@ -576,7 +585,9 @@ function buildShell(): Node {
 
     // The favorite button's per-post status (reset per post, checked
     // idempotently like showOriginal): rule34 can't tell us beforehand
-    // whether a post is favorited, so every post starts "idle".
+    // whether a post is favorited, so every post starts "idle" — the server
+    // "already" overlay (AddFavoriteButton) is display-only and rides on the
+    // shared downloaded set instead.
     let favoriteFor: number | undefined
     const favorite = van.state<FavoriteStatus>("idle")
     const ensureFavorite = (post: PostDetailsData) => {

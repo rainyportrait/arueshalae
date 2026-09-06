@@ -3,11 +3,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { PostDetails as PostDetailsData } from "../../src/api/post-details.ts"
 import type { Post } from "../../src/api/post-list.ts"
 import { flushVan, resetDom } from "../dom.ts"
+import { deferred } from "../helpers/deferred.ts"
 
 const api = vi.hoisted(() => ({
     fetchFavorites: vi.fn(),
     fetchPostDetails: vi.fn(),
     fetchPostList: vi.fn(),
+    checkDownloads: vi.fn(),
+    getDownloadCount: vi.fn(),
+    fetchProfile: vi.fn(async () => ({ favorites: 0 })),
 }))
 
 vi.mock("../../src/api/favorites.ts", () => ({ fetchFavorites: api.fetchFavorites }))
@@ -16,6 +20,17 @@ vi.mock("../../src/api/post-details.ts", async (importOriginal) => ({
     fetchPostDetails: api.fetchPostDetails,
 }))
 vi.mock("../../src/api/post-list.ts", () => ({ fetchPostList: api.fetchPostList }))
+vi.mock("../../src/api/server.ts", () => ({
+    checkDownloads: api.checkDownloads,
+    getDownloadCount: api.getDownloadCount,
+    ServerError: class ServerError extends Error {},
+}))
+// The button tests log the user in, which fires the profile loader in
+// state/auth.ts; answer it without a network.
+vi.mock("../../src/api/auth.ts", async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    fetchProfile: api.fetchProfile,
+}))
 
 function post(id: number): Post {
     return {
@@ -54,9 +69,14 @@ describe("PostDetails gallery", () => {
         api.fetchFavorites.mockReset()
         api.fetchPostDetails.mockReset()
         api.fetchPostList.mockReset()
+        api.checkDownloads.mockReset()
+        api.getDownloadCount.mockReset()
         // The details loader and the gallery's neighbor prefetch fire for the
         // postdetails routes the tests set: answer with the test's own fixture.
         api.fetchPostDetails.mockImplementation((id: number) => Promise.resolve(details(id)))
+        // The server check (state/downloaded.ts) fires whenever a post settles
+        // while the server is enabled: answer with an empty set by default.
+        api.checkDownloads.mockResolvedValue(new Set())
         resetDom("https://rule34.xxx/index.php?page=account&s=options")
     })
 
@@ -157,5 +177,90 @@ describe("PostDetails gallery", () => {
         expect(prev?.className).toContain("cursor-pointer")
         expect(prev?.className).not.toContain("opacity-30")
         expect(next?.className).toContain("opacity-30")
+    })
+})
+
+describe("PostDetails favorite button, server state", () => {
+    beforeEach(() => {
+        vi.resetModules()
+        api.fetchFavorites.mockReset()
+        api.fetchPostDetails.mockReset()
+        api.fetchPostList.mockReset()
+        api.checkDownloads.mockReset()
+        api.getDownloadCount.mockReset()
+        api.checkDownloads.mockResolvedValue(new Set())
+        resetDom("https://rule34.xxx/index.php?page=account&s=options")
+    })
+
+    // Mount the details page directly on a ready post (no gallery origin, so
+    // the filmstrip stays out) and log the user in, so the button shows.
+    async function mountDetails(id: number) {
+        const { details: detailsState } = await import("../../src/state/details.ts")
+        const { auth } = await import("../../src/state/auth.ts")
+        const { serverSettings } = await import("../../src/state/settings.ts")
+        const { downloaded } = await import("../../src/state/downloaded.ts")
+        const { PostDetails } = await import("../../src/PostDetails.ts")
+        auth.val = { status: "authenticated", userId: 5 }
+        serverSettings.val = { ...serverSettings.val, enabled: true }
+        detailsState.val = { status: "ready", post: details(id), origin: undefined }
+        document.body.append(PostDetails())
+        await flushVan()
+        return { auth, serverSettings, downloaded }
+    }
+
+    function favoriteButton(): HTMLButtonElement | null {
+        return (
+            [...document.querySelectorAll<HTMLButtonElement>("button")].find((button) =>
+                (button.textContent ?? "").includes("favorites"),
+            ) ?? null
+        )
+    }
+
+    it("starts available when the post is not in the user's library", async () => {
+        await mountDetails(3)
+
+        const button = favoriteButton()
+        expect(button?.textContent).toBe("Add to favorites")
+        expect(button?.disabled).toBe(false)
+    })
+
+    it("starts in the disabled already state when the server holds the post", async () => {
+        const { downloaded } = await import("../../src/state/downloaded.ts")
+        downloaded.val = new Set([3])
+        await mountDetails(3)
+
+        const button = favoriteButton()
+        expect(button?.textContent).toBe("Already in favorites")
+        expect(button?.disabled).toBe(true)
+    })
+
+    it("settles into the already state when the post's check resolves", async () => {
+        const gate = deferred<Set<number>>()
+        api.checkDownloads.mockImplementation(() => gate.promise)
+        await mountDetails(3)
+
+        expect(api.checkDownloads).toHaveBeenCalledWith([3])
+        expect(favoriteButton()?.textContent).toBe("Add to favorites")
+
+        gate.resolve(new Set([3]))
+        await flushVan()
+
+        const button = favoriteButton()
+        expect(button?.textContent).toBe("Already in favorites")
+        expect(button?.disabled).toBe(true)
+    })
+
+    it("drops back to available when the server is disabled", async () => {
+        const { downloaded } = await import("../../src/state/downloaded.ts")
+        downloaded.val = new Set([3])
+        const { serverSettings } = await mountDetails(3)
+        expect(favoriteButton()?.textContent).toBe("Already in favorites")
+
+        serverSettings.val = { ...serverSettings.val, enabled: false }
+        await flushVan()
+
+        const button = favoriteButton()
+        expect(button?.textContent).toBe("Add to favorites")
+        expect(button?.disabled).toBe(false)
     })
 })

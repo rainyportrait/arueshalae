@@ -1,4 +1,5 @@
 import van from "vanjs-core"
+import type { ChildDom } from "vanjs-core"
 
 import { Link } from "./Link.ts"
 import type { Post } from "./api/post-list.ts"
@@ -6,8 +7,11 @@ import { isAnimated } from "./api/tags.ts"
 import clsx from "./clsx.ts"
 import { setCardSpan } from "./masonry.ts"
 import { postHref, route } from "./router.ts"
+import { auth } from "./state/auth.ts"
+import { downloaded } from "./state/downloaded.ts"
+import { serverSettings } from "./state/settings.ts"
 
-const { img } = van.tags
+const { img, span } = van.tags
 
 // On the post list and favorites routes the post link carries the gallery
 // origin (which collection it came from and from which page), so the details
@@ -25,12 +29,55 @@ function cardHref(post: Post): string {
     return post.link
 }
 
+// The "in your library" badge: a heart in the card's corner for posts the
+// arueshalae server holds, over a soft darkening of the corner that keeps it
+// readable on bright thumbnails. A live child of the card anchor, so a
+// settled /check (or a server toggle, or a navigation) swaps just this node
+// — never the card or its img, a swap of which would reload the thumbnail.
+// It reads route/auth only inside its own binding, so navigation re-runs the
+// badge, not the grid. Hidden on the logged-in user's own favorites page,
+// where the server would badge nearly every card (see state/downloaded.ts).
+function LibraryBadge({ post }: { post: Post }): ChildDom {
+    return () => {
+        const r = route.val
+        const a = auth.val
+        const ownFavorites =
+            r.type === "favorites" && a.status === "authenticated" && r.id === a.userId
+        if (ownFavorites || !serverSettings.val.enabled || !downloaded.val.has(post.id))
+            return document.createComment("")
+        return span(
+            {
+                // The darkening is a full-card overlay, not a small corner
+                // box: its edges coincide with the card's padding box, so
+                // the card's own overflow-hidden + rounded-xl clip it exactly
+                // like the image and no seam shows. Only the corner is
+                // actually darkened (a 32px radial fade that vanishes on
+                // dark thumbnails). It is part of the badge node, so a hidden
+                // badge leaves the thumbnail untouched. (Icons are CSS masks,
+                // so the gradient can't live on the icon span itself.)
+                class: clsx(
+                    "absolute inset-0 flex items-start justify-end",
+                    "bg-[radial-gradient(circle_32px_at_top_right,rgba(0,0,0,0.45),transparent)]",
+                ),
+            },
+            span({
+                "icon-name": "heart",
+                title: "In your library",
+                class: clsx(
+                    "mt-1.5 mr-1.5 text-lg text-rose-400",
+                    "drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]",
+                ),
+            }),
+        )
+    }
+}
+
 export function PostCard(post: Post) {
     return Link(
         {
             href: () => cardHref(post),
             class: clsx(
-                "masonry-item group",
+                "masonry-item group relative",
                 "block w-full overflow-hidden rounded-xl bg-zinc-900",
                 "transition-colors duration-150",
                 // Animated posts carry a rose border so they stand out in the
@@ -58,5 +105,6 @@ export function PostCard(post: Post) {
                 if (card) setCardSpan(card)
             },
         }),
+        LibraryBadge({ post }),
     )
 }

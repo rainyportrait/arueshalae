@@ -31,13 +31,6 @@ macro_rules! json_ok {
     };
 }
 
-#[macro_export]
-macro_rules! html_ok {
-    ($html:expr) => {
-        Ok(axum::response::Html($html.render()?))
-    };
-}
-
 #[derive(Clone)]
 pub struct AppState {
     pub database: Database,

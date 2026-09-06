@@ -4,7 +4,10 @@ use anyhow::Result;
 use camino::Utf8Path;
 use sqlx::{SqlitePool, sqlite::SqliteConnectOptions};
 
-const MIGRATIONS: &[&str] = &[include_str!("./migrations/202508291609-init.sql")];
+const MIGRATIONS: &[&str] = &[
+    include_str!("./migrations/202508291609-init.sql"),
+    include_str!("./migrations/20260906-sync.sql"),
+];
 
 #[derive(Clone)]
 pub struct Database {

@@ -14,24 +14,41 @@ export type FetchOptions = {
 // request starts by at least MIN_REQUEST_GAP_MS, turning bursts into a
 // steady drip and spacing out retries for free.
 const MIN_REQUEST_GAP_MS = 350
-let requestQueue: Promise<void> = Promise.resolve()
 let lastRequestStart = 0
+const interactive: Array<() => Promise<void>> = []
+const background: Array<() => Promise<void>> = []
+let draining = false
 
-// Serialize run behind every queued request and start it no sooner than
-// MIN_REQUEST_GAP_MS after the previous request started. A rejection does not
-// break the chain; the caller still receives the error.
-function enqueueRequest<T>(run: () => Promise<T>): Promise<T> {
-    const result = requestQueue.then(async () => {
-        const wait = lastRequestStart + MIN_REQUEST_GAP_MS - Date.now()
-        if (wait > 0) await sleep(wait)
-        lastRequestStart = Date.now()
-        return run()
+// Interactive work takes the next slot ahead of queued background work. An
+// already-running request is allowed to finish; every start still shares pacing.
+function enqueueRequest<T>(run: () => Promise<T>, lowPriority = false): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+        const queue = lowPriority ? background : interactive
+        queue.push(async () => {
+            try {
+                resolve(await run())
+            } catch (error) {
+                reject(error)
+            }
+        })
+        void drainRequests()
     })
-    requestQueue = result.then(
-        () => undefined,
-        () => undefined,
-    )
-    return result
+}
+async function drainRequests(): Promise<void> {
+    if (draining) return
+    draining = true
+    try {
+        while (interactive.length || background.length) {
+            const wait = lastRequestStart + MIN_REQUEST_GAP_MS - Date.now()
+            if (wait > 0) await sleep(wait)
+            const run = interactive.shift() ?? background.shift()
+            if (!run) break
+            lastRequestStart = Date.now()
+            await run()
+        }
+    } finally {
+        draining = false
+    }
 }
 
 // Fetch a URL, transparently solving a bot challenge (a 4xx challenge page) if
@@ -106,4 +123,16 @@ export async function retry<T>(
 
 function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+// Background jobs make one bounded attempt. Their persistent queue owns retries;
+// a challenge or timeout yields work rather than monopolizing a worker lease.
+export function fetchBackground(
+    url: string,
+    isCurrent: () => boolean = () => true,
+): Promise<Response> {
+    return enqueueRequest(() => {
+        if (!isCurrent()) throw new Error("Background worker stopped")
+        return fetch(url, { signal: AbortSignal.timeout(30_000) })
+    }, true)
 }

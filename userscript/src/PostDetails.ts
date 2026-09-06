@@ -12,17 +12,17 @@ import clsx from "./clsx.ts"
 import { type PostOrigin, postHref, route } from "./router.ts"
 import { auth } from "./state/auth.ts"
 import { details, reloadDetails } from "./state/details.ts"
-import { downloaded } from "./state/downloaded.ts"
 import {
     type FavoriteStatus,
     addFavoriteWithStatus,
     librarySaves,
     removeFavoriteWithStatus,
-    retryLibraryDelete,
+    retryLibraryRemoval,
     retryLibrarySave,
 } from "./state/favorite-action.ts"
 import { loadedPosts, originKey } from "./state/gallery-collection.ts"
 import { canStep, gallery, galleryFocus, reloadGallery, step } from "./state/gallery.ts"
+import { libraryPosts } from "./state/library.ts"
 import { preferOriginal, serverSettings } from "./state/settings.ts"
 
 const { a, aside, button, div, h4, img, span, video } = van.tags
@@ -112,18 +112,8 @@ function OriginalImageToggle({
 // the user's favorites, so without the arueshalae server the button always
 // starts out "Add to favorites" and only becomes the "Remove from
 // favorites" face after the user added the post (the API's ack settles
-// "added"). With the server enabled it starts in the "already" state for
-// posts the server holds (it mirrors downloaded favorites) — already the
-// "Remove from favorites" face: display-only, derived from the shared set in
-// state/downloaded.ts, so a settled check or a server toggle re-renders just
-// the button while the per-post state stays untouched. Either way the
-// library mirror (see state/favorite-action.ts) runs only after rule34 has
-// acked — adding saves its copy, removing deletes it — so a failed save or
-// delete settles into the clickable "library-failed"/"removal-failed" state,
-// which retries just the server part. Hidden entirely for guests. The button
-// is a live node reading `auth`, the per-post `favorite` (owned by the page
-// shell), the shared set, and the in-flight saves, so login/logout, a check,
-// a save, and a click re-render just this button, not the sidebar around it.
+// Membership determines the favorite button; downloaded media has independent
+// status. Failed local updates retry without repeating the upstream mutation.
 function AddFavoriteButton({
     post,
     favorite,
@@ -136,7 +126,9 @@ function AddFavoriteButton({
     return () => {
         if (auth.val.status !== "authenticated") return document.createComment("")
         const base =
-            favorite.val === "idle" && serverSettings.val.enabled && downloaded.val.has(post.id)
+            favorite.val === "idle" &&
+            serverSettings.val.enabled &&
+            libraryPosts.val.get(post.id)?.membership === "favorited"
                 ? "already"
                 : favorite.val
         // A save in flight (started by this or an earlier mount of the post)
@@ -150,15 +142,15 @@ function AddFavoriteButton({
             state === "adding"
                 ? "Adding…"
                 : state === "saving"
-                  ? "Saving to library…"
+                  ? "Updating library…"
                   : state === "removing"
                     ? "Removing…"
                     : state === "added" || state === "already"
                       ? "Remove from favorites"
                       : state === "library-failed"
-                        ? "Library save failed"
+                        ? "Library update failed"
                         : state === "removal-failed"
-                          ? "Library delete failed"
+                          ? "Library update failed"
                           : state === "stale-session"
                             ? "Session expired"
                             : "Add to favorites"
@@ -184,9 +176,9 @@ function AddFavoriteButton({
                 ),
                 title:
                     state === "library-failed"
-                        ? "The favorite was added on rule34.xxx, but saving it to your library failed. Click to retry."
+                        ? "The favorite was added on rule34.xxx, but updating local membership failed. Click to retry."
                         : state === "removal-failed"
-                          ? "The favorite was removed on rule34.xxx, but deleting it from your library failed. Click to retry."
+                          ? "The favorite was removed on rule34.xxx, but updating local membership failed. Click to retry."
                           : state === "stale-session"
                             ? "Your rule34 session has expired, so the removal failed. The post is still in your favorites — log in again to manage it."
                             : "",
@@ -198,7 +190,7 @@ function AddFavoriteButton({
                     if (favorite.val === "library-failed")
                         void retryLibrarySave(post, favorite, isCurrent)
                     else if (favorite.val === "removal-failed")
-                        void retryLibraryDelete(post, favorite, isCurrent)
+                        void retryLibraryRemoval(post, favorite, isCurrent)
                     else if (state === "added" || state === "already")
                         void removeFavoriteWithStatus(post, favorite, isCurrent)
                     else if (state === "idle") void addFavoriteWithStatus(post, favorite, isCurrent)
@@ -223,6 +215,13 @@ function Sidebar({
     return div(
         { class: clsx("flex flex-col gap-6") },
         AddFavoriteButton({ post, favorite, isCurrent }),
+        () =>
+            serverSettings.val.enabled
+                ? div(
+                      { class: clsx("text-sm text-zinc-400") },
+                      libraryPosts.val.get(post.id)?.downloadState ?? "Local status unknown",
+                  )
+                : document.createComment(""),
         OriginalImageToggle({ post, showOriginal }),
         StatsSection({ post }),
         TagList({ tags: post.tags }),

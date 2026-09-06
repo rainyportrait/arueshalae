@@ -1,5 +1,6 @@
 use std::{path::Path, process::Stdio};
 
+use crate::ids::PostId;
 use anyhow::{Context, Result, anyhow, bail};
 use camino::{Utf8Path, Utf8PathBuf};
 use infer::MatcherType;
@@ -26,8 +27,8 @@ pub struct MediaProcessorResult {
 }
 
 impl MediaProcessorResult {
-    pub async fn commit(self, base_path: &Utf8Path, id: i64, external_id: i64) -> Result<()> {
-        let file_name = file_name(id, external_id, self.extension);
+    pub async fn commit(self, base_path: &Utf8Path, post_id: PostId) -> Result<()> {
+        let file_name = file_name(post_id, self.extension);
 
         let Self { file, thumb, .. } = self;
         move_file(file.path(), base_path.join(&file_name).as_path()).await?;
@@ -256,6 +257,6 @@ async fn move_file(from: &Path, to: &Utf8Path) -> Result<()> {
     Ok(())
 }
 
-pub fn file_name(id: i64, external_id: i64, extension: &str) -> String {
-    format!("{id:07}_{external_id}.{extension}")
+pub fn file_name(post_id: PostId, extension: &str) -> String {
+    format!("{}.{extension}", post_id.0)
 }

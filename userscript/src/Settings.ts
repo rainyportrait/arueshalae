@@ -1,6 +1,7 @@
 import van from "vanjs-core"
 
 import { AutocompleteInput } from "./AutocompleteInput.ts"
+import { SyncSettings } from "./SyncSettings.ts"
 import { Toggle } from "./Toggle.ts"
 import { getDownloadCount } from "./api/server.ts"
 import { normalizeTags } from "./api/tags.ts"
@@ -89,6 +90,7 @@ export function Settings() {
 
     return div(
         { class: clsx("mx-auto flex w-full max-w-3xl flex-col gap-8") },
+        SyncSettings(),
         div(
             { class: clsx("flex flex-col gap-1") },
             h1({ class: clsx("text-3xl font-semibold tracking-tight text-zinc-100") }, "Settings"),

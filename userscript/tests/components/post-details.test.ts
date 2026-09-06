@@ -227,24 +227,20 @@ describe("PostDetails favorite button, server state", () => {
     it("starts in the remove face when the server holds the post", async () => {
         // The "already" face is the toggle's "Remove from favorites" face,
         // so the button is active, not a disabled end state.
-        const { downloaded } = await import("../../src/state/downloaded.ts")
-        downloaded.val = new Set([3])
+        const { libraryPosts } = await import("../../src/state/library.ts")
         await mountDetails(3)
-
-        const button = favoriteButton()
-        expect(button?.textContent).toBe("Remove from favorites")
-        expect(button?.disabled).toBe(false)
-    })
-
-    it("settles into the already state when the post's check resolves", async () => {
-        const gate = deferred<Set<number>>()
-        api.checkDownloads.mockImplementation(() => gate.promise)
-        await mountDetails(3)
-
-        expect(api.checkDownloads).toHaveBeenCalledWith([3])
-        expect(favoriteButton()?.textContent).toBe("Add to favorites")
-
-        gate.resolve(new Set([3]))
+        libraryPosts.val = new Map([
+            [
+                3,
+                {
+                    postId: 3,
+                    membership: "favorited",
+                    availability: "available",
+                    downloaded: true,
+                    error: null,
+                },
+            ],
+        ])
         await flushVan()
 
         const button = favoriteButton()
@@ -252,10 +248,42 @@ describe("PostDetails favorite button, server state", () => {
         expect(button?.disabled).toBe(false)
     })
 
+    it("membership independently updates the favorite button", async () => {
+        await mountDetails(3)
+        expect(favoriteButton()?.textContent).toBe("Add to favorites")
+        const { libraryPosts } = await import("../../src/state/library.ts")
+        libraryPosts.val = new Map([
+            [
+                3,
+                {
+                    postId: 3,
+                    membership: "favorited",
+                    availability: "available",
+                    downloaded: false,
+                    error: null,
+                },
+            ],
+        ])
+        await flushVan()
+        expect(favoriteButton()?.textContent).toBe("Remove from favorites")
+    })
+
     it("drops back to available when the server is disabled", async () => {
-        const { downloaded } = await import("../../src/state/downloaded.ts")
-        downloaded.val = new Set([3])
+        const { libraryPosts } = await import("../../src/state/library.ts")
         const { serverSettings } = await mountDetails(3)
+        libraryPosts.val = new Map([
+            [
+                3,
+                {
+                    postId: 3,
+                    membership: "favorited",
+                    availability: "available",
+                    downloaded: true,
+                    error: null,
+                },
+            ],
+        ])
+        await flushVan()
         expect(favoriteButton()?.textContent).toBe("Remove from favorites")
 
         serverSettings.val = { ...serverSettings.val, enabled: false }

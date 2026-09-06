@@ -11,13 +11,13 @@ import { deferred } from "../helpers/deferred.ts"
 // its production save is never called — every test injects `save`.
 const api = vi.hoisted(() => ({
     checkDownloads: vi.fn(),
-    deletePostFromServer: vi.fn(),
+    unfavoriteOnServer: vi.fn(),
     getDownloadCount: vi.fn(),
 }))
 
 vi.mock("../../src/api/server.ts", () => ({
     checkDownloads: api.checkDownloads,
-    deletePostFromServer: api.deletePostFromServer,
+    unfavoriteOnServer: api.unfavoriteOnServer,
     getDownloadCount: api.getDownloadCount,
     ServerError: class ServerError extends Error {},
     savePostToServer: vi.fn(),
@@ -75,7 +75,7 @@ describe("favorite button lifecycle", () => {
         vi.resetModules()
         api.checkDownloads.mockReset()
         api.checkDownloads.mockResolvedValue(new Set())
-        api.deletePostFromServer.mockReset()
+        api.unfavoriteOnServer.mockReset()
         resetDom()
         favorite = van.state<FavoriteStatus>("idle")
         add = vi.fn<AddFn>()
@@ -104,7 +104,7 @@ describe("favorite button lifecycle", () => {
         expect(add).toHaveBeenCalledWith(1)
         expect(save).toHaveBeenCalledTimes(1)
         expect(favorite.val).toBe("added")
-        expect(downloaded.val.has(1)).toBe(true)
+        expect(downloaded.val.has(1)).toBe(false)
         expect(librarySaves.val.size).toBe(0)
     })
 
@@ -121,7 +121,7 @@ describe("favorite button lifecycle", () => {
         expect(downloaded.val.has(1)).toBe(false)
     })
 
-    it("skips the save when the post is already in the library", async () => {
+    it("updates membership even when media is already downloaded", async () => {
         const { addFavoriteWithStatus, downloaded, serverSettings } = await load()
         serverSettings.val = { enabled: true, url: "http://127.0.0.1:34343" }
         downloaded.val = new Set([1])
@@ -131,7 +131,7 @@ describe("favorite button lifecycle", () => {
         await addFavoriteWithStatus(post, favorite, () => true, add, save)
 
         expect(favorite.val).toBe("added")
-        expect(save).not.toHaveBeenCalled()
+        expect(save).toHaveBeenCalledTimes(1)
     })
 
     it("saves a post rule34 says is already a favorite, settling already", async () => {
@@ -149,7 +149,7 @@ describe("favorite button lifecycle", () => {
         await done
 
         expect(favorite.val).toBe("already")
-        expect(downloaded.val.has(1)).toBe(true)
+        expect(downloaded.val.has(1)).toBe(false)
     })
 
     it("does not save when rule34 can't be reached, keeping the button retryable", async () => {
@@ -196,7 +196,7 @@ describe("favorite button lifecycle", () => {
 
         expect(favorite.val).toBe("already")
         expect(save).toHaveBeenCalledTimes(2)
-        expect(downloaded.val.has(1)).toBe(true)
+        expect(downloaded.val.has(1)).toBe(false)
     })
 
     it("a retry with the server disabled settles already without saving", async () => {
@@ -255,10 +255,10 @@ describe("favorite button lifecycle", () => {
         expect(save).toHaveBeenCalledTimes(1)
         expect(favorite.val).toBe("added")
         expect(favorite2.val).toBe("added")
-        expect(downloaded.val.has(1)).toBe(true)
+        expect(downloaded.val.has(1)).toBe(false)
     })
 
-    it("removes the favorite, deletes it from the library, and settles idle", async () => {
+    it("marks the post unfavorited and retains downloaded media", async () => {
         const { removeFavoriteWithStatus, downloaded, serverSettings } = await load()
         serverSettings.val = { enabled: true, url: "http://127.0.0.1:34343" }
         downloaded.val = new Set([1])
@@ -270,7 +270,7 @@ describe("favorite button lifecycle", () => {
         expect(remove).toHaveBeenCalledWith(1)
         expect(del).toHaveBeenCalledTimes(1)
         expect(favorite.val).toBe("idle")
-        expect(downloaded.val.has(1)).toBe(false)
+        expect(downloaded.val.has(1)).toBe(true)
         expect(sessionCheck).not.toHaveBeenCalled()
     })
 
@@ -287,7 +287,7 @@ describe("favorite button lifecycle", () => {
         expect(del).not.toHaveBeenCalled()
     })
 
-    it("skips the delete when the post is not in the library", async () => {
+    it("updates membership even before media is downloaded", async () => {
         const { removeFavoriteWithStatus, serverSettings } = await load()
         serverSettings.val = { enabled: true, url: "http://127.0.0.1:34343" }
         const post = makePost(1)
@@ -296,7 +296,7 @@ describe("favorite button lifecycle", () => {
         await removeFavoriteWithStatus(post, favorite, () => true, remove, sessionCheck, del)
 
         expect(favorite.val).toBe("idle")
-        expect(del).not.toHaveBeenCalled()
+        expect(del).toHaveBeenCalledTimes(1)
     })
 
     it("deletes a drifted post on a 403 when the session is alive", async () => {
@@ -311,7 +311,7 @@ describe("favorite button lifecycle", () => {
 
         expect(del).toHaveBeenCalledTimes(1)
         expect(favorite.val).toBe("idle")
-        expect(downloaded.val.has(1)).toBe(false)
+        expect(downloaded.val.has(1)).toBe(true)
     })
 
     it("settles stale-session without deleting when the session is dead", async () => {
@@ -358,7 +358,7 @@ describe("favorite button lifecycle", () => {
     })
 
     it("settles removal-failed when the delete fails, and a retry completes it", async () => {
-        const { removeFavoriteWithStatus, retryLibraryDelete, downloaded, serverSettings } =
+        const { removeFavoriteWithStatus, retryLibraryRemoval, downloaded, serverSettings } =
             await load()
         serverSettings.val = { enabled: true, url: "http://127.0.0.1:34343" }
         downloaded.val = new Set([1])
@@ -372,20 +372,20 @@ describe("favorite button lifecycle", () => {
         expect(downloaded.val.has(1)).toBe(true)
 
         del.mockResolvedValue(undefined)
-        await retryLibraryDelete(post, favorite, () => true, del)
+        await retryLibraryRemoval(post, favorite, () => true, del)
 
         expect(favorite.val).toBe("idle")
         expect(del).toHaveBeenCalledTimes(2)
-        expect(downloaded.val.has(1)).toBe(false)
+        expect(downloaded.val.has(1)).toBe(true)
     })
 
     it("a retry with the server disabled settles idle without deleting", async () => {
-        const { retryLibraryDelete, serverSettings } = await load()
+        const { retryLibraryRemoval, serverSettings } = await load()
         serverSettings.val = { enabled: false, url: "http://127.0.0.1:34343" }
         favorite.val = "removal-failed"
         const post = makePost(1)
 
-        await retryLibraryDelete(post, favorite, () => true, del)
+        await retryLibraryRemoval(post, favorite, () => true, del)
 
         expect(favorite.val).toBe("idle")
         expect(del).not.toHaveBeenCalled()

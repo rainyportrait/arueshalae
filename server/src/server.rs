@@ -7,7 +7,7 @@ use axum::{
     http::{HeaderValue, Method, StatusCode, header},
     response::IntoResponse,
     response::Response,
-    routing::{delete, get, post},
+    routing::{get, post},
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use serde::Deserialize;
@@ -18,9 +18,7 @@ use tracing::error;
 
 use crate::{
     database::Database,
-    posts::{
-        create_post, delete_post, get_download_count, list_downloaded_posts, search, serve_media,
-    },
+    posts::{create_post, get_download_count, list_downloaded_posts, search, serve_media},
     tags::search_tags,
 };
 
@@ -45,9 +43,9 @@ pub struct SearchQuery {
 
 pub fn create_router(database: &Database, base_path: &Utf8Path) -> Router {
     Router::new()
+        .route("/api/sync", post(crate::sync::command))
         .route("/api/posts/{post_id}", post(create_post))
         .layer(DefaultBodyLimit::max(1024 * 1024 * 1024))
-        .route("/api/posts/{post_id}", delete(delete_post))
         .route("/api/posts/downloaded", get(list_downloaded_posts))
         .route("/api/posts/search", get(search))
         .route("/api/posts/count", get(get_download_count))

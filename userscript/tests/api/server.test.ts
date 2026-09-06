@@ -1,6 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { ServerError, checkDownloads, getDownloadCount } from "../../src/api/server.ts"
+import type { PostDetails } from "../../src/api/post-details.ts"
+import {
+    type MediaFetcher,
+    ServerError,
+    checkDownloads,
+    getDownloadCount,
+    mediaUrlFor,
+    savePostToServer,
+} from "../../src/api/server.ts"
+import type { Tag } from "../../src/api/tags.ts"
 import { resetDom } from "../dom.ts"
 
 // The client goes through the global fetch; a stub stands in so no request
@@ -95,5 +104,131 @@ describe("server client", () => {
 
         await expect(getDownloadCount()).resolves.toBe(42)
         expect(calls[0]?.url).toBe("http://127.0.0.1:34343/count")
+    })
+})
+
+// --- Saving posts -----------------------------------------------------------
+
+function makePost(overrides: Partial<PostDetails> = {}): PostDetails {
+    return {
+        id: 123,
+        title: "test post",
+        media: {
+            kind: "image",
+            src: "https://rule34.xxx/img/2025/sample_123.jpg",
+            originalImage: "https://wimg.rule34.xxx/img/2025/123.jpg",
+            width: 700,
+            height: 874,
+        },
+        posted: "",
+        poster: "",
+        posterHref: "",
+        source: "",
+        sourceHref: "",
+        rating: "",
+        score: 0,
+        tags: [
+            { name: "Tree Bark", slug: "tree_bark", type: "artist", count: 10 },
+            { name: "1boy", slug: "1boy", type: "character", count: 5 },
+        ],
+        ...overrides,
+    }
+}
+
+describe("mediaUrlFor", () => {
+    it("prefers the original image over the displayed sample", () => {
+        expect(mediaUrlFor(makePost().media)).toBe("https://wimg.rule34.xxx/img/2025/123.jpg")
+    })
+
+    it("falls back to the displayed src when the original link is missing", () => {
+        const post = makePost()
+        post.media = { ...post.media, kind: "image", originalImage: "" }
+        expect(mediaUrlFor(post.media)).toBe("https://rule34.xxx/img/2025/sample_123.jpg")
+    })
+
+    it("uses the video src for video posts", () => {
+        const post = makePost()
+        post.media = {
+            kind: "video",
+            src: "https://aws-mp4.rule34.xxx/2025/123.mp4",
+            poster: "https://wimg.rule34.xxx/posters/123.jpg",
+            width: 0,
+            height: 0,
+        }
+        expect(mediaUrlFor(post.media)).toBe("https://aws-mp4.rule34.xxx/2025/123.mp4")
+    })
+})
+
+describe("savePostToServer", () => {
+    let calls: FetchCall[]
+
+    beforeEach(() => {
+        calls = []
+    })
+
+    it("downloads the original image and posts it to /upload with the post's tags", async () => {
+        const bytes = new Uint8Array([1, 2, 3, 4])
+        const fetchMedia = vi.fn<MediaFetcher>(async (url) => bytes.buffer)
+        mockFetch(calls, () => jsonResponse({ ok: true }))
+
+        await savePostToServer(makePost(), fetchMedia, 1000)
+
+        expect(fetchMedia).toHaveBeenCalledWith("https://wimg.rule34.xxx/img/2025/123.jpg", 1000)
+        expect(calls).toHaveLength(1)
+        expect(calls[0]?.url).toBe("http://127.0.0.1:34343/upload")
+        expect(calls[0]?.init.method).toBe("POST")
+        const body = calls[0]?.init.body as FormData
+        expect(body.get("id")).toBe("123")
+        const file = body.get("image") as File
+        expect(file.name).toBe("123.jpg")
+        expect(file.type).toBe("image/jpeg")
+        expect(new Uint8Array(await file.arrayBuffer())).toEqual(bytes)
+        expect(JSON.parse(String(body.get("tags")))).toEqual([
+            { name: "tree_bark", kind: "artist" },
+            { name: "1boy", kind: "character" },
+        ])
+    })
+
+    it("downloads the video file for video posts", async () => {
+        const fetchMedia = vi.fn<MediaFetcher>(async () => new ArrayBuffer(0))
+        mockFetch(calls, () => jsonResponse({ ok: true }))
+        const post = makePost()
+        post.media = {
+            kind: "video",
+            src: "https://aws-mp4.rule34.xxx/2025/123.mp4?token=abc",
+            poster: "",
+            width: 0,
+            height: 0,
+        }
+
+        await savePostToServer(post, fetchMedia, 1000)
+
+        expect(fetchMedia).toHaveBeenCalledWith(
+            "https://aws-mp4.rule34.xxx/2025/123.mp4?token=abc",
+            1000,
+        )
+        const file = (calls[0]?.init.body as FormData).get("image") as File
+        expect(file.name).toBe("123.mp4")
+        expect(file.type).toBe("video/mp4")
+    })
+
+    it("throws when the post has no media URL", async () => {
+        const post = makePost()
+        post.media = { ...post.media, kind: "image", src: "", originalImage: "" }
+
+        await expect(savePostToServer(post, vi.fn<MediaFetcher>(), 1000)).rejects.toThrow(
+            "no media URL",
+        )
+    })
+
+    it("throws a ServerError when the upload leg fails", async () => {
+        const fetchMedia = vi.fn<MediaFetcher>(async () => new ArrayBuffer(0))
+        mockFetch(calls, () => {
+            throw new TypeError("fetch failed")
+        })
+
+        await expect(savePostToServer(makePost(), fetchMedia, 1000)).rejects.toBeInstanceOf(
+            ServerError,
+        )
     })
 })

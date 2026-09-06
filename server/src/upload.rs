@@ -124,9 +124,12 @@ impl Database {
             .execute(&mut *trx)
             .await?;
 
+            // Idempotent: re-uploading a known post (a client retry) must
+            // not trip the (post_id, tag_id) primary key.
             sqlx::query!(
                 r#"INSERT INTO post_tags (post_id, tag_id) 
-                VALUES (?, (SELECT id FROM tags WHERE name = ?))"#,
+                VALUES (?, (SELECT id FROM tags WHERE name = ?))
+                ON CONFLICT DO NOTHING"#,
                 id,
                 tag.name
             )

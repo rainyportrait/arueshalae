@@ -1,4 +1,6 @@
 import { serverSettings } from "../state/settings.ts"
+import type { PostDetails, PostMedia } from "./post-details.ts"
+import type { Tag } from "./tags.ts"
 
 // Client for the arueshalae server. All requests go through the base URL
 // configured in Settings and are bounded by a hard timeout so a stopped
@@ -16,8 +18,13 @@ export function serverBaseUrl(): string {
 
 // Fetch a server endpoint (relative path, no leading slash) with a bounded
 // timeout. Throws ServerError for bad URLs, network failures, timeouts, and
-// non-2xx responses.
-export async function fetchServer(path: string, init?: RequestInit): Promise<Response> {
+// non-2xx responses. The timeout defaults to the short control-plane budget;
+// the media upload passes a much longer one (see savePostToServer).
+export async function fetchServer(
+    path: string,
+    init?: RequestInit,
+    timeoutMs = TIMEOUT_MS,
+): Promise<Response> {
     const base = serverBaseUrl()
     if (base === "") throw new ServerError("No server URL is configured")
 
@@ -29,7 +36,7 @@ export async function fetchServer(path: string, init?: RequestInit): Promise<Res
     }
 
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
+    const timeout = setTimeout(() => controller.abort(), timeoutMs)
     try {
         const res = await fetch(url, { ...init, signal: controller.signal })
         if (!res.ok)
@@ -37,8 +44,7 @@ export async function fetchServer(path: string, init?: RequestInit): Promise<Res
         return res
     } catch (err) {
         if (err instanceof ServerError) throw err
-        if (controller.signal.aborted)
-            throw new ServerError(`Timed out after ${TIMEOUT_MS / 1000}s`)
+        if (controller.signal.aborted) throw new ServerError(`Timed out after ${timeoutMs / 1000}s`)
         throw new ServerError("Could not reach the server")
     } finally {
         clearTimeout(timeout)
@@ -63,4 +69,76 @@ export async function checkDownloads(postIds: number[]): Promise<Set<number>> {
     })
     const { downloaded } = (await res.json()) as { downloaded: number[] }
     return new Set(downloaded)
+}
+
+// --- Saving posts -----------------------------------------------------------
+
+// The tag shape the server's /upload endpoint expects. `name` is the tag's
+// slug — rule34's canonical identifier, which the server matches searches
+// exactly against — and `kind` reuses the userscript tag type (same values).
+export type ServerTag = { name: string; kind: string }
+
+export function serverTags(tags: Tag[]): ServerTag[] {
+    return tags.map((tag) => ({ name: tag.slug, kind: tag.type }))
+}
+
+// The URL whose bytes belong in the library record: image posts carry the
+// full-resolution "Original image" (the displayed src can be a sample),
+// falling back to the displayed URL when the original link is missing; video
+// posts carry the actual file.
+export function mediaUrlFor(media: PostMedia): string {
+    if (media.kind === "video") return media.src
+    return media.originalImage !== "" ? media.originalImage : media.src
+}
+
+// Download the post's media (cross-origin, so through the injected GM fetcher
+// — see gm-fetch.ts) and upload it to the /upload endpoint as multipart form
+// data. The server infers the media type and extension from the bytes; the
+// Blob's mime and file name are best-effort from the URL, useful in logs.
+export type MediaFetcher = (url: string, timeoutMs: number) => Promise<ArrayBuffer>
+
+export async function savePostToServer(
+    post: PostDetails,
+    fetchMedia: MediaFetcher,
+    timeoutMs: number,
+): Promise<void> {
+    const url = mediaUrlFor(post.media)
+    if (url === "") throw new Error("the post has no media URL")
+    const bytes = await fetchMedia(url, timeoutMs)
+    const form = new FormData()
+    form.append("id", String(post.id))
+    form.append("image", new Blob([bytes], { type: mimeFromUrl(url) }), fileNameFromUrl(url))
+    form.append("tags", JSON.stringify(serverTags(post.tags)))
+    // The upload leg streams the media to a localhost server: the default 5s
+    // control-plane budget is far too short for a large file.
+    await fetchServer("upload", { method: "POST", body: form }, timeoutMs)
+}
+
+function mimeFromUrl(url: string): string {
+    const path = url.split(/[?#]/)[0] ?? ""
+    const dot = path.lastIndexOf(".")
+    if (dot === -1) return "application/octet-stream"
+    switch (path.slice(dot + 1).toLowerCase()) {
+        case "jpg":
+        case "jpeg":
+            return "image/jpeg"
+        case "png":
+            return "image/png"
+        case "gif":
+            return "image/gif"
+        case "webp":
+            return "image/webp"
+        case "mp4":
+            return "video/mp4"
+        case "webm":
+            return "video/webm"
+        default:
+            return "application/octet-stream"
+    }
+}
+
+function fileNameFromUrl(url: string): string {
+    const path = url.split(/[?#]/)[0] ?? ""
+    const name = path.slice(path.lastIndexOf("/") + 1)
+    return name === "" ? "media" : name
 }

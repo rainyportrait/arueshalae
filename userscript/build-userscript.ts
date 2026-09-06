@@ -75,6 +75,7 @@ async function runBuild() {
 // @version      ${version}
 // @description  Replaces the default rule34.xxx UI
 // @match        https://rule34.xxx/*
+// @grant        GM.xmlHttpRequest
 // @run-at       document-end
 // ==/UserScript==
 

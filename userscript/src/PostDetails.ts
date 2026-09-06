@@ -13,7 +13,12 @@ import { type PostOrigin, postHref, route } from "./router.ts"
 import { auth } from "./state/auth.ts"
 import { details, reloadDetails } from "./state/details.ts"
 import { downloaded } from "./state/downloaded.ts"
-import { type FavoriteStatus, addFavoriteWithStatus } from "./state/favorite-action.ts"
+import {
+    type FavoriteStatus,
+    addFavoriteWithStatus,
+    librarySaves,
+    retryLibrarySave,
+} from "./state/favorite-action.ts"
 import { loadedPosts, originKey } from "./state/gallery-collection.ts"
 import { canStep, gallery, galleryFocus, reloadGallery, step } from "./state/gallery.ts"
 import { preferOriginal, serverSettings } from "./state/settings.ts"
@@ -108,10 +113,13 @@ function OriginalImageToggle({
 // enabled it starts in the "already" state for posts the server holds (it
 // mirrors downloaded favorites): display-only, derived from the shared set
 // in state/downloaded.ts, so a settled check or a server toggle re-renders
-// just the button while the per-post state stays untouched. Hidden entirely
-// for guests. The button is a live node reading `auth`, the per-post
-// `favorite` (owned by the page shell), and the shared set, so login/logout,
-// a check, and a click re-render just this button, not the sidebar around it.
+// just the button while the per-post state stays untouched. The library
+// mirror (see state/favorite-action.ts) runs only after rule34 has acked the
+// favorite, so a failed save settles into the clickable "library-failed"
+// state, which retries just the save. Hidden entirely for guests. The button
+// is a live node reading `auth`, the per-post `favorite` (owned by the page
+// shell), the shared set, and the in-flight saves, so login/logout, a check,
+// a save, and a click re-render just this button, not the sidebar around it.
 function AddFavoriteButton({
     post,
     favorite,
@@ -123,31 +131,50 @@ function AddFavoriteButton({
 }) {
     return () => {
         if (auth.val.status !== "authenticated") return document.createComment("")
-        const state =
+        const base =
             favorite.val === "idle" && serverSettings.val.enabled && downloaded.val.has(post.id)
                 ? "already"
                 : favorite.val
+        // A save in flight (started by this or an earlier mount of the post)
+        // shows as "saving" even on a fresh mount, where the per-post state
+        // has reset to "idle".
+        const state = librarySaves.val.has(post.id) ? "saving" : base
         const label =
             state === "adding"
                 ? "Adding…"
-                : state === "added"
-                  ? "Added to favorites"
-                  : state === "already"
-                    ? "Already in favorites"
-                    : "Add to favorites"
+                : state === "saving"
+                  ? "Saving to library…"
+                  : state === "added"
+                    ? "Added to favorites"
+                    : state === "already"
+                      ? "Already in favorites"
+                      : state === "library-failed"
+                        ? "Library save failed"
+                        : "Add to favorites"
         return button(
             {
                 type: "button",
-                disabled: state !== "idle",
+                // "library-failed" stays clickable: it retries the library
+                // save alone (rule34 already holds the favorite).
+                disabled: state !== "idle" && state !== "library-failed",
                 class: clsx(
                     "w-full rounded-lg border px-3 py-2 text-sm transition-colors",
                     state === "idle"
                         ? "cursor-pointer border-zinc-700 bg-zinc-900/60 text-zinc-200 hover:bg-zinc-800"
-                        : "cursor-default border-zinc-800 bg-zinc-900/40 text-zinc-500",
+                        : state === "library-failed"
+                          ? "cursor-pointer border-rose-900/70 bg-rose-950/30 text-rose-300 hover:bg-rose-950/50"
+                          : "cursor-default border-zinc-800 bg-zinc-900/40 text-zinc-500",
                 ),
+                title:
+                    state === "library-failed"
+                        ? "The favorite was added on rule34.xxx, but saving it to your library failed. Click to retry."
+                        : "",
                 onclick: () => {
-                    if (favorite.val !== "idle") return
-                    void addFavoriteWithStatus(post.id, favorite, isCurrent)
+                    if (librarySaves.val.has(post.id)) return
+                    if (favorite.val === "library-failed")
+                        void retryLibrarySave(post, favorite, isCurrent)
+                    else if (favorite.val === "idle")
+                        void addFavoriteWithStatus(post, favorite, isCurrent)
                 },
             },
             label,

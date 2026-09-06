@@ -13,7 +13,7 @@ const { div } = van.tags
 
 // Each skeleton item's grid span is its height plus the row gap, exactly as
 // real cards are sized.
-const SKELETON_HEIGHTS = [160, 256, 128, 224, 192, 240, 176, 208, 144, 256, 160, 224]
+const SKELETON_HEIGHTS = [152, 272, 152, 360, 208, 432, 272, 152, 360, 208, 432, 272]
 
 function SkeletonGrid() {
     return div(

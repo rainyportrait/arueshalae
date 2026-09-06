@@ -137,9 +137,9 @@ function panelSkeleton() {
                         class: clsx(
                             "masonry-item overflow-hidden rounded-xl border border-zinc-800",
                         ),
-                        style: `grid-row-end: span ${250 + MASONRY_GAP}`,
+                        style: `grid-row-end: span ${280 + MASONRY_GAP}`,
                     },
-                    div({ class: clsx("skeleton w-full"), style: "height: 250px" }),
+                    div({ class: clsx("skeleton w-full"), style: "height: 280px" }),
                 ),
             ),
         ),

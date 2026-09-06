@@ -98,7 +98,8 @@ function MobileTagList({ tags }: { tags: Tag[] }): ChildDom {
 function MobileSidebar({ hidden, tags }: { hidden: number; tags: Tag[] }): ChildDom {
     if (hidden === 0 && tags.length === 0) return document.createComment("")
     return div(
-        { class: clsx("flex flex-col gap-2 sm:hidden") },
+        // Hidden above PostListLayout's swap point, like the aside it replaces.
+        { class: clsx("flex flex-col gap-2 min-[808px]:hidden") },
         HiddenPostsToggle({ count: hidden }),
         MobileTagList({ tags }),
     )
@@ -113,10 +114,15 @@ function PostListLayout({
     sidebar: ChildDom
     main: ChildDom
 }) {
+    // The sidebar swaps in at 808px: the viewport at which the tagless grid
+    // becomes three columns (3 × 252px tracks + 2 × 16px gaps + 20px page
+    // padding). Below it the wide two-column grid is worth more than the tag
+    // list, so the mobile layout stays up until the sidebar can be paid for
+    // with a column.
     return div(
-        { class: clsx("flex flex-col gap-4 sm:flex-row sm:gap-6") },
+        { class: clsx("flex flex-col gap-4 min-[808px]:flex-row min-[808px]:gap-6") },
         mobile,
-        aside({ class: clsx("hidden w-64 shrink-0 sm:block") }, sidebar),
+        aside({ class: clsx("hidden w-64 shrink-0 min-[808px]:block") }, sidebar),
         div({ class: clsx("min-w-0 flex-1") }, main),
     )
 }

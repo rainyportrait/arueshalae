@@ -10,6 +10,7 @@ import { PostList } from "./PostList.ts"
 import { Settings } from "./Settings.ts"
 import { CaptchaModal } from "./captcha.ts"
 import clsx from "./clsx.ts"
+import { initMasonry } from "./masonry.ts"
 import { type Route, route } from "./router.ts"
 import { profile, profileLoading } from "./state/account.ts"
 import { details, detailsLoading } from "./state/details.ts"
@@ -183,6 +184,9 @@ export function initApp(): void {
     document.body.innerHTML = ""
     van.add(document.body, ArueApp())
     van.add(document.body, CaptchaModal())
+    // Card spans are pixel values measured at load time, and card height
+    // follows the column width, so resize needs a re-measure (masonry.ts).
+    initMasonry()
     // Focus mode also needs the document itself non-scrollable: html/body
     // carry min-height: 100% against the large viewport, which alone would
     // keep the page scrollable (see the body.arue-focus rule in

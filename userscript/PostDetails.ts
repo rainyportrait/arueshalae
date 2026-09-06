@@ -463,7 +463,11 @@ function Thumb({
             replace: true,
             class: () =>
                 clsx(
-                    "shrink-0 overflow-hidden rounded-md border transition-opacity",
+                    // border-2 across all states (not just the rose one) keeps
+                    // every thumb the same size — a per-state width would make
+                    // the animated thumbs 2px taller than their neighbours in
+                    // the row.
+                    "shrink-0 overflow-hidden rounded-md border-2 transition-opacity",
                     isActive()
                         ? "border-zinc-200 opacity-100"
                         : // Inactive animated thumbs keep a rose border so

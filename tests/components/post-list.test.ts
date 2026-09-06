@@ -40,9 +40,9 @@ function tagToggle(body: HTMLElement): HTMLButtonElement {
 }
 
 // The desktop sidebar is in the DOM too (linkedom applies no CSS, so its
-// `sm:block` hiding is inert); assert on the mobile block only.
+// `min-[808px]:block` hiding is inert); assert on the mobile block only.
 function mobileBlock(body: HTMLElement): HTMLElement {
-    const el = body.querySelector<HTMLElement>('div[class*="sm:hidden"]')
+    const el = body.querySelector<HTMLElement>('div[class*="min-[808px]:hidden"]')
     if (el === null) throw new Error("mobile sidebar block not found")
     return el
 }
@@ -134,6 +134,6 @@ describe("PostList mobile tag disclosure", () => {
     it("drops out entirely with no tags and nothing hidden", async () => {
         const { body } = await mountPostList([], [post(1, [])])
         expect(body.querySelector("button[aria-expanded]")).toBeNull()
-        expect(body.querySelector('div[class*="sm:hidden"]')).toBeNull()
+        expect(body.querySelector('div[class*="min-[808px]:hidden"]')).toBeNull()
     })
 })

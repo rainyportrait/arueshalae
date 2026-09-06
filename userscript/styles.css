@@ -52,14 +52,16 @@ body.arue-focus {
 /*
  * Masonry layout.
  *
- * Thumbnails keep their aspect ratio with the long side clamped to 250px, so a
- * fixed-size grid would leave letterbox gaps. We use a CSS grid with a 1px row
- * track and give each card a `grid-row-end: span N`, where N is the measured
- * card height plus the vertical gap (see masonry.ts). `grid-auto-flow` is the
- * row default, so cards flow left-to-right then top-to-bottom. The horizontal
- * gap is `column-gap`; the vertical gap is folded into each card's span, with
- * `align-self: start` so a card doesn't stretch down into that gap. The span in
- * CSS is a safe upper bound until each image reports its real height.
+ * Thumbnails stretch to the column's width with their aspect ratio kept (the
+ * CDN serves them with a 250px long side, so wider columns render them a touch
+ * upscaled), so a fixed-size grid would leave letterbox gaps. We use a CSS grid
+ * with a 1px row track and give each card a `grid-row-end: span N`, where N is
+ * the measured card height plus the vertical gap (see masonry.ts).
+ * `grid-auto-flow` is the row default, so cards flow left-to-right then
+ * top-to-bottom. The horizontal gap is `column-gap`; the vertical gap is folded
+ * into each card's span, with `align-self: start` so a card doesn't stretch down
+ * into that gap. The span in CSS is a starting value until each image loads and
+ * reports its real height — a card can grow as well as shrink.
  *
  * Two columns are the minimum. `auto-fill` alone would collapse to one
  * column on narrow containers (below 520px, i.e. two 252px tracks plus the
@@ -83,11 +85,8 @@ body.arue-focus {
 
 .masonry-item > img {
     display: block;
-    margin: 0 auto;
-    width: auto;
+    width: 100%;
     height: auto;
-    max-width: 250px;
-    max-height: 250px;
 }
 
 /* Shimmering skeleton placeholder. */

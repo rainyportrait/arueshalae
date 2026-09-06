@@ -31,13 +31,17 @@ export function PostCard(post: Post) {
             href: () => cardHref(post),
             class: clsx(
                 "masonry-item group",
-                "block w-full overflow-hidden rounded-xl border bg-zinc-900",
+                "block w-full overflow-hidden rounded-xl bg-zinc-900",
                 "transition-colors duration-150",
                 // Animated posts carry a rose border so they stand out in the
-                // grid; the hover state brightens whichever base is set.
+                // grid; the hover state brightens whichever base is set. It is
+                // two pixels thick so the accent reads at a glance — border-box
+                // sizing keeps the card's outer size identical to its
+                // neighbours, and the span is measured after load, so the masonry
+                // layout is unaffected.
                 isAnimated(post.tags)
-                    ? "border-rose-500/60 hover:border-rose-400/70"
-                    : "border-zinc-800 hover:border-zinc-600",
+                    ? "border-2 border-rose-500/60 hover:border-rose-400/70"
+                    : "border border-zinc-800 hover:border-zinc-600",
             ),
             title: `Post #${post.id}`,
         },

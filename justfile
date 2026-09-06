@@ -12,6 +12,7 @@ watch-userscript:
 serve-userscript:
     python3 -m http.server 8080 --directory userscript/target/userscript
 
+[parallel]
 watch-and-serve-userscript: watch-userscript serve-userscript
 
 build-server:

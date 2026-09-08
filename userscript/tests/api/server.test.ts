@@ -5,13 +5,17 @@ import {
     type MediaFetcher,
     ServerError,
     checkDownloads,
-    deletePostFromServer,
     getDownloadCount,
     mediaUrlFor,
     savePostToServer,
 } from "../../src/api/server.ts"
+import { setFavoriteMembership } from "../../src/api/sync.ts"
 import type { Tag } from "../../src/api/tags.ts"
 import { resetDom } from "../dom.ts"
+
+vi.mock("../../src/state/auth.ts", () => ({
+    auth: { rawVal: { status: "authenticated", userId: 7 } },
+}))
 
 // The client goes through the global fetch; a stub stands in so no request
 // ever leaves the process.
@@ -113,23 +117,29 @@ describe("server client", () => {
         expect(calls[0]?.url).toBe("http://127.0.0.1:34343/api/posts/count")
     })
 
-    it("deletes a post with DELETE /api/posts/{id} and treats a 404 as a no-op", async () => {
-        mockFetch(calls, () => ({ ok: false, status: 404, statusText: "Not Found" }) as Response)
+    it("marks membership unfavorited through the account-scoped endpoint", async () => {
+        mockFetch(calls, () => jsonResponse({ ok: true }))
 
-        await expect(deletePostFromServer(123)).resolves.toBeUndefined()
+        await expect(setFavoriteMembership(123, false)).resolves.toBeUndefined()
 
         expect(calls).toHaveLength(1)
-        expect(calls[0]?.url).toBe("http://127.0.0.1:34343/api/posts/123")
-        expect(calls[0]?.init.method).toBe("DELETE")
+        expect(calls[0]?.url).toBe("http://127.0.0.1:34343/api/sync")
+        expect(calls[0]?.init.method).toBe("POST")
+        expect(JSON.parse(String(calls[0]?.init.body))).toMatchObject({
+            userId: 7,
+            action: "membership",
+            postId: 123,
+            value: "unfavorited",
+        })
     })
 
-    it("throws ServerError when the delete fails for another reason", async () => {
+    it("throws ServerError when the membership update fails", async () => {
         mockFetch(
             calls,
             () => ({ ok: false, status: 500, statusText: "Internal Server Error" }) as Response,
         )
 
-        await expect(deletePostFromServer(123)).rejects.toBeInstanceOf(ServerError)
+        await expect(setFavoriteMembership(123, false)).rejects.toBeInstanceOf(ServerError)
     })
 })
 
@@ -192,7 +202,7 @@ describe("savePostToServer", () => {
         calls = []
     })
 
-    it("downloads the original image and posts it to /api/posts/{id} with the post's tags", async () => {
+    it("uploads the original image and post tags", async () => {
         const bytes = new Uint8Array([1, 2, 3, 4])
         const fetchMedia = vi.fn<MediaFetcher>(async (url) => bytes.buffer)
         mockFetch(calls, () => jsonResponse({ ok: true }))
@@ -201,7 +211,7 @@ describe("savePostToServer", () => {
 
         expect(fetchMedia).toHaveBeenCalledWith("https://wimg.rule34.xxx/img/2025/123.jpg", 1000)
         expect(calls).toHaveLength(1)
-        expect(calls[0]?.url).toBe("http://127.0.0.1:34343/api/posts/123")
+        expect(calls[0]?.url).toBe("http://127.0.0.1:34343/api/posts/123?userId=7")
         expect(calls[0]?.init.method).toBe("POST")
         const body = calls[0]?.init.body as FormData
         const file = body.get("image") as File

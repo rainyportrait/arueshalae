@@ -8,17 +8,20 @@ use axum::{
     http::{StatusCode, header},
     response::IntoResponse,
 };
+use camino::Utf8Path;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tempfile::NamedTempFile;
+use sqlx::SqliteConnection;
+use tempfile::{NamedTempFile, TempDir};
 use tokio::fs::File;
 use tokio_util::io::ReaderStream;
-use tracing::{error, info, warn};
+use tracing::info;
 
 use crate::{
     database::Database,
+    ids::{PostId, Rule34UserId, TagId},
     json_ok,
-    media_processor::{MediaProcessor, file_name, mini_thumb},
+    media_processor::{MediaProcessor, MediaProcessorResult, file_name, mini_thumb},
     server::{AppResult, AppState, SearchQuery},
 };
 
@@ -28,76 +31,100 @@ pub async fn create_post(
         base_path,
         ..
     }): State<AppState>,
-    Path(post_id): Path<i64>,
+    Path(post_id): Path<PostId>,
+    Query(account): Query<UploadAccount>,
     multipart: Multipart,
 ) -> AppResult<Json<Value>> {
     let data = PostData::from_multipart(multipart).await?;
     let processor = MediaProcessor::process(data.image).await?;
-    let row_id = database
-        .insert_post(
-            post_id,
-            processor.extension,
-            processor.mime,
-            processor.original,
-            &data.tags,
-        )
-        .await?;
-    info!(
-        "Saved https://rule34.xxx/index.php?page=post&s=view&id={}",
-        post_id
-    );
-    processor.commit(&base_path, row_id, post_id).await?;
+
+    if !database.configured_for(account.user_id).await? {
+        return Ok(Json(serde_json::json!({"cancelled": true})));
+    }
+
+    let media = StagedMedia::new(&base_path, post_id, processor).await?;
+    if !database
+        .save_post(&base_path, post_id, &media, &data.tags)
+        .await?
+    {
+        return Ok(Json(serde_json::json!({"cancelled": true})));
+    }
+
+    info!(post_id = post_id.0, "Saved rule34 post");
     json_ok!({"ok": true})
 }
 
-pub async fn delete_post(
-    State(AppState {
-        database,
-        base_path,
-        ..
-    }): State<AppState>,
-    Path(post_id): Path<i64>,
-) -> impl IntoResponse {
-    let post = match database.delete_post(post_id).await {
-        Ok(post) => post,
-        Err(err) => {
-            error!("failed to delete post {post_id}: {err}");
-            return Err((StatusCode::INTERNAL_SERVER_ERROR, "failed to delete post"));
-        }
-    };
-    let Some(post) = post else {
-        return Err((StatusCode::NOT_FOUND, "post not found"));
-    };
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UploadAccount {
+    user_id: Rule34UserId,
+}
 
-    // The files go after the commit, best-effort: an orphaned file can never
-    // be served (its row is gone) and there is no retry path, so a warn! is
-    // the right ceiling.
-    let name = file_name(post.id, post.external_id, &post.extension);
-    for path in [
-        base_path.join(&name),
-        base_path.join(".thumbs").join(format!("{name}.jpeg")),
-        base_path.join(".minis").join(format!("mini_{name}.jpeg")),
-    ] {
-        if let Err(err) = tokio::fs::remove_file(path.as_path()).await {
-            if err.kind() != std::io::ErrorKind::NotFound {
-                warn!("failed to remove {}: {err}", path);
-            }
-        }
+struct StagedMedia {
+    directory: TempDir,
+    storage_name: String,
+    extension: &'static str,
+    mime: &'static str,
+    original: bool,
+}
+
+impl StagedMedia {
+    async fn new(
+        base_path: &Utf8Path,
+        post_id: PostId,
+        processor: MediaProcessorResult,
+    ) -> Result<Self> {
+        // Copy across filesystems before acquiring the SQLite write lock.
+        // Publishing from here is a same-filesystem rename, even for a large video.
+        let directory = tempfile::tempdir_in(base_path)?;
+        let path = Utf8Path::from_path(directory.path())
+            .ok_or_else(|| anyhow::anyhow!("non-UTF8 staging path"))?;
+
+        tokio::fs::create_dir(path.join(".thumbs")).await?;
+
+        let media = Self {
+            directory,
+            storage_name: file_name(post_id, processor.extension),
+            extension: processor.extension,
+            mime: processor.mime,
+            original: processor.original,
+        };
+        processor.commit(media.path(), post_id).await?;
+
+        Ok(media)
     }
 
-    json_ok!({"ok": true})
+    async fn publish(&self, base_path: &Utf8Path) -> Result<()> {
+        tokio::fs::rename(
+            self.path().join(&self.storage_name),
+            base_path.join(&self.storage_name),
+        )
+        .await?;
+
+        let thumbnail = format!("{}.jpeg", self.storage_name);
+        let staged_thumbnail = self.path().join(".thumbs").join(&thumbnail);
+        if staged_thumbnail.exists() {
+            tokio::fs::rename(staged_thumbnail, base_path.join(".thumbs").join(thumbnail)).await?;
+        }
+
+        Ok(())
+    }
+
+    fn path(&self) -> &Utf8Path {
+        Utf8Path::from_path(self.directory.path()).expect("staging path was already validated")
+    }
 }
 
 #[derive(Deserialize)]
 pub struct DownloadedQuery {
     #[serde(default, deserialize_with = "parse_id_list")]
-    ids: Option<Vec<i64>>,
+    ids: Option<Vec<PostId>>,
 }
 
 // The `ids` filter is a comma-separated list (`?ids=1,2,3`); the query
 // deserializer wouldn't split it on its own. A value that isn't a list of
 // post ids fails the query extraction, which axum answers with a 400.
-fn parse_id_list<'de, D>(deserializer: D) -> Result<Option<Vec<i64>>, D::Error>
+fn parse_id_list<'de, D>(deserializer: D) -> Result<Option<Vec<PostId>>, D::Error>
 where
     D: serde::de::Deserializer<'de>,
 {
@@ -113,7 +140,10 @@ where
         let id = part
             .parse::<i64>()
             .map_err(|_| serde::de::Error::custom(format!("invalid post id {part:?} in ids")))?;
-        ids.push(id);
+        if id <= 0 {
+            return Err(serde::de::Error::custom("post IDs must be positive"));
+        }
+        ids.push(PostId(id));
     }
     Ok(Some(ids))
 }
@@ -187,12 +217,12 @@ pub async fn serve_media(
         base_path,
         ..
     }): State<AppState>,
-    Path(post_id): Path<i64>,
+    Path(post_id): Path<PostId>,
     Query(MediaQuery { kind }): Query<MediaQuery>,
 ) -> impl IntoResponse {
     let (name, path, mime) = match database.get_post(post_id).await {
         Ok(post) => {
-            let name = file_name(post.id, post.external_id, &post.extension);
+            let name = post.storage_name;
             let (path, mime) = if post.mime.starts_with("image") {
                 (base_path.join(&name), post.mime)
             } else {
@@ -236,11 +266,50 @@ pub async fn serve_media(
 }
 
 impl Database {
+    async fn configured_for(&self, user_id: Rule34UserId) -> Result<bool> {
+        let configured: Option<Rule34UserId> =
+            sqlx::query_scalar("SELECT rule34_user_id FROM sync_account")
+                .fetch_optional(&self.pool)
+                .await?;
+
+        Ok(configured == Some(user_id))
+    }
+
+    async fn save_post(
+        &self,
+        base_path: &Utf8Path,
+        post_id: PostId,
+        media: &StagedMedia,
+        tags: &[Tag],
+    ) -> Result<bool> {
+        // The immediate transaction serializes the final membership check and
+        // publication against an unfavorite arriving from another request.
+        let mut transaction = self.pool.begin_with("BEGIN IMMEDIATE").await?;
+
+        if !upload_is_allowed(&mut transaction, post_id).await? {
+            return Ok(false);
+        }
+
+        if !has_media(&mut transaction, post_id).await? {
+            media.publish(base_path).await?;
+            insert_media(&mut transaction, post_id, media).await?;
+            insert_tags(&mut transaction, post_id, tags).await?;
+        }
+
+        sqlx::query("DELETE FROM download_queue WHERE post_id = ?")
+            .bind(post_id)
+            .execute(&mut *transaction)
+            .await?;
+
+        transaction.commit().await?;
+        Ok(true)
+    }
+
     // Which of the requested posts the library holds; without a request, the
     // whole library. The ids come back in no particular order.
-    async fn downloaded_post_ids(&self, requested: Option<&[i64]>) -> Result<Vec<i64>> {
+    async fn downloaded_post_ids(&self, requested: Option<&[PostId]>) -> Result<Vec<PostId>> {
         let Some(requested) = requested else {
-            return Ok(sqlx::query_scalar!("SELECT external_id FROM posts")
+            return Ok(sqlx::query_scalar("SELECT post_id FROM post_media")
                 .fetch_all(&self.pool)
                 .await?);
         };
@@ -249,7 +318,7 @@ impl Database {
         }
 
         let mut query_builder =
-            sqlx::QueryBuilder::new("SELECT external_id FROM posts WHERE external_id IN (");
+            sqlx::QueryBuilder::new("SELECT post_id FROM post_media WHERE post_id IN (");
         query_builder.push_values(requested, |mut builder, post_id| {
             builder.push_bind(post_id);
         });
@@ -261,127 +330,32 @@ impl Database {
             .await?)
     }
 
-    pub async fn insert_post(
-        &self,
-        external_id: i64,
-        extension: &str,
-        mime: &str,
-        original: bool,
-        tags: &[Tag],
-    ) -> Result<i64> {
-        let mut trx = self.pool.begin().await?;
-
-        let id = sqlx::query_scalar!("SELECT id FROM posts WHERE external_id = ?", external_id)
-            .fetch_optional(&mut *trx)
-            .await?;
-
-        let id = if let Some(id) = id {
-            id
-        } else {
-            sqlx::query_scalar!(
-                r#"INSERT INTO posts (external_id, extension, mime, original) 
-                VALUES (?, ?, ?, ?) 
-                RETURNING id"#,
-                external_id,
-                extension,
-                mime,
-                original
-            )
-            .fetch_one(&mut *trx)
-            .await?
-        };
-
-        for tag in tags {
-            let kind = tag.kind.as_str();
-            sqlx::query!(
-                "INSERT INTO tags (name, kind) VALUES (?, ?) ON CONFLICT DO NOTHING",
-                tag.name,
-                kind,
-            )
-            .execute(&mut *trx)
-            .await?;
-
-            // Idempotent: re-uploading a known post (a client retry) must
-            // not trip the (post_id, tag_id) primary key.
-            sqlx::query!(
-                r#"INSERT INTO post_tags (post_id, tag_id) 
-                VALUES (?, (SELECT id FROM tags WHERE name = ?))
-                ON CONFLICT DO NOTHING"#,
-                id,
-                tag.name
-            )
-            .execute(&mut *trx)
-            .await?;
-        }
-
-        trx.commit().await?;
-
-        Ok(id)
-    }
-
-    async fn delete_post(&self, external_id: i64) -> Result<Option<PostRow>> {
-        let mut trx = self.pool.begin().await?;
-
-        let Some(post) = sqlx::query_as!(
-            PostRow,
-            r#"SELECT id, external_id, extension
-            FROM posts
-            WHERE external_id = ?"#,
-            external_id
-        )
-        .fetch_optional(&mut *trx)
-        .await?
-        else {
-            return Ok(None);
-        };
-
-        sqlx::query("DELETE FROM post_tags WHERE post_id = ?")
-            .bind(post.id)
-            .execute(&mut *trx)
-            .await?;
-
-        sqlx::query("DELETE FROM posts WHERE id = ?")
-            .bind(post.id)
-            .execute(&mut *trx)
-            .await?;
-
-        // Prune tags orphaned by this delete: deletion is the first thing
-        // that can orphan a tag, and autocomplete queries tags_with_uses
-        // without a uses > 0 filter, so unpruned orphans would become
-        // suggestable dead tags. (With post_tags empty, NOT IN matches every
-        // tag row — deleting them all is correct.)
-        sqlx::query("DELETE FROM tags WHERE id NOT IN (SELECT tag_id FROM post_tags)")
-            .execute(&mut *trx)
-            .await?;
-
-        trx.commit().await?;
-
-        Ok(Some(post))
-    }
-
     async fn get_download_count(&self) -> Result<i64> {
-        Ok(sqlx::query_scalar!("SELECT COUNT(1) FROM posts")
+        Ok(sqlx::query_scalar!("SELECT COUNT(1) FROM post_media")
             .fetch_one(&self.pool)
             .await?)
     }
 
-    async fn search(&self, search: &Search<'_>) -> Result<Vec<i64>> {
+    async fn search(&self, search: &Search<'_>) -> Result<Vec<PostId>> {
         let mut query_builder = sqlx::QueryBuilder::new(
-            r#"SELECT p.external_id 
+            r#"SELECT p.post_id
             FROM posts p
-            JOIN post_tags pt ON p.id = pt.post_id
-            JOIN tags t ON t.id = pt.tag_id
-            WHERE t.name IN "#,
+            JOIN post_tags pt ON p.post_id = pt.post_id
+            JOIN tags t ON t.tag_id = pt.tag_id
+            JOIN favorites f ON f.post_id = p.post_id
+            WHERE f.membership != 'unfavorited'
+              AND (f.membership = 'favorited' OR p.availability = 'deleted')
+              AND t.name IN "#,
         );
         query_builder.push_tuples(&search.include, |mut builder, term| {
             builder.push_bind(term);
         });
         query_builder.push(
-            r#" GROUP BY p.external_id
+            r#" GROUP BY p.post_id
             HAVING COUNT(1) = "#,
         );
         query_builder.push_bind(search.include.len() as i64);
-        query_builder.push(" ORDER BY p.id DESC");
+        query_builder.push(" ORDER BY p.post_id DESC");
 
         Ok(query_builder
             .build_query_scalar()
@@ -389,41 +363,112 @@ impl Database {
             .await?)
     }
 
-    async fn get_post(&self, external_id: i64) -> Result<PostMedia> {
+    async fn get_post(&self, post_id: PostId) -> Result<PostMedia> {
         Ok(sqlx::query_as!(
             PostMedia,
-            r#"SELECT id, external_id, extension, mime
-            FROM posts
-            WHERE external_id = ?
-            "#,
-            external_id
+            "SELECT storage_name, mime FROM post_media WHERE post_id = ?",
+            post_id.0
         )
         .fetch_one(&self.pool)
         .await?)
     }
 }
 
-// The stored media of a post: enough of the row to compute the file names
-// and pick the content type for serving.
+async fn upload_is_allowed(connection: &mut SqliteConnection, post_id: PostId) -> Result<bool> {
+    Ok(sqlx::query_scalar(
+        r#"SELECT EXISTS(
+            SELECT 1
+            FROM favorites f
+            JOIN posts p USING (post_id)
+            WHERE post_id = ?
+              AND (
+                f.membership = 'favorited'
+                OR (
+                  p.availability = 'deleted'
+                  AND f.membership != 'unfavorited'
+                )
+              )
+        )"#,
+    )
+    .bind(post_id)
+    .fetch_one(connection)
+    .await?)
+}
+
+async fn has_media(connection: &mut SqliteConnection, post_id: PostId) -> Result<bool> {
+    Ok(
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM post_media WHERE post_id = ?)")
+            .bind(post_id)
+            .fetch_one(connection)
+            .await?,
+    )
+}
+
+async fn insert_media(
+    connection: &mut SqliteConnection,
+    post_id: PostId,
+    media: &StagedMedia,
+) -> Result<()> {
+    sqlx::query(
+        r#"INSERT INTO post_media (
+            post_id,
+            storage_name,
+            extension,
+            mime,
+            original
+        ) VALUES (?, ?, ?, ?, ?)"#,
+    )
+    .bind(post_id)
+    .bind(&media.storage_name)
+    .bind(media.extension)
+    .bind(media.mime)
+    .bind(media.original)
+    .execute(connection)
+    .await?;
+
+    Ok(())
+}
+
+async fn insert_tags(
+    connection: &mut SqliteConnection,
+    post_id: PostId,
+    tags: &[Tag],
+) -> Result<()> {
+    for tag in tags {
+        sqlx::query("INSERT INTO tags (name, kind) VALUES (?, ?) ON CONFLICT DO NOTHING")
+            .bind(&tag.name)
+            .bind(tag.kind.as_str())
+            .execute(&mut *connection)
+            .await?;
+
+        let tag_id: TagId = sqlx::query_scalar("SELECT tag_id FROM tags WHERE name = ?")
+            .bind(&tag.name)
+            .fetch_one(&mut *connection)
+            .await?;
+
+        sqlx::query(
+            r#"INSERT INTO post_tags (post_id, tag_id)
+            VALUES (?, ?)
+            ON CONFLICT DO NOTHING"#,
+        )
+        .bind(post_id)
+        .bind(tag_id)
+        .execute(&mut *connection)
+        .await?;
+    }
+
+    Ok(())
+}
+
 struct PostMedia {
-    id: i64,
-    external_id: i64,
-    extension: String,
+    storage_name: String,
     mime: String,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PostIdsContainer {
-    pub post_ids: Vec<i64>,
-}
-
-// A post row: the ids and extension needed to compute the post's file names
-// after the row itself is deleted.
-struct PostRow {
-    id: i64,
-    external_id: i64,
-    extension: String,
+    pub post_ids: Vec<PostId>,
 }
 
 pub struct PostData {

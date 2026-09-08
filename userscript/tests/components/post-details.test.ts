@@ -198,14 +198,13 @@ describe("PostDetails favorite button, server state", () => {
         const { details: detailsState } = await import("../../src/state/details.ts")
         const { auth } = await import("../../src/state/auth.ts")
         const { serverSettings } = await import("../../src/state/settings.ts")
-        const { downloaded } = await import("../../src/state/downloaded.ts")
         const { PostDetails } = await import("../../src/PostDetails.ts")
         auth.val = { status: "authenticated", userId: 5 }
         serverSettings.val = { ...serverSettings.val, enabled: true }
         detailsState.val = { status: "ready", post: details(id), origin: undefined }
         document.body.append(PostDetails())
         await flushVan()
-        return { auth, serverSettings, downloaded }
+        return { serverSettings }
     }
 
     function favoriteButton(): HTMLButtonElement | null {
@@ -214,6 +213,23 @@ describe("PostDetails favorite button, server state", () => {
                 (button.textContent ?? "").includes("favorites"),
             ) ?? null
         )
+    }
+
+    async function setLibraryPost(postId: number, downloaded: boolean): Promise<void> {
+        const { libraryPosts } = await import("../../src/state/library.ts")
+        libraryPosts.val = new Map([
+            [
+                postId,
+                {
+                    postId,
+                    membership: "favorited",
+                    availability: "available",
+                    downloaded,
+                    error: null,
+                },
+            ],
+        ])
+        await flushVan()
     }
 
     it("starts available when the post is not in the user's library", async () => {
@@ -227,35 +243,24 @@ describe("PostDetails favorite button, server state", () => {
     it("starts in the remove face when the server holds the post", async () => {
         // The "already" face is the toggle's "Remove from favorites" face,
         // so the button is active, not a disabled end state.
-        const { downloaded } = await import("../../src/state/downloaded.ts")
-        downloaded.val = new Set([3])
         await mountDetails(3)
+        await setLibraryPost(3, true)
 
         const button = favoriteButton()
         expect(button?.textContent).toBe("Remove from favorites")
         expect(button?.disabled).toBe(false)
     })
 
-    it("settles into the already state when the post's check resolves", async () => {
-        const gate = deferred<Set<number>>()
-        api.checkDownloads.mockImplementation(() => gate.promise)
+    it("membership independently updates the favorite button", async () => {
         await mountDetails(3)
-
-        expect(api.checkDownloads).toHaveBeenCalledWith([3])
         expect(favoriteButton()?.textContent).toBe("Add to favorites")
-
-        gate.resolve(new Set([3]))
-        await flushVan()
-
-        const button = favoriteButton()
-        expect(button?.textContent).toBe("Remove from favorites")
-        expect(button?.disabled).toBe(false)
+        await setLibraryPost(3, false)
+        expect(favoriteButton()?.textContent).toBe("Remove from favorites")
     })
 
     it("drops back to available when the server is disabled", async () => {
-        const { downloaded } = await import("../../src/state/downloaded.ts")
-        downloaded.val = new Set([3])
         const { serverSettings } = await mountDetails(3)
+        await setLibraryPost(3, true)
         expect(favoriteButton()?.textContent).toBe("Remove from favorites")
 
         serverSettings.val = { ...serverSettings.val, enabled: false }

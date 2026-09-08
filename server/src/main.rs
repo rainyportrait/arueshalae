@@ -1,7 +1,9 @@
 mod database;
+mod ids;
 mod media_processor;
 mod posts;
 mod server;
+mod sync;
 mod tags;
 
 use camino::{Utf8Component, Utf8Path, Utf8PathBuf};

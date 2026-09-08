@@ -1,3 +1,4 @@
+import { auth } from "../state/auth.ts"
 import { serverSettings } from "../state/settings.ts"
 import type { PostDetails, PostMedia } from "./post-details.ts"
 import type { Tag } from "./tags.ts"
@@ -20,7 +21,7 @@ export function serverBaseUrl(): string {
 // timeout, returning the raw response. Throws ServerError for bad URLs,
 // network failures, and timeouts — never for the status code, so a caller
 // that needs to read a non-2xx (e.g. a 404 as a no-op) can inspect it.
-async function fetchServerResponse(
+export async function fetchServerResponse(
     path: string,
     init?: RequestInit,
     timeoutMs = TIMEOUT_MS,
@@ -56,35 +57,28 @@ export async function fetchServer(
     init?: RequestInit,
     timeoutMs = TIMEOUT_MS,
 ): Promise<Response> {
-    const res = await fetchServerResponse(path, init, timeoutMs)
-    if (!res.ok) throw new ServerError(`The server responded with ${res.status} ${res.statusText}`)
-    return res
+    const response = await fetchServerResponse(path, init, timeoutMs)
+    if (!response.ok) {
+        throw new ServerError(`The server responded with ${response.status} ${response.statusText}`)
+    }
+    return response
 }
 
 // The number of posts the server has downloaded. Used as the connection test:
 // reaching this endpoint also proves we're talking to an arueshalae server.
 export async function getDownloadCount(): Promise<number> {
-    const res = await fetchServer("api/posts/count")
-    return ((await res.json()) as { count: number }).count
+    const response = await fetchServer("api/posts/count")
+    return ((await response.json()) as { count: number }).count
 }
 
-// Ask which of the given posts the server holds. Its database mirrors the
-// user's downloaded favorites, so an id it returns is (and was) favorited.
-// Returns the ids the server has (a subset of the input, in no order).
+// Downloaded media is independent of current membership. This includes retained
+// unfavorited and upstream-deleted copies.
 export async function checkDownloads(postIds: number[]): Promise<Set<number>> {
     if (postIds.length === 0) return new Set()
-    const res = await fetchServer(`api/posts/downloaded?ids=${postIds.join(",")}`)
-    const { postIds: downloaded } = (await res.json()) as { postIds: number[] }
-    return new Set(downloaded)
-}
 
-// Delete a post from the server's library (database row and media files).
-// A 404 (the server doesn't hold it) is a successful no-op, so duplicate or
-// out-of-order deletes are harmless.
-export async function deletePostFromServer(postId: number): Promise<void> {
-    const res = await fetchServerResponse(`api/posts/${postId}`, { method: "DELETE" })
-    if (!res.ok && res.status !== 404)
-        throw new ServerError(`The server responded with ${res.status} ${res.statusText}`)
+    const response = await fetchServer(`api/posts/downloaded?ids=${postIds.join(",")}`)
+    const { postIds: downloaded } = (await response.json()) as { postIds: number[] }
+    return new Set(downloaded)
 }
 
 // --- Saving posts -----------------------------------------------------------
@@ -119,15 +113,27 @@ export async function savePostToServer(
     fetchMedia: MediaFetcher,
     timeoutMs: number,
 ): Promise<void> {
+    const account = auth.rawVal
+    if (account.status !== "authenticated") throw new Error("Not signed in")
+
     const url = mediaUrlFor(post.media)
     if (url === "") throw new Error("the post has no media URL")
+
     const bytes = await fetchMedia(url, timeoutMs)
     const form = new FormData()
     form.append("image", new Blob([bytes], { type: mimeFromUrl(url) }), fileNameFromUrl(url))
     form.append("tags", JSON.stringify(serverTags(post.tags)))
+
     // The upload leg streams the media to a localhost server: the default 5s
     // control-plane budget is far too short for a large file.
-    await fetchServer(`api/posts/${post.id}`, { method: "POST", body: form }, timeoutMs)
+    const response = await fetchServer(
+        `api/posts/${post.id}?userId=${account.userId}`,
+        { method: "POST", body: form },
+        timeoutMs,
+    )
+    const result = (await response.json()) as { cancelled?: boolean }
+
+    if (result.cancelled) throw new Error("Download cancelled: post was unfavorited")
 }
 
 function mimeFromUrl(url: string): string {

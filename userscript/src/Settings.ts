@@ -1,6 +1,7 @@
 import van from "vanjs-core"
 
 import { AutocompleteInput } from "./AutocompleteInput.ts"
+import { SyncSettings } from "./SyncSettings.ts"
 import { Toggle } from "./Toggle.ts"
 import { getDownloadCount } from "./api/server.ts"
 import { normalizeTags } from "./api/tags.ts"
@@ -242,6 +243,7 @@ export function Settings() {
                     result,
                 )
             },
+            SyncSettings(),
         ),
     )
 }

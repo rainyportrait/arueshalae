@@ -1,47 +1,31 @@
 # Favorite synchronization
 
-The userscript is the only component that accesses rule34. The server stores
-favorite membership, an ordered baseline, downloaded media, and retry state. It
-never fetches rule34 pages or media itself.
+Rule34 is the only source of truth. The userscript performs every Rule34 request;
+the server only stores the latest complete observation and downloaded media.
 
-## Discovery
+Synchronization is an explicit user action. The first Sync reads every favorites
+page and establishes an ordered baseline and the difference between Rule34's
+reported count and the number of observed IDs.
 
-A manual full scan reads every favorites page in the initiating tab. It verifies
-the reported count and first page before publishing the complete order in one
-transaction. Closing the tab abandons the scan; there is no resumable server job.
+Later runs first read the reported count and newest page. New and re-favorited
+posts form a prefix. When the remaining remote order is a subsequence of the
+baseline, the userscript uses binary search to locate removals. It switches to a
+sequential scan when that is cheaper or the ordering assumption does not hold.
 
-Some rule34 accounts permanently report a favorite count that differs from the
-number of IDs on their favorites pages. A successful full scan stores:
+Before publishing a longer run, the userscript rechecks the count and newest
+page. It checks each disappeared post's detail page so the server can distinguish
+an unfavorite from an upstream deletion. An ambiguous response aborts the update.
 
-```
-count offset = reported count - observed IDs
-```
+The completed ordered list is sent in one request. Presence in `favorite_order`
+means that a post is currently favorited; absent posts and their media remain in
+the database. `posts.availability` separately records confirmed upstream
+deletions.
 
-Incremental checks subtract that offset before comparing the reported count with
-the baseline. A later full scan recalculates it.
+Favorite-button actions update `favorite_order` immediately. A favorite moves to
+the front and opportunistically downloads its media; an unfavorite leaves any
+stored media intact.
 
-Every 15 minutes, open userscript tabs ask the server whether an incremental
-check is due. One atomic update admits a single check. There are no worker
-identities, leases, generations, heartbeats, or persisted scan runs. The
-userscript reconciles the newest page first, then uses binary search against the
-established order when the corrected count indicates removals. Only observed,
-unambiguous results are committed; otherwise the discrepancy remains unresolved.
-
-## Downloads
-
-Discovery records IDs immediately and leaves media to a separate pull loop. The
-server returns one eligible post and places a short soft claim on it. The
-userscript fetches its detail page and media, then uploads it. The server checks
-current membership when committing the upload, so an unfavorited post is
-cancelled and duplicate uploads are harmless.
-
-Failures use a bounded persistent backoff. A soft claim can expire without any
-worker takeover protocol; at worst another tab repeats a download.
-
-## Local data
-
-- `post_id` always means the rule34 post ID.
-- Favorite membership, upstream availability, and downloaded media are separate.
-- Unfavoriting retains existing media and cancels future downloads.
-- Confirmed upstream-deleted records and any available media are preserved.
-- Media URLs are never stored.
+After reconciliation, the userscript attempts every current favorite without
+media. Missing media itself is the queue. Failures remain eligible for the next
+explicit Sync; there are no workers, leases, claims, schedules, persisted retry
+state, or stored media URLs.

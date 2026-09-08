@@ -19,7 +19,7 @@ use tracing::info;
 
 use crate::{
     database::Database,
-    ids::{PostId, Rule34UserId, TagId},
+    ids::{PostId, TagId},
     json_ok,
     media_processor::{MediaProcessor, MediaProcessorResult, file_name, mini_thumb},
     server::{AppResult, AppState, SearchQuery},
@@ -32,15 +32,10 @@ pub async fn create_post(
         ..
     }): State<AppState>,
     Path(post_id): Path<PostId>,
-    Query(account): Query<UploadAccount>,
     multipart: Multipart,
 ) -> AppResult<Json<Value>> {
     let data = PostData::from_multipart(multipart).await?;
     let processor = MediaProcessor::process(data.image).await?;
-
-    if !database.configured_for(account.user_id).await? {
-        return Ok(Json(serde_json::json!({"cancelled": true})));
-    }
 
     let media = StagedMedia::new(&base_path, post_id, processor).await?;
     if !database
@@ -52,12 +47,6 @@ pub async fn create_post(
 
     info!(post_id = post_id.0, "Saved rule34 post");
     json_ok!({"ok": true})
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UploadAccount {
-    user_id: Rule34UserId,
 }
 
 struct StagedMedia {
@@ -266,15 +255,6 @@ pub async fn serve_media(
 }
 
 impl Database {
-    async fn configured_for(&self, user_id: Rule34UserId) -> Result<bool> {
-        let configured: Option<Rule34UserId> =
-            sqlx::query_scalar("SELECT rule34_user_id FROM sync_account")
-                .fetch_optional(&self.pool)
-                .await?;
-
-        Ok(configured == Some(user_id))
-    }
-
     async fn save_post(
         &self,
         base_path: &Utf8Path,
@@ -295,11 +275,6 @@ impl Database {
             insert_media(&mut transaction, post_id, media).await?;
             insert_tags(&mut transaction, post_id, tags).await?;
         }
-
-        sqlx::query("DELETE FROM download_queue WHERE post_id = ?")
-            .bind(post_id)
-            .execute(&mut *transaction)
-            .await?;
 
         transaction.commit().await?;
         Ok(true)
@@ -342,9 +317,8 @@ impl Database {
             FROM posts p
             JOIN post_tags pt ON p.post_id = pt.post_id
             JOIN tags t ON t.tag_id = pt.tag_id
-            JOIN favorites f ON f.post_id = p.post_id
-            WHERE f.membership != 'unfavorited'
-              AND (f.membership = 'favorited' OR p.availability = 'deleted')
+            LEFT JOIN favorite_order f ON f.post_id = p.post_id
+            WHERE (f.post_id IS NOT NULL OR p.availability = 'deleted')
               AND t.name IN "#,
         );
         query_builder.push_tuples(&search.include, |mut builder, term| {
@@ -378,16 +352,10 @@ async fn upload_is_allowed(connection: &mut SqliteConnection, post_id: PostId) -
     Ok(sqlx::query_scalar(
         r#"SELECT EXISTS(
             SELECT 1
-            FROM favorites f
-            JOIN posts p USING (post_id)
+            FROM posts p
+            LEFT JOIN favorite_order f USING (post_id)
             WHERE post_id = ?
-              AND (
-                f.membership = 'favorited'
-                OR (
-                  p.availability = 'deleted'
-                  AND f.membership != 'unfavorited'
-                )
-              )
+              AND (f.post_id IS NOT NULL OR p.availability = 'deleted')
         )"#,
     )
     .bind(post_id)

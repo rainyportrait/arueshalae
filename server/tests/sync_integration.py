@@ -84,7 +84,7 @@ with tempfile.TemporaryDirectory(prefix="arue-sync-test-") as folder:
             return json.loads(
                 req(
                     "/api/sync",
-                    json.dumps(dict(userId=7, action=action, **fields)).encode(),
+                    json.dumps(dict(action=action, **fields)).encode(),
                     {"Content-Type": "application/json"},
                 )
             )
@@ -101,7 +101,7 @@ with tempfile.TemporaryDirectory(prefix="arue-sync-test-") as folder:
             body = image_headers + png + tags
             return json.loads(
                 req(
-                    f"/api/posts/{post_id}?userId=7",
+                    f"/api/posts/{post_id}",
                     body,
                     {"Content-Type": "multipart/form-data; boundary=test"},
                 )
@@ -115,11 +115,9 @@ with tempfile.TemporaryDirectory(prefix="arue-sync-test-") as folder:
                 except Exception:
                     time.sleep(0.1)
             assert req("/api/posts/123/media") == png
-            assert command("status") == {"configured": False}
-            command("configure")
+            assert command("status")["initialized"] is False
             command("membership", postId=123, value="unfavorited")
             assert req("/api/posts/123/media") == png
-            assert command("status")["archived"] == 1
             command("membership", postId=123, value="favorited")
             assert upload(123) == {"ok": True}
             assert (folder / "0000012_123.png").read_bytes() == png
@@ -131,20 +129,14 @@ with tempfile.TemporaryDirectory(prefix="arue-sync-test-") as folder:
             command("membership", postId=456, value="favorited")
             assert upload(456) == {"ok": True}
             assert req("/api/posts/456/media") == png
-            baseline = command("baseline")
             command(
-                "full-scan",
+                "reconcile",
                 ids=[456, 123],
                 reportedCount=5,
-                revision=baseline["revision"],
             )
             assert command("status")["countOffset"] == 3
-            db = sqlite3.connect(folder / ".data.db")
-            db.execute("UPDATE sync_account SET next_incremental_at = 0")
-            db.commit()
-            db.close()
-            assert command("claim-incremental") == {"run": True}
-            assert command("claim-incremental") == {"run": False}
+            assert command("baseline")["ids"] == [456, 123]
+            assert command("downloads") == {"ids": []}
             assert json.loads(req("/api/posts/downloaded?ids=123,456,789")) == {
                 "postIds": [123, 456]
             }
@@ -153,13 +145,10 @@ with tempfile.TemporaryDirectory(prefix="arue-sync-test-") as folder:
             assert db.execute(
                 "SELECT post_id FROM post_tags WHERE tag_id=1"
             ).fetchall() == [(123,)]
-            assert db.execute(
-                "SELECT COUNT(*) FROM download_queue WHERE post_id=456"
-            ).fetchone() == (0,)
             print(
                 "PASS: legacy migration, original filenames, retained media, "
                 "re-favorite reuse, cancelled upload, real media upload/read, "
-                "count offset, one-shot claim, filtered IDs, tag links, foreign keys"
+                "count offset, normalized order, filtered IDs, tag links, foreign keys"
             )
         finally:
             process.terminate()

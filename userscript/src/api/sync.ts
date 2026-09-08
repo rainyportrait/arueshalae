@@ -1,19 +1,13 @@
-import { auth } from "../state/auth.ts"
 import { ServerError, fetchServerResponse } from "./server.ts"
 
 export async function syncCommand<T>(
     action: string,
     data: Record<string, unknown> = {},
 ): Promise<T> {
-    const account = auth.rawVal
-    if (account.status !== "authenticated") {
-        throw new Error("Sign in to configure synchronization")
-    }
-
     const response = await fetchServerResponse("api/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: account.userId, action, ...data }),
+        body: JSON.stringify({ action, ...data }),
     })
     if (!response.ok) {
         const message = await responseMessage(response)

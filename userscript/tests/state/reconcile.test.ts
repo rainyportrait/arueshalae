@@ -46,7 +46,7 @@ describe("binary search against a stable ordered baseline", () => {
         }
     })
 
-    it("propagates budget exhaustion without publishing guessed removals", async () => {
+    it("propagates page failures without publishing guessed removals", async () => {
         const baseline = Array.from({ length: 200 }, (_, i) => i + 1)
         await expect(
             reconcileRemovals(
@@ -54,10 +54,10 @@ describe("binary search against a stable ordered baseline", () => {
                 50,
                 199,
                 async () => {
-                    throw new Error("budget exhausted")
+                    throw new Error("page failed")
                 },
                 async () => {},
             ),
-        ).rejects.toThrow("budget exhausted")
+        ).rejects.toThrow("page failed")
     })
 })

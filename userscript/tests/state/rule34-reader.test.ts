@@ -14,7 +14,7 @@ describe("Rule34Reader", () => {
         vi.restoreAllMocks()
     })
 
-    it("backs off and counts every retry attempt", async () => {
+    it("backs off and retries transient failures", async () => {
         vi.useFakeTimers()
         const fetch = vi
             .spyOn(globalThis, "fetch")
@@ -22,27 +22,19 @@ describe("Rule34Reader", () => {
                 new Response("", { status: 429, headers: { "Retry-After": "0" } }),
             )
             .mockResolvedValueOnce(new Response("", { status: 404 }))
-        const attempts = vi.fn()
-
-        const result = new Rule34Reader(42).withRequestBudget(attempts).postDetails(123)
+        const result = new Rule34Reader(42).postDetails(123)
         await vi.runAllTimersAsync()
 
         await expect(result).resolves.toBeNull()
         expect(fetch).toHaveBeenCalledTimes(2)
-        expect(attempts).toHaveBeenCalledTimes(2)
     })
 
     it("surfaces a challenge through the regular captcha solver", async () => {
         vi.spyOn(globalThis, "fetch")
             .mockResolvedValueOnce(new Response("challenge", { status: 403 }))
             .mockResolvedValueOnce(new Response("", { status: 404 }))
-        const attempts = vi.fn()
-
-        await expect(
-            new Rule34Reader(42).withRequestBudget(attempts).postDetails(123),
-        ).resolves.toBeNull()
+        await expect(new Rule34Reader(42).postDetails(123)).resolves.toBeNull()
 
         expect(solveCaptcha).toHaveBeenCalledWith("/index.php?page=post&s=view&id=123")
-        expect(attempts).toHaveBeenCalledTimes(2)
     })
 })

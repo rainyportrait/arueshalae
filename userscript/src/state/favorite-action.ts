@@ -9,6 +9,7 @@ import {
 } from "../api/favorites.ts"
 import type { PostDetails } from "../api/post-details.ts"
 import { setFavoriteMembership } from "../api/sync.ts"
+import { downloadKnownPost } from "../sync/download.ts"
 import { auth } from "./auth.ts"
 import { refreshLibrary } from "./library.ts"
 import { serverSettings } from "./settings.ts"
@@ -33,13 +34,16 @@ type MembershipWriter = (post: PostDetails) => Promise<void>
 type UnfavoriteWriter = (postId: number) => Promise<void>
 type SessionCheck = (userId: number) => Promise<boolean>
 
-const productionFavorite: MembershipWriter = (post) => setFavoriteMembership(post.id, true)
+const productionFavorite: MembershipWriter = async (post) => {
+    await setFavoriteMembership(post.id, true)
+    await downloadKnownPost(post).catch(() => {})
+}
 const productionUnfavorite: UnfavoriteWriter = (postId) => setFavoriteMembership(postId, false)
 const productionSessionCheck: SessionCheck = (userId) =>
     userId > 0 ? sessionAlive(userId) : Promise.resolve(false)
 
-// Membership writes are serialized so rapid favorite actions cannot race on
-// the account revision. The public map also lets a remounted details page join
+// Membership writes are serialized so rapid favorite actions preserve their
+// prepend order. The public map also lets a remounted details page join
 // an in-flight write instead of offering a duplicate action.
 export const membershipWrites = van.state<Map<number, Promise<boolean>>>(new Map())
 

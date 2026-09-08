@@ -12,14 +12,7 @@ const RETRYABLE_STATUSES = new Set([429, 502, 503, 504])
 // Read-only rule34 access used by synchronization. Keeping it here makes the
 // server boundary explicit: none of these requests can originate in Rust.
 export class Rule34Reader {
-    constructor(
-        private readonly userId: number,
-        private readonly beforeRequest: () => void = () => {},
-    ) {}
-
-    withRequestBudget(spend: () => void): Rule34Reader {
-        return new Rule34Reader(this.userId, spend)
-    }
+    constructor(private readonly userId: number) {}
 
     async reportedCount(): Promise<number> {
         const profile = extractUserProfile(
@@ -61,7 +54,6 @@ export class Rule34Reader {
 
     private async request(url: string): Promise<Response> {
         for (let attempt = 0; ; attempt++) {
-            this.beforeRequest()
             const response = await fetchBackground(url)
             if (isChallengeBody(await response.clone().text())) {
                 if (attempt + 1 >= MAX_ATTEMPTS) {

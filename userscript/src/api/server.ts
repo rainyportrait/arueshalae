@@ -1,4 +1,3 @@
-import { auth } from "../state/auth.ts"
 import { serverSettings } from "../state/settings.ts"
 import type { PostDetails, PostMedia } from "./post-details.ts"
 import type { Tag } from "./tags.ts"
@@ -113,9 +112,6 @@ export async function savePostToServer(
     fetchMedia: MediaFetcher,
     timeoutMs: number,
 ): Promise<void> {
-    const account = auth.rawVal
-    if (account.status !== "authenticated") throw new Error("Not signed in")
-
     const url = mediaUrlFor(post.media)
     if (url === "") throw new Error("the post has no media URL")
 
@@ -127,7 +123,7 @@ export async function savePostToServer(
     // The upload leg streams the media to a localhost server: the default 5s
     // control-plane budget is far too short for a large file.
     const response = await fetchServer(
-        `api/posts/${post.id}?userId=${account.userId}`,
+        `api/posts/${post.id}`,
         { method: "POST", body: form },
         timeoutMs,
     )

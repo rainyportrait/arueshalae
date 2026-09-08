@@ -6,8 +6,6 @@ import { details } from "./details.ts"
 import { markDownloaded } from "./downloaded.ts"
 import { serverSettings } from "./settings.ts"
 
-const LIBRARY_POLL_INTERVAL_MS = 15_000
-
 export type LibraryPost = {
     postId: number
     membership: string
@@ -46,8 +44,8 @@ export async function refreshLibrary(postIds: number[]): Promise<void> {
     libraryPosts.val = next
 }
 
-// Load membership with the details page and poll while it remains open. This
-// lets background reconciliation change the button without rebuilding the page.
+// Load membership with the details page. Explicit favorite and sync actions
+// refresh the affected state themselves.
 van.derive(() => {
     const page = details.val
     if (
@@ -58,11 +56,6 @@ van.derive(() => {
         void refreshLibrary([page.post.id]).catch(() => {})
     }
 })
-
-setInterval(() => {
-    const page = details.rawVal
-    if (page.status === "ready") void refreshLibrary([page.post.id]).catch(() => {})
-}, LIBRARY_POLL_INTERVAL_MS)
 
 // Membership belongs to the selected account and server, so no cached entry
 // survives a context change.

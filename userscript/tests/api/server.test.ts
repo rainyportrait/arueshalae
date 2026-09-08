@@ -117,7 +117,7 @@ describe("server client", () => {
         expect(calls[0]?.url).toBe("http://127.0.0.1:34343/api/posts/count")
     })
 
-    it("marks membership unfavorited through the account-scoped endpoint", async () => {
+    it("marks membership unfavorited through the sync endpoint", async () => {
         mockFetch(calls, () => jsonResponse({ ok: true }))
 
         await expect(setFavoriteMembership(123, false)).resolves.toBeUndefined()
@@ -126,7 +126,6 @@ describe("server client", () => {
         expect(calls[0]?.url).toBe("http://127.0.0.1:34343/api/sync")
         expect(calls[0]?.init.method).toBe("POST")
         expect(JSON.parse(String(calls[0]?.init.body))).toMatchObject({
-            userId: 7,
             action: "membership",
             postId: 123,
             value: "unfavorited",
@@ -211,7 +210,7 @@ describe("savePostToServer", () => {
 
         expect(fetchMedia).toHaveBeenCalledWith("https://wimg.rule34.xxx/img/2025/123.jpg", 1000)
         expect(calls).toHaveLength(1)
-        expect(calls[0]?.url).toBe("http://127.0.0.1:34343/api/posts/123?userId=7")
+        expect(calls[0]?.url).toBe("http://127.0.0.1:34343/api/posts/123")
         expect(calls[0]?.init.method).toBe("POST")
         const body = calls[0]?.init.body as FormData
         const file = body.get("image") as File

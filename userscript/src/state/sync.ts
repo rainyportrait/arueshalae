@@ -2,142 +2,80 @@ import van from "vanjs-core"
 
 import { syncCommand } from "../api/sync.ts"
 import { drainDownloads } from "../sync/download.ts"
-import { runFullScan } from "../sync/full-scan.ts"
-import { runIncremental } from "../sync/incremental.ts"
 import { Rule34Reader } from "../sync/rule34.ts"
+import { synchronize } from "../sync/synchronize.ts"
 import { auth } from "./auth.ts"
+import { details } from "./details.ts"
+import { refreshLibrary } from "./library.ts"
 import { serverSettings } from "./settings.ts"
 
-const POLL_INTERVAL_MS = 15_000
-
 export type SyncStatus = {
-    configured: true
-    active: number
-    downloaded: number
-    archived: number
-    deleted: number
+    favorites: number
     pending: number
-    baselineCount: number
-    baselineReady: boolean
+    initialized: boolean
     countOffset: number
-    budget: number
-    incrementalPaused: boolean
-    downloadsPaused: boolean
-    lastIncrementalAt: number | null
-    lastFullScanAt: number | null
-    lastResult: string | null
+    lastSyncAt: number | null
 }
 
-export type FullScanState =
+export type SyncRun =
     | { status: "idle" }
     | { status: "running"; message: string }
     | { status: "complete"; message: string }
     | { status: "failed"; message: string }
 
 export const syncStatus = van.state<SyncStatus | null>(null)
-export const syncConfiguration = van.state<"unknown" | "missing" | "ready">("unknown")
-export const syncError = van.state("")
-export const fullScan = van.state<FullScanState>({ status: "idle" })
+export const syncRun = van.state<SyncRun>({ status: "idle" })
 
-let scheduling = false
+export async function startSync(): Promise<void> {
+    if (syncRun.rawVal.status === "running") return
+    const account = auth.rawVal
+    if (account.status !== "authenticated") {
+        syncRun.val = { status: "failed", message: "Sign in to synchronize favorites." }
+        return
+    }
 
-export async function syncControl(
-    action: string,
-    data: Record<string, unknown> = {},
-): Promise<void> {
-    await syncCommand(action, data)
-    if (action === "configure") syncConfiguration.val = "unknown"
-    await refreshSyncStatus()
-}
-
-export async function startFullScan(): Promise<void> {
-    if (fullScan.rawVal.status === "running") return
-    const reader = readerForCurrentAccount()
-    fullScan.val = { status: "running", message: "Starting full scan…" }
-    syncError.val = ""
+    syncRun.val = { status: "running", message: "Starting synchronization…" }
+    const reader = new Rule34Reader(account.userId)
 
     try {
-        const offset = await runFullScan(reader, (message) => {
-            fullScan.val = { status: "running", message }
+        await withBrowserLock(async () => {
+            const count = await synchronize(reader, (message) => {
+                syncRun.val = { status: "running", message }
+            })
+            syncRun.val = { status: "running", message: "Downloading missing media…" }
+            await drainDownloads(reader)
+            syncRun.val = {
+                status: "complete",
+                message: `Synchronized ${count.toLocaleString()} favorites.`,
+            }
         })
-        const suffix = offset === 0 ? "" : ` Rule34's reported count differs by ${offset}.`
-        fullScan.val = { status: "complete", message: `Full scan completed.${suffix}` }
         await refreshSyncStatus()
-        void schedule()
+        const page = details.rawVal
+        if (page.status === "ready") await refreshLibrary([page.post.id])
     } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        fullScan.val = { status: "failed", message }
+        syncRun.val = {
+            status: "failed",
+            message: error instanceof Error ? error.message : String(error),
+        }
     }
 }
 
 export async function refreshSyncStatus(): Promise<void> {
-    const response = await syncCommand<SyncStatus | { configured: false }>("status")
-    if (!response.configured) {
+    if (!serverSettings.rawVal.enabled) {
         syncStatus.val = null
-        syncConfiguration.val = "missing"
         return
     }
-    syncStatus.val = response
-    syncConfiguration.val = "ready"
+    syncStatus.val = await syncCommand<SyncStatus>("status")
 }
 
-async function schedule(): Promise<void> {
-    if (scheduling || !canSync() || syncConfiguration.rawVal === "missing") return
-    const knownStatus = syncStatus.rawVal
-    if (knownStatus !== null && !knownStatus.baselineReady && knownStatus.pending === 0) return
-
-    scheduling = true
-    try {
-        await refreshSyncStatus()
-        if (syncConfiguration.rawVal !== "ready") return
-        syncError.val = ""
-        const status = syncStatus.rawVal
-        if (status === null) return
-        const reader = readerForCurrentAccount()
-
-        let changed = false
-        if (status.baselineReady) {
-            const claim = await syncCommand<{ run: boolean }>("claim-incremental")
-            if (claim.run) {
-                await withBrowserLock("arueshalae-reconciliation", () => runIncremental(reader))
-                changed = true
-            }
-        }
-        if (status.pending > 0) {
-            await withBrowserLock("arueshalae-downloads", () => drainDownloads(reader))
-            changed = true
-        }
-        if (changed) await refreshSyncStatus()
-    } catch (error) {
-        syncError.val = error instanceof Error ? error.message : String(error)
-    } finally {
-        scheduling = false
-    }
-}
-
-function canSync(): boolean {
-    return serverSettings.rawVal.enabled && auth.rawVal.status === "authenticated"
-}
-
-function readerForCurrentAccount(): Rule34Reader {
-    const account = auth.rawVal
-    if (account.status !== "authenticated") throw new Error("Sign in to synchronize favorites")
-    return new Rule34Reader(account.userId)
-}
-
-async function withBrowserLock(name: string, run: () => Promise<void>): Promise<void> {
+async function withBrowserLock(run: () => Promise<void>): Promise<void> {
     if (navigator.locks === undefined) return run()
-    await navigator.locks.request(name, { ifAvailable: true }, async (lock) => {
-        if (lock !== null) await run()
-    })
+    await navigator.locks.request("arueshalae-sync", run)
 }
-
-setInterval(() => void schedule(), POLL_INTERVAL_MS)
 
 van.derive(() => {
     serverSettings.val
     auth.val
     syncStatus.val = null
-    syncConfiguration.val = "unknown"
-    void schedule()
+    if (serverSettings.rawVal.enabled) void refreshSyncStatus().catch(() => {})
 })

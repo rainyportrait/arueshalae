@@ -21,9 +21,20 @@ means that a post is currently favorited; absent posts and their media remain in
 the database. `posts.availability` separately records confirmed upstream
 deletions.
 
+The baseline includes a revision, which the reconciliation request must return.
+Favorite actions and completed reconciliations advance this revision. A stale
+reconciliation returns HTTP 409 without changing the stored observation; run Sync
+again to read a fresh baseline. Deploy the updated userscript alongside the server.
+Reconciliation requires explicit `ids`, `reportedCount`, and `revision` fields;
+an explicitly empty list is valid, but omitted fields are rejected.
+
 Favorite-button actions update `favorite_order` immediately. A favorite moves to
 the front and opportunistically downloads its media; an unfavorite leaves any
 stored media intact.
+
+Favorite positions are ordering keys and may have gaps or negative values.
+Adding or removing a favorite leaves other rows in place. Full reconciliation
+replaces the order, while read-only commands use ordinary read transactions.
 
 After reconciliation, the userscript attempts every current favorite without
 media. Missing media itself is the queue. Failures remain eligible for the next

@@ -11,7 +11,7 @@ describe("explicit synchronization", () => {
     beforeEach(() => command.mockReset())
 
     it("uses a complete first page as the initial baseline", async () => {
-        command.mockResolvedValueOnce({ ids: [], initialized: false, countOffset: 0 })
+        command.mockResolvedValueOnce({ ids: [], initialized: false, countOffset: 0, revision: 0 })
         command.mockResolvedValueOnce({ ok: true })
         const reader = fakeReader([3, 2, 1])
 
@@ -20,6 +20,7 @@ describe("explicit synchronization", () => {
             ids: [3, 2, 1],
             deleted: [],
             reportedCount: 3,
+            revision: 0,
         })
     })
 
@@ -27,7 +28,12 @@ describe("explicit synchronization", () => {
         const baseline = Array.from({ length: 250 }, (_, index) => 500 - index)
         const disappeared = baseline[149] as number
         const remote = [900, ...baseline.filter((postId) => postId !== disappeared)]
-        command.mockResolvedValueOnce({ ids: baseline, initialized: true, countOffset: 0 })
+        command.mockResolvedValueOnce({
+            ids: baseline,
+            initialized: true,
+            countOffset: 0,
+            revision: 7,
+        })
         command.mockResolvedValueOnce({ ok: true })
         const reader = fakeReader(remote, disappeared)
 
@@ -36,6 +42,7 @@ describe("explicit synchronization", () => {
             ids: remote,
             deleted: [disappeared],
             reportedCount: 250,
+            revision: 7,
         })
     })
 })

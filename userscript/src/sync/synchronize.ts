@@ -2,7 +2,7 @@ import { syncCommand } from "../api/sync.ts"
 import { reconcilePrefix, reconcileRemovals } from "./reconcile.ts"
 import { FAVORITES_PAGE_SIZE, Rule34Reader } from "./rule34.ts"
 
-type Baseline = { ids: number[]; initialized: boolean; countOffset: number }
+type Baseline = { ids: number[]; initialized: boolean; countOffset: number; revision: number }
 type Progress = (message: string) => void
 
 export async function synchronize(reader: Rule34Reader, progress: Progress): Promise<number> {
@@ -40,7 +40,7 @@ export async function synchronize(reader: Rule34Reader, progress: Progress): Pro
         if ((await reader.postDetails(postId)) === null) deleted.push(postId)
     }
 
-    await syncCommand("reconcile", { ids, deleted, reportedCount })
+    await syncCommand("reconcile", { ids, deleted, reportedCount, revision: baseline.revision })
     return ids.length
 }
 

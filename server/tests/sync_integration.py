@@ -91,6 +91,14 @@ with tempfile.TemporaryDirectory(prefix="arue-sync-test-") as folder:
                 )
             )
 
+        def rejected_command(status, action, **fields):
+            try:
+                command(action, **fields)
+            except urllib.error.HTTPError as error:
+                assert error.code == status, error.read()
+            else:
+                raise AssertionError(f"{action} should return {status}")
+
         def rejected_request(status, path, data=None, headers=None):
             try:
                 req(path, data, headers)
@@ -146,6 +154,7 @@ with tempfile.TemporaryDirectory(prefix="arue-sync-test-") as folder:
                 "reconcile",
                 ids=[456, 123],
                 reportedCount=5,
+                revision=command("baseline")["revision"],
             )
             assert command("status")["countOffset"] == 3
             assert command("baseline")["ids"] == [456, 123]
@@ -158,6 +167,32 @@ with tempfile.TemporaryDirectory(prefix="arue-sync-test-") as folder:
             assert db.execute(
                 "SELECT post_id FROM post_tags WHERE tag_id=1"
             ).fetchall() == [(123,)]
+
+            baseline = command("baseline")
+            rejected_command(400, "reconcile")
+            rejected_command(400, "reconcile", ids=[], revision=baseline["revision"])
+            rejected_command(400, "membership", postId=123, value="invalid")
+            assert command("baseline") == baseline
+
+            command("membership", postId=789, value="favorited")
+            rejected_command(
+                409,
+                "reconcile",
+                ids=baseline["ids"],
+                reportedCount=5,
+                revision=baseline["revision"],
+            )
+            assert command("baseline")["ids"] == [789, 456, 123]
+
+            # Reads must remain available while another connection reserves the writer.
+            db.execute("BEGIN IMMEDIATE")
+            try:
+                assert command("status")["favorites"] == 3
+                assert command("baseline")["ids"] == [789, 456, 123]
+                assert command("downloads")["ids"] == [789]
+                assert len(command("memberships", ids=[123, 456, 789])["posts"]) == 3
+            finally:
+                db.rollback()
 
             tiny_png = (
                 b"\x89PNG\r\n\x1a\n"
@@ -219,8 +254,9 @@ with tempfile.TemporaryDirectory(prefix="arue-sync-test-") as folder:
             print(
                 "PASS: legacy migration, original filenames, retained media, "
                 "re-favorite reuse, cancelled upload, real media upload/read, "
-                "count offset, normalized order, filtered IDs, tag links, foreign keys, "
-                "small images, search filters, autocomplete ranking, HTTP error classification"
+                "count offset, ordered favorites, filtered IDs, tag links, foreign keys, "
+                "invalid commands, stale reconciliation, concurrent reads, small images, "
+                "search filters, autocomplete ranking, HTTP error classification"
             )
         finally:
             process.terminate()

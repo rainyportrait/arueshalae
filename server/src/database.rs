@@ -7,6 +7,7 @@ use sqlx::{SqlitePool, sqlite::SqliteConnectOptions};
 const MIGRATIONS: &[&str] = &[
     include_str!("./migrations/202508291609-init.sql"),
     include_str!("./migrations/20260906-sync.sql"),
+    include_str!("./migrations/20260909-sync-revision.sql"),
 ];
 
 #[derive(Clone)]

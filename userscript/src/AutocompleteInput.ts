@@ -353,7 +353,7 @@ export function AutocompleteInput({
     }
 
     return div(
-        { class: clsx("relative min-w-0 flex-1") },
+        { class: "relative min-w-0 flex-1" },
         icon
             ? span({
                   "icon-name": icon,

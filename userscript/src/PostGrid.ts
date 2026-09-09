@@ -17,7 +17,7 @@ const SKELETON_HEIGHTS = [152, 272, 152, 360, 208, 432, 272, 152, 360, 208, 432,
 
 function SkeletonGrid() {
     return div(
-        { class: clsx("masonry") },
+        { class: "masonry" },
         SKELETON_HEIGHTS.map((height) =>
             div(
                 {
@@ -26,7 +26,7 @@ function SkeletonGrid() {
                     ),
                     style: `grid-row-end: span ${height + MASONRY_GAP}`,
                 },
-                div({ class: clsx("skeleton w-full"), style: `height: ${height}px` }),
+                div({ class: "skeleton w-full", style: `height: ${height}px` }),
             ),
         ),
     )
@@ -71,9 +71,9 @@ export function PostGrid({
     if (state.posts.length === 0) return CenteredState(empty)
 
     return div(
-        { class: clsx("flex flex-col") },
+        { class: "flex flex-col" },
         div(
-            { class: clsx("masonry") },
+            { class: "masonry" },
             state.posts.map((post) => PostCard(post)),
         ),
         Pagination({ currentPage, totalPages, routeForPage }),

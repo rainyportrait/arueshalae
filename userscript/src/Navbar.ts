@@ -16,7 +16,7 @@ const MENU_ITEM_CLASS = clsx(
 )
 
 function MenuItemIcon({ name }: { name: string }): HTMLSpanElement {
-    return span({ "icon-name": name, class: clsx("shrink-0 text-zinc-400") })
+    return span({ "icon-name": name, class: "shrink-0 text-zinc-400" })
 }
 
 // A click-to-toggle user menu (no hover). Clicking the trigger opens it,
@@ -116,7 +116,7 @@ function UserMenu(): HTMLDivElement {
         () => {
             const ui = userInfo.val
             return ui.status === "ready"
-                ? span({ class: clsx("hidden max-w-40 truncate sm:inline") }, ui.profile.username)
+                ? span({ class: "hidden max-w-40 truncate sm:inline" }, ui.profile.username)
                 : document.createComment("")
         },
         // The chevron signals that this opens a menu; it flips while open.
@@ -182,7 +182,7 @@ function UserMenu(): HTMLDivElement {
                     "Settings",
                 ),
                 // A divider visually sets Logout apart from the navigation items.
-                div({ role: "separator", class: clsx("my-1 border-t border-zinc-800") }),
+                div({ role: "separator", class: "my-1 border-t border-zinc-800" }),
                 button(
                     {
                         type: "button",
@@ -216,7 +216,7 @@ function UserMenu(): HTMLDivElement {
         return ui.status === "ready" ? `Favorites (${ui.profile.favorites})` : "Favorites"
     }
 
-    container = div({ class: clsx("relative flex items-center") }, trigger, menu)
+    container = div({ class: "relative flex items-center" }, trigger, menu)
     return container
 }
 
@@ -233,14 +233,14 @@ export function Navbar() {
                 ),
         },
         div(
-            { class: clsx("mx-auto flex w-full items-center gap-3 px-4 py-3") },
+            { class: "mx-auto flex w-full items-center gap-3 px-4 py-3" },
             Link(
                 {
                     href: routeToUrl({ type: "postlist", tags: undefined, pid: 0 }),
-                    class: clsx("flex shrink-0 items-center gap-2"),
+                    class: "flex shrink-0 items-center gap-2",
                     "aria-label": "Arueshalae home",
                 },
-                span({ class: clsx("text-sm leading-none text-rose-500") }, "◆"),
+                span({ class: "text-sm leading-none text-rose-500" }, "◆"),
                 // The wordmark drops off on narrow screens; the diamond alone
                 // is enough to identify the app there.
                 span(

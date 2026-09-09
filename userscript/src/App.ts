@@ -29,8 +29,8 @@ function LoadingBar() {
     return () => {
         if (!pageLoading.val) return document.createComment("")
         return div(
-            { class: clsx("pointer-events-none fixed inset-x-0 top-0 z-100 h-0.5") },
-            div({ class: clsx("loading-bar") }),
+            { class: "pointer-events-none fixed inset-x-0 top-0 z-100 h-0.5" },
+            div({ class: "loading-bar" }),
         )
     }
 }

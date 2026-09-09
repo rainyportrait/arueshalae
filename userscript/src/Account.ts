@@ -43,26 +43,23 @@ function TopicPanel({
     posts: Post[]
 }) {
     return div(
-        { class: clsx("flex flex-col gap-3") },
+        { class: "flex flex-col gap-3" },
         div(
-            { class: clsx("flex items-center justify-between gap-3") },
+            { class: "flex items-center justify-between gap-3" },
             div(
-                { class: clsx("flex items-baseline gap-2") },
+                { class: "flex items-baseline gap-2" },
                 div(
-                    { class: clsx("text-2xl font-semibold text-zinc-100 tabular-nums") },
+                    { class: "text-2xl font-semibold text-zinc-100 tabular-nums" },
                     count.toLocaleString(),
                 ),
-                div(
-                    { class: clsx("text-xs font-medium tracking-wider text-zinc-500 uppercase") },
-                    title,
-                ),
+                div({ class: "text-xs font-medium tracking-wider text-zinc-500 uppercase" }, title),
             ),
             href === null
                 ? document.createComment("")
                 : Link(
                       {
                           href,
-                          class: clsx("text-sm font-medium text-rose-400 hover:text-rose-300"),
+                          class: "text-sm font-medium text-rose-400 hover:text-rose-300",
                       },
                       "View all",
                   ),
@@ -77,7 +74,7 @@ function TopicPanel({
                   "Nothing here yet.",
               )
             : div(
-                  { class: clsx("masonry") },
+                  { class: "masonry" },
                   posts.map((post) => PostCard(post)),
               ),
     )
@@ -85,18 +82,12 @@ function TopicPanel({
 
 function ProfileView({ data }: { data: UserProfile }) {
     return div(
-        { class: clsx("mx-auto flex w-full max-w-5xl flex-col gap-6") },
+        { class: "mx-auto flex w-full max-w-5xl flex-col gap-6" },
         // Identity
         div(
-            { class: clsx("flex flex-col gap-1") },
-            h2(
-                { class: clsx("text-3xl font-semibold tracking-tight text-zinc-100") },
-                data.username,
-            ),
-            p(
-                { class: clsx("text-sm text-zinc-500") },
-                `Member since ${formatJoinDate(data.joinDate)}`,
-            ),
+            { class: "flex flex-col gap-1" },
+            h2({ class: "text-3xl font-semibold tracking-tight text-zinc-100" }, data.username),
+            p({ class: "text-sm text-zinc-500" }, `Member since ${formatJoinDate(data.joinDate)}`),
         ),
         // One section per topic: the count, the "View all" link, and the recent
         // items are grouped together. The favorites link needs the numeric id,
@@ -119,18 +110,18 @@ function ProfileView({ data }: { data: UserProfile }) {
 // A factory (not a shared node) so each call yields a fresh skeleton.
 function panelSkeleton() {
     return div(
-        { class: clsx("flex flex-col gap-3") },
+        { class: "flex flex-col gap-3" },
         div(
-            { class: clsx("flex items-center justify-between gap-3") },
+            { class: "flex items-center justify-between gap-3" },
             div(
-                { class: clsx("flex items-baseline gap-2") },
-                div({ class: clsx("skeleton h-6 w-16 rounded") }),
-                div({ class: clsx("skeleton h-3 w-20 rounded") }),
+                { class: "flex items-baseline gap-2" },
+                div({ class: "skeleton h-6 w-16 rounded" }),
+                div({ class: "skeleton h-3 w-20 rounded" }),
             ),
-            div({ class: clsx("skeleton h-4 w-16 rounded") }),
+            div({ class: "skeleton h-4 w-16 rounded" }),
         ),
         div(
-            { class: clsx("masonry") },
+            { class: "masonry" },
             Array.from({ length: 5 }).map(() =>
                 div(
                     {
@@ -139,7 +130,7 @@ function panelSkeleton() {
                         ),
                         style: `grid-row-end: span ${280 + MASONRY_GAP}`,
                     },
-                    div({ class: clsx("skeleton w-full"), style: "height: 280px" }),
+                    div({ class: "skeleton w-full", style: "height: 280px" }),
                 ),
             ),
         ),
@@ -150,11 +141,11 @@ function panelSkeleton() {
 // for Posts and Favorites.
 function LoadingSkeleton() {
     return div(
-        { class: clsx("mx-auto flex w-full max-w-5xl flex-col gap-6") },
+        { class: "mx-auto flex w-full max-w-5xl flex-col gap-6" },
         div(
-            { class: clsx("flex flex-col gap-2") },
-            div({ class: clsx("skeleton h-8 w-48 rounded") }),
-            div({ class: clsx("skeleton h-4 w-36 rounded") }),
+            { class: "flex flex-col gap-2" },
+            div({ class: "skeleton h-8 w-48 rounded" }),
+            div({ class: "skeleton h-4 w-36 rounded" }),
         ),
         panelSkeleton(),
         panelSkeleton(),
@@ -162,7 +153,7 @@ function LoadingSkeleton() {
 }
 
 export function Account() {
-    return div({ class: clsx("min-h-[60vh]") }, () => {
+    return div({ class: "min-h-[60vh]" }, () => {
         const state = profile.val
         if (state.status === "error") {
             return CenteredState({

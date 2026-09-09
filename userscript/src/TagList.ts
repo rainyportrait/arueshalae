@@ -38,7 +38,7 @@ function groupByType(tags: Tag[]): [TagType, Tag[]][] {
 // the whole row on hover would blur which part is being pointed at.
 function TagLink({ tag }: { tag: Tag }) {
     return div(
-        { class: clsx("flex min-w-0 items-center gap-1") },
+        { class: "flex min-w-0 items-center gap-1" },
         Link(
             {
                 href: routeToUrl({ type: "postlist", tags: tag.slug, pid: 0 }),
@@ -51,7 +51,7 @@ function TagLink({ tag }: { tag: Tag }) {
             span({ class: clsx("min-w-0 truncate text-sm", TAG_META[tag.type].color) }, tag.name),
             span(
                 {
-                    class: clsx("ml-auto shrink-0 text-xs text-zinc-500 tabular-nums"),
+                    class: "ml-auto shrink-0 text-xs text-zinc-500 tabular-nums",
                 },
                 tag.count.toLocaleString(),
             ),
@@ -98,7 +98,7 @@ function TagGroup({ type, tags }: { type: TagType; tags: Tag[] }) {
     return () => {
         const isCollapsed = interactive && collapsed.val
         return div(
-            { class: clsx("flex flex-col gap-1") },
+            { class: "flex flex-col gap-1" },
             button(
                 {
                     class: clsx(
@@ -128,7 +128,7 @@ function TagGroup({ type, tags }: { type: TagType; tags: Tag[] }) {
             // The tag block is indented as a whole (hover highlights included),
             // so it reads as nested under the heading rather than flush with it.
             div(
-                { class: clsx("flex flex-col gap-2") },
+                { class: "flex flex-col gap-2" },
                 isCollapsed
                     ? [
                           TagLink({ tag: tags[0] }),
@@ -160,9 +160,9 @@ const TAG_SKELETON_WIDTHS = ["80%", "65%", "90%", "55%", "70%", "45%", "85%", "6
 // stand in with this.
 export function TagListSkeleton() {
     return div(
-        { class: clsx("flex flex-col gap-2.5") },
+        { class: "flex flex-col gap-2.5" },
         TAG_SKELETON_WIDTHS.map((width) =>
-            div({ class: clsx("skeleton h-4 rounded"), style: `width: ${width}` }),
+            div({ class: "skeleton h-4 rounded", style: `width: ${width}` }),
         ),
     )
 }
@@ -170,7 +170,7 @@ export function TagListSkeleton() {
 export function TagList({ tags }: { tags: Tag[] }) {
     if (tags.length === 0) return div()
     return div(
-        { class: clsx("flex flex-col gap-4") },
+        { class: "flex flex-col gap-4" },
         groupByType(tags).map(([type, group]) => TagGroup({ type, tags: group })),
     )
 }

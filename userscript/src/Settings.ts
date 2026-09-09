@@ -92,14 +92,11 @@ export function Settings() {
     }
 
     return div(
-        { class: clsx("mx-auto flex w-full max-w-3xl flex-col gap-8") },
+        { class: "mx-auto flex w-full max-w-3xl flex-col gap-8" },
         div(
-            { class: clsx("flex flex-col gap-1") },
-            h1({ class: clsx("text-3xl font-semibold tracking-tight text-zinc-100") }, "Settings"),
-            p(
-                { class: clsx("text-sm text-zinc-500") },
-                "Saved to this browser; no login required.",
-            ),
+            { class: "flex flex-col gap-1" },
+            h1({ class: "text-3xl font-semibold tracking-tight text-zinc-100" }, "Settings"),
+            p({ class: "text-sm text-zinc-500" }, "Saved to this browser; no login required."),
         ),
 
         section(
@@ -109,15 +106,15 @@ export function Settings() {
                 ),
             },
             div(
-                { class: clsx("flex flex-col gap-1") },
-                h2({ class: clsx("text-lg font-semibold text-zinc-100") }, "Tag blacklist"),
+                { class: "flex flex-col gap-1" },
+                h2({ class: "text-lg font-semibold text-zinc-100" }, "Tag blacklist"),
                 p(
-                    { class: clsx("text-sm text-zinc-500") },
+                    { class: "text-sm text-zinc-500" },
                     "Posts carrying any of these tags are hidden from the post list. Favorites and other pages are unaffected.",
                 ),
             ),
             div(
-                { class: clsx("flex items-center gap-2") },
+                { class: "flex items-center gap-2" },
                 AutocompleteInput({
                     placeholder: "Add a tag (e.g. ai_generated)",
                     ariaLabel: "Add a tag to the blacklist",
@@ -142,9 +139,9 @@ export function Settings() {
             () => {
                 const tags = tagBlacklist.val
                 if (tags.length === 0)
-                    return p({ class: clsx("text-sm text-zinc-600") }, "No tags blacklisted yet.")
+                    return p({ class: "text-sm text-zinc-600" }, "No tags blacklisted yet.")
                 return div(
-                    { class: clsx("flex flex-wrap gap-2") },
+                    { class: "flex flex-wrap gap-2" },
                     tags.map((tag) => TagPill({ tag })),
                 )
             },
@@ -157,9 +154,9 @@ export function Settings() {
                 ),
             },
             div(
-                { class: clsx("flex flex-col gap-1") },
-                h2({ class: clsx("text-lg font-semibold text-zinc-100") }, "Image quality"),
-                p({ class: clsx("text-sm text-zinc-500") }, "How post images are loaded."),
+                { class: "flex flex-col gap-1" },
+                h2({ class: "text-lg font-semibold text-zinc-100" }, "Image quality"),
+                p({ class: "text-sm text-zinc-500" }, "How post images are loaded."),
             ),
             Toggle({
                 label: "Load original image right away",
@@ -177,10 +174,10 @@ export function Settings() {
                 ),
             },
             div(
-                { class: clsx("flex flex-col gap-1") },
-                h2({ class: clsx("text-lg font-semibold text-zinc-100") }, "Arueshalae server"),
+                { class: "flex flex-col gap-1" },
+                h2({ class: "text-lg font-semibold text-zinc-100" }, "Arueshalae server"),
                 p(
-                    { class: clsx("text-sm text-zinc-500") },
+                    { class: "text-sm text-zinc-500" },
                     "Connect to the arueshalae server that mirrors your downloaded media.",
                 ),
             ),
@@ -200,7 +197,7 @@ export function Settings() {
                     (serverSettings.val = { ...serverSettings.val, preferDownloaded: value }),
             }),
             div(
-                { class: clsx("flex items-center gap-2") },
+                { class: "flex items-center gap-2" },
                 // Rendered once: writing state on input doesn't re-render the
                 // field itself, so the caret is preserved while typing. The
                 // trailing slash is stripped on blur.
@@ -239,8 +236,7 @@ export function Settings() {
             ),
             // Live: connection test status. Always returns a node.
             () => {
-                if (testing.val)
-                    return p({ class: clsx("text-sm text-zinc-500") }, "Testing connection…")
+                if (testing.val) return p({ class: "text-sm text-zinc-500" }, "Testing connection…")
                 const result = testResult.val
                 if (result === null) return document.createComment("")
                 return p(

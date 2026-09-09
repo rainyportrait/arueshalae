@@ -15,10 +15,10 @@ type Props = {
 // and the route placeholder.
 export function CenteredState({ icon, title, message, action }: Props): HTMLDivElement {
     return div(
-        { class: clsx("flex flex-col items-center justify-center gap-2 py-24 text-center") },
-        span({ class: clsx("text-4xl") }, icon),
-        h2({ class: clsx("mt-2 text-lg font-medium text-zinc-200") }, title),
-        message ? p({ class: clsx("max-w-md px-4 text-sm text-zinc-500") }, message) : null,
+        { class: "flex flex-col items-center justify-center gap-2 py-24 text-center" },
+        span({ class: "text-4xl" }, icon),
+        h2({ class: "mt-2 text-lg font-medium text-zinc-200" }, title),
+        message ? p({ class: "max-w-md px-4 text-sm text-zinc-500" }, message) : null,
         action
             ? button(
                   {

@@ -107,7 +107,7 @@ export function PostCard(post: Post) {
             alt: `Post ${post.id}`,
             loading: "lazy",
             decoding: "async",
-            class: clsx("block transition-transform duration-300 group-hover:scale-[1.03]"),
+            class: "block transition-transform duration-300 group-hover:scale-[1.03]",
             // Size the card's grid span once the image has loaded and the card
             // reaches its final height. Fires for lazy and cached images alike.
             onload: (e: Event) => {

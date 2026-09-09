@@ -19,11 +19,11 @@ export function Toggle({
     onToggle: (value: boolean) => void
 }) {
     return div(
-        { class: clsx("flex items-center justify-between gap-4") },
+        { class: "flex items-center justify-between gap-4" },
         div(
-            { class: clsx("min-w-0") },
-            div({ class: clsx("text-sm font-medium text-zinc-100") }, label),
-            p({ class: clsx("mt-0.5 text-sm text-zinc-500") }, description),
+            { class: "min-w-0" },
+            div({ class: "text-sm font-medium text-zinc-100" }, label),
+            p({ class: "mt-0.5 text-sm text-zinc-500" }, description),
         ),
         button(
             {

@@ -43,19 +43,19 @@ export function Login() {
     })
 
     return div(
-        { class: clsx("mx-auto w-full max-w-sm py-16") },
+        { class: "mx-auto w-full max-w-sm py-16" },
         div(
-            { class: clsx("mb-8") },
+            { class: "mb-8" },
             div(
-                { class: clsx("flex items-center gap-2.5") },
-                span({ class: clsx("text-2xl leading-none text-rose-500") }, "\u25C6"),
-                h1({ class: clsx("text-3xl font-semibold tracking-tight text-zinc-100") }, "Login"),
+                { class: "flex items-center gap-2.5" },
+                span({ class: "text-2xl leading-none text-rose-500" }, "\u25C6"),
+                h1({ class: "text-3xl font-semibold tracking-tight text-zinc-100" }, "Login"),
             ),
-            p({ class: clsx("mt-2 text-sm text-zinc-400") }, "Sign in to your Rule34.xxx account."),
+            p({ class: "mt-2 text-sm text-zinc-400" }, "Sign in to your Rule34.xxx account."),
         ),
         form(
             {
-                class: clsx("flex flex-col gap-4"),
+                class: "flex flex-col gap-4",
                 onsubmit: async (e: SubmitEvent) => {
                     e.preventDefault()
                     if (submitting.val) return // guard against double-submits
@@ -83,13 +83,13 @@ export function Login() {
                 },
             },
             div(
-                { class: clsx("flex flex-col gap-1.5") },
-                label({ class: clsx("text-sm text-zinc-300") }, "Username"),
+                { class: "flex flex-col gap-1.5" },
+                label({ class: "text-sm text-zinc-300" }, "Username"),
                 usernameEl,
             ),
             div(
-                { class: clsx("flex flex-col gap-1.5") },
-                label({ class: clsx("text-sm text-zinc-300") }, "Password"),
+                { class: "flex flex-col gap-1.5" },
+                label({ class: "text-sm text-zinc-300" }, "Password"),
                 passwordEl,
             ),
             // The error slot: a live node that must always return a connected
@@ -97,7 +97,7 @@ export function Login() {
             // comment when there is no error.
             () =>
                 error.val
-                    ? p({ class: clsx("text-sm text-red-400") }, error.val)
+                    ? p({ class: "text-sm text-red-400" }, error.val)
                     : document.createComment(""),
             button(
                 {

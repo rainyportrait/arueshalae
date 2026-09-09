@@ -47,7 +47,7 @@ const mobileTagsOpen = van.state(false)
 function MobileTagList({ tags }: { tags: Tag[] }): ChildDom {
     if (tags.length === 0) return document.createComment("")
     return div(
-        { class: clsx("overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900/40") },
+        { class: "overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900/40" },
         button(
             {
                 type: "button",
@@ -64,9 +64,9 @@ function MobileTagList({ tags }: { tags: Tag[] }): ChildDom {
                 onclick: () => (mobileTagsOpen.val = !mobileTagsOpen.val),
             },
             div(
-                { class: clsx("flex min-w-0 items-baseline gap-2") },
-                span({ class: clsx("shrink-0 font-medium") }, "Tags"),
-                span({ class: clsx("text-xs text-zinc-500 tabular-nums") }, String(tags.length)),
+                { class: "flex min-w-0 items-baseline gap-2" },
+                span({ class: "shrink-0 font-medium" }, "Tags"),
+                span({ class: "text-xs text-zinc-500 tabular-nums" }, String(tags.length)),
             ),
             span({
                 "icon-name": "chevron-down",
@@ -85,7 +85,7 @@ function MobileTagList({ tags }: { tags: Tag[] }): ChildDom {
         // re-opens.
         () =>
             mobileTagsOpen.val
-                ? div({ class: clsx("border-t border-zinc-800 px-3 pt-3 pb-3") }, TagList({ tags }))
+                ? div({ class: "border-t border-zinc-800 px-3 pt-3 pb-3" }, TagList({ tags }))
                 : document.createComment(""),
     )
 }
@@ -99,7 +99,7 @@ function MobileSidebar({ hidden, tags }: { hidden: number; tags: Tag[] }): Child
     if (hidden === 0 && tags.length === 0) return document.createComment("")
     return div(
         // Hidden above PostListLayout's swap point, like the aside it replaces.
-        { class: clsx("flex flex-col gap-2 min-[808px]:hidden") },
+        { class: "flex flex-col gap-2 min-[808px]:hidden" },
         HiddenPostsToggle({ count: hidden }),
         MobileTagList({ tags }),
     )
@@ -120,15 +120,15 @@ function PostListLayout({
     // list, so the mobile layout stays up until the sidebar can be paid for
     // with a column.
     return div(
-        { class: clsx("flex flex-col gap-4 min-[808px]:flex-row min-[808px]:gap-6") },
+        { class: "flex flex-col gap-4 min-[808px]:flex-row min-[808px]:gap-6" },
         mobile,
-        aside({ class: clsx("hidden w-64 shrink-0 min-[808px]:block") }, sidebar),
-        div({ class: clsx("min-w-0 flex-1") }, main),
+        aside({ class: "hidden w-64 shrink-0 min-[808px]:block" }, sidebar),
+        div({ class: "min-w-0 flex-1" }, main),
     )
 }
 
 export function PostList() {
-    return div({ class: clsx("min-h-[60vh]") }, () => {
+    return div({ class: "min-h-[60vh]" }, () => {
         const state = list.val
         // The page on screen: the ready page; null during the very first load,
         // where a skeleton stands in. While a new page loads the state keeps
@@ -194,7 +194,7 @@ export function PostList() {
                 sidebar:
                     source !== null
                         ? div(
-                              { class: clsx("flex flex-col gap-6") },
+                              { class: "flex flex-col gap-6" },
                               HiddenPostsToggle({ count: hidden }),
                               TagList({ tags: source.tags }),
                           )

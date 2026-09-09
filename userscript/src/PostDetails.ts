@@ -32,20 +32,20 @@ function StatsSection({ post }: { post: PostDetailsData }) {
     const cells: ChildDom[] = []
     const push = (label: string, value: ChildDom) => {
         cells.push(
-            span({ class: clsx("text-zinc-500") }, label),
-            div({ class: clsx("min-w-0 text-right") }, value),
+            span({ class: "text-zinc-500" }, label),
+            div({ class: "min-w-0 text-right" }, value),
         )
     }
-    push("Id", span({ class: clsx("tabular-nums") }, `#${post.id}`))
-    if (post.title) push("Title", span({ class: clsx("wrap-break-word") }, post.title))
-    if (post.posted) push("Posted", span({ class: clsx("truncate") }, post.posted))
+    push("Id", span({ class: "tabular-nums" }, `#${post.id}`))
+    if (post.title) push("Title", span({ class: "wrap-break-word" }, post.title))
+    if (post.posted) push("Posted", span({ class: "truncate" }, post.posted))
     if (post.poster)
         push(
             "by",
             Link(
                 {
                     href: post.posterHref,
-                    class: clsx("truncate text-rose-300 hover:text-rose-200"),
+                    class: "truncate text-rose-300 hover:text-rose-200",
                 },
                 post.poster,
             ),
@@ -60,17 +60,17 @@ function StatsSection({ post }: { post: PostDetailsData }) {
                     href: post.sourceHref,
                     target: "_blank",
                     rel: "noopener noreferrer",
-                    class: clsx("break-all text-cyan-300 hover:text-cyan-200"),
+                    class: "break-all text-cyan-300 hover:text-cyan-200",
                     title: post.source,
                 },
                 post.source,
             ),
         )
     if (post.rating) push("Rating", span({}, post.rating))
-    push("Score", span({ class: clsx("tabular-nums") }, String(post.score)))
+    push("Score", span({ class: "tabular-nums" }, String(post.score)))
 
     return div(
-        { class: clsx("flex flex-col gap-1") },
+        { class: "flex flex-col gap-1" },
         h4(
             {
                 class: clsx(
@@ -79,7 +79,7 @@ function StatsSection({ post }: { post: PostDetailsData }) {
             },
             "Metadata",
         ),
-        div({ class: clsx("grid grid-cols-[auto_1fr] gap-x-3 gap-y-2.5 px-1.5 text-sm") }, cells),
+        div({ class: "grid grid-cols-[auto_1fr] gap-x-3 gap-y-2.5 px-1.5 text-sm" }, cells),
     )
 }
 
@@ -99,7 +99,7 @@ function OriginalImageToggle({
     if (media.kind !== "image" || !media.originalImage || media.originalImage === media.src)
         return null
     return div(
-        { class: clsx("rounded-xl border border-zinc-800 bg-zinc-900/40 p-4") },
+        { class: "rounded-xl border border-zinc-800 bg-zinc-900/40 p-4" },
         Toggle({
             label: "Original image",
             description: "Show the full-resolution image instead of the sample.",
@@ -235,7 +235,7 @@ function Sidebar({
     isCurrent: () => boolean
 }) {
     return div(
-        { class: clsx("flex flex-col gap-6") },
+        { class: "flex flex-col gap-6" },
         AddFavoriteButton({ post, favorite, isCurrent }),
         LibraryDownloadStatus(post.id),
         OriginalImageToggle({ post, showOriginal }),
@@ -249,7 +249,7 @@ function LibraryDownloadStatus(postId: number) {
         if (!serverSettings.val.enabled) return document.createComment("")
 
         return div(
-            { class: clsx("text-sm text-zinc-400") },
+            { class: "text-sm text-zinc-400" },
             libraryPosts.val.get(postId)?.downloadState ?? "Local status unknown",
         )
     }
@@ -385,7 +385,7 @@ function FocusButton() {
         () =>
             span({
                 "icon-name": galleryFocus.val ? "minimize" : "maximize",
-                class: clsx("text-sm"),
+                class: "text-sm",
             }),
     )
 }
@@ -425,7 +425,7 @@ function Filmstrip({
         const total = g.status === "ready" ? loadedPosts(g).length : 0
         return index === -1
             ? document.createComment("")
-            : span({ class: clsx("text-xs text-zinc-500 tabular-nums") }, `${index + 1} / ${total}`)
+            : span({ class: "text-xs text-zinc-500 tabular-nums" }, `${index + 1} / ${total}`)
     }
     // The thumbs. Re-runs only when the gallery state changes (a page load,
     // an error); the scroller itself stays mounted, so its scroll position
@@ -435,7 +435,7 @@ function Filmstrip({
     // arrays).
     const Thumbs = () => {
         const g = gallery.val
-        if (g.status === "loading") return div({ class: clsx("skeleton h-14 rounded-lg") })
+        if (g.status === "loading") return div({ class: "skeleton h-14 rounded-lg" })
         if (g.status === "error") {
             return div(
                 {
@@ -447,7 +447,7 @@ function Filmstrip({
                 button(
                     {
                         type: "button",
-                        class: clsx("text-zinc-200 underline"),
+                        class: "text-zinc-200 underline",
                         onclick: reloadGallery,
                     },
                     "Try again",
@@ -457,7 +457,7 @@ function Filmstrip({
         // loadedPosts dedupes posts the feed shift put into two pages, so
         // the strip never shows a thumb twice.
         return div(
-            { class: clsx("contents") },
+            { class: "contents" },
             loadedPosts(g).map(({ post, pid }) =>
                 Thumb({
                     post,
@@ -487,7 +487,7 @@ function Filmstrip({
     // The "Gallery" heading, shared by both orientations.
     const headerLabel = span(
         {
-            class: clsx("text-xs font-semibold tracking-wider text-zinc-500 uppercase"),
+            class: "text-xs font-semibold tracking-wider text-zinc-500 uppercase",
         },
         "Gallery",
     )
@@ -496,14 +496,14 @@ function Filmstrip({
     // one row with the counter grouped next to the focus button.
     const header = vertical
         ? div(
-              { class: clsx("flex flex-col gap-1 px-0.5") },
-              div({ class: clsx("flex items-center justify-between") }, headerLabel, FocusButton()),
+              { class: "flex flex-col gap-1 px-0.5" },
+              div({ class: "flex items-center justify-between" }, headerLabel, FocusButton()),
               Counter,
           )
         : div(
-              { class: clsx("flex items-center justify-between px-0.5") },
+              { class: "flex items-center justify-between px-0.5" },
               headerLabel,
-              div({ class: clsx("flex items-center gap-2") }, Counter, FocusButton()),
+              div({ class: "flex items-center gap-2" }, Counter, FocusButton()),
           )
     // The scroll container, kept across gallery steps by the caller — so the
     // wheel listener below is attached exactly once per strip.
@@ -601,18 +601,15 @@ function LoadingState() {
     // Matches the loaded layout: media first on mobile, sidebar below it;
     // sidebar left on desktop.
     return div(
-        { class: clsx("flex flex-col gap-6 lg:flex-row") },
-        aside(
-            { class: clsx("order-last w-full shrink-0 lg:order-first lg:w-64") },
-            TagListSkeleton(),
-        ),
+        { class: "flex flex-col gap-6 lg:flex-row" },
+        aside({ class: "order-last w-full shrink-0 lg:order-first lg:w-64" }, TagListSkeleton()),
         div(
             {
                 class: clsx(
                     "order-first flex min-h-[60vh] min-w-0 flex-1 items-center justify-center",
                 ),
             },
-            div({ class: clsx("skeleton h-96 w-full max-w-xl rounded-xl") }),
+            div({ class: "skeleton h-96 w-full max-w-xl rounded-xl" }),
         ),
     )
 }
@@ -636,7 +633,7 @@ export function PostDetails() {
     // (keepConnected), so it must never be reused after being taken off
     // screen.
     let shell: Node | undefined
-    return div({ class: clsx("min-h-[60vh]") }, () => {
+    return div({ class: "min-h-[60vh]" }, () => {
         const state = details.val
         if (state.status === "error") {
             shell = undefined
@@ -846,7 +843,7 @@ function buildShell(): Node {
     }
 
     return div(
-        { class: clsx("flex flex-col gap-6 lg:flex-row") },
+        { class: "flex flex-col gap-6 lg:flex-row" },
         aside(
             {
                 // Focus mode hides the metadata sidebar so the media fills

@@ -232,7 +232,7 @@ export function Pagination({ currentPage, totalPages, routeForPage }: Pagination
     }
     const el = nav(
         {
-            class: clsx("relative mt-10 flex w-full justify-center pb-4"),
+            class: "relative mt-10 flex w-full justify-center pb-4",
             "aria-label": "Pagination",
         },
         probe,

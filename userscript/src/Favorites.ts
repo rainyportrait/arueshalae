@@ -2,7 +2,6 @@ import van from "vanjs-core"
 
 import { PostGrid } from "./PostGrid.ts"
 import type { Favorites } from "./api/favorites.ts"
-import clsx from "./clsx.ts"
 import type { Route } from "./router.ts"
 import {
     FAVORITES_PAGE_SIZE,
@@ -16,7 +15,7 @@ import {
 const { div } = van.tags
 
 export function Favorites() {
-    return div({ class: clsx("min-h-[60vh]") }, () => {
+    return div({ class: "min-h-[60vh]" }, () => {
         const state = favorites.val
         const count = favoritesCount.val
         // The page on screen: the ready page (the state keeps the previous one

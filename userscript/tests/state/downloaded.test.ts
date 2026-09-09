@@ -169,10 +169,11 @@ describe("state/downloaded", () => {
         expect(m.downloaded.val.has(1)).toBe(true)
     })
 
-    it("skips the logged-in user's own favorites page but checks others'", async () => {
+    it("checks the logged-in user's own favorites page for local media", async () => {
         const m = await importAll()
         await enableServer(m)
         m.auth.val = { status: "authenticated", userId: 7 }
+        api.checkDownloads.mockResolvedValue(new Set([1]))
 
         m.favorites.val = {
             status: "ready",
@@ -182,18 +183,19 @@ describe("state/downloaded", () => {
             pid: 0,
         }
         await flushVan()
-        expect(api.checkDownloads).not.toHaveBeenCalled()
+        expect(api.checkDownloads).toHaveBeenCalledWith([1])
+        expect(m.downloaded.val.has(1)).toBe(true)
 
         m.favorites.val = {
             status: "ready",
-            posts: [post(1)],
+            posts: [post(1), post(2)],
             lastPagePID: 0,
             id: 8,
             pid: 0,
         }
         await flushVan()
 
-        expect(api.checkDownloads).toHaveBeenCalledWith([1])
+        expect(api.checkDownloads).toHaveBeenLastCalledWith([2])
     })
 
     it("checks the details page's post as it settles", async () => {

@@ -78,11 +78,14 @@ export const showHiddenPosts = van.state(false)
 export interface ServerSettings {
     enabled: boolean
     url: string
+    // Optional only for compatibility with settings persisted by older builds.
+    preferDownloaded?: boolean
 }
 
 export const serverSettings = persisted<ServerSettings>(`${PREFIX}server`, {
     enabled: false,
     url: "http://127.0.0.1:34343",
+    preferDownloaded: true,
 })
 
 // A post is hidden if it carries *any* blacklisted tag; with an empty

@@ -1,7 +1,6 @@
 import van from "vanjs-core"
 
 import { checkDownloads } from "../api/server.ts"
-import { auth } from "./auth.ts"
 import { details } from "./details.ts"
 import { favorites } from "./favorites.ts"
 import { list } from "./list.ts"
@@ -74,19 +73,10 @@ export function checkDownloadsPage(
     )
 }
 
-// Whether the given favorites page belongs to the logged-in user. On that
-// page the server (mirroring *our* downloads) would badge essentially every
-// card, so the badges are noise there: the check is skipped and the cards
-// hide them (PostCard re-checks this live).
-function isOwnFavorites(id: number): boolean {
-    const a = auth.val
-    return a.status === "authenticated" && a.userId === id
-}
-
 // Check a grid page as soon as it settles (and re-check the current one when
 // the server is enabled mid-session). Reads the list and favorites payloads
-// directly, so this re-runs exactly when a page settles or the server/auth
-// settings change — never on grid-local re-renders (blacklist toggle, ...).
+// directly, so this re-runs exactly when a page settles or the server setting
+// changes — never on grid-local re-renders (blacklist toggle, ...).
 // The favorites payload is read only while ready, so its ids are checked once
 // per settled page (the answered set absorbs the replay republishes).
 van.derive(() => {
@@ -94,7 +84,7 @@ van.derive(() => {
     const l = list.val
     if (l.status === "ready") checkDownloadsPage(l.posts.map((p) => p.id))
     const f = favorites.val
-    if (f.status === "ready" && !isOwnFavorites(f.id)) checkDownloadsPage(f.posts.map((p) => p.id))
+    if (f.status === "ready") checkDownloadsPage(f.posts.map((p) => p.id))
 })
 
 // The details page checks its single post as it settles — guests included,

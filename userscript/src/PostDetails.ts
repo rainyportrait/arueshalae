@@ -9,6 +9,7 @@ import type { PostDetails as PostDetailsData } from "./api/post-details.ts"
 import type { Post } from "./api/post-list.ts"
 import { isAnimated } from "./api/tags.ts"
 import clsx from "./clsx.ts"
+import { imageUrl, thumbnailUrl, videoPosterUrl, videoUrl } from "./media-source.ts"
 import { type PostOrigin, postHref, route } from "./router.ts"
 import { auth } from "./state/auth.ts"
 import { details, reloadDetails } from "./state/details.ts"
@@ -284,8 +285,8 @@ function buildMediaEl(
     const elementClass = mediaElementClass(fill)
     if (media.kind === "video") {
         const el = video({
-            src: media.src,
-            poster: media.poster,
+            src: () => videoUrl(post.id, media),
+            poster: () => videoPosterUrl(post.id, media),
             controls: true,
             loop: true,
             muted: true,
@@ -295,6 +296,11 @@ function buildMediaEl(
             playsinline: true,
             class: elementClass,
             style: "grid-area: 1 / 1",
+            onerror: (e: Event) => {
+                const video = e.currentTarget as HTMLVideoElement
+                if (video.getAttribute("src") !== media.src) video.src = media.src
+                if (video.getAttribute("poster") !== media.poster) video.poster = media.poster
+            },
         })
         const whenReady = new Promise<void>((resolve) => {
             if (el.readyState >= 2) resolve()
@@ -308,10 +314,16 @@ function buildMediaEl(
     const el = img({
         // Function prop: re-runs when showOriginal changes, swapping the
         // displayed image for the original (and back).
-        src: () => (showOriginal.val && media.originalImage ? media.originalImage : media.src),
+        src: () => imageUrl(post.id, media, showOriginal.val),
         alt: post.title ? `Post ${post.id}: ${post.title}` : `Post ${post.id}`,
         class: elementClass,
         style: "grid-area: 1 / 1",
+        onerror: (e: Event) => {
+            const image = e.currentTarget as HTMLImageElement
+            const upstream =
+                showOriginal.val && media.originalImage ? media.originalImage : media.src
+            if (image.getAttribute("src") !== upstream) image.src = upstream
+        },
     })
     // A rejected decode (broken image) still resolves: fade in whatever the
     // browser renders rather than holding the old post forever.
@@ -568,7 +580,7 @@ function Thumb({
             "data-gallery-active": () => (isActive() ? "true" : "false"),
         },
         img({
-            src: post.thumbnail,
+            src: () => thumbnailUrl(post),
             alt: `Post ${post.id}`,
             loading: "lazy",
             class: clsx(
@@ -577,6 +589,10 @@ function Thumb({
                 "object-cover",
                 vertical ? "h-14 w-full" : "h-12 w-16",
             ),
+            onerror: (e: Event) => {
+                const image = e.currentTarget as HTMLImageElement
+                if (image.getAttribute("src") !== post.thumbnail) image.src = post.thumbnail
+            },
         }),
     )
 }

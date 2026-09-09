@@ -6,6 +6,7 @@ import type { Post } from "./api/post-list.ts"
 import { isAnimated } from "./api/tags.ts"
 import clsx from "./clsx.ts"
 import { setCardSpan } from "./masonry.ts"
+import { thumbnailUrl } from "./media-source.ts"
 import { postHref, route } from "./router.ts"
 import { auth } from "./state/auth.ts"
 import { downloaded } from "./state/downloaded.ts"
@@ -94,7 +95,7 @@ export function PostCard(post: Post) {
             title: `Post #${post.id}`,
         },
         img({
-            src: post.thumbnail,
+            src: () => thumbnailUrl(post),
             alt: `Post ${post.id}`,
             loading: "lazy",
             decoding: "async",
@@ -104,6 +105,10 @@ export function PostCard(post: Post) {
             onload: (e: Event) => {
                 const card = (e.currentTarget as HTMLImageElement).parentElement
                 if (card) setCardSpan(card)
+            },
+            onerror: (e: Event) => {
+                const image = e.currentTarget as HTMLImageElement
+                if (image.getAttribute("src") !== post.thumbnail) image.src = post.thumbnail
             },
         }),
         LibraryBadge({ post }),

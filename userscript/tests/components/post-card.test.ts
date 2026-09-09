@@ -109,6 +109,38 @@ describe("PostCard library badge", () => {
         expect(card.querySelector("img")).toBe(img)
     })
 
+    it("switches downloaded thumbnails to the server and back without replacing the image", async () => {
+        const m = await importAll()
+        await enableServer(m, true)
+        const card = await mountCard(m, 1)
+        const image = card.querySelector("img")
+
+        expect(image?.getAttribute("src")).toBe("//cdn.example/1.jpg")
+
+        m.downloaded.val = new Set([1])
+        await flushVan()
+        expect(card.querySelector("img")).toBe(image)
+        expect(image?.getAttribute("src")).toBe(
+            "http://127.0.0.1:34343/api/posts/1/media?type=mini",
+        )
+
+        m.serverSettings.val = { ...m.serverSettings.val, preferDownloaded: false }
+        await flushVan()
+        expect(image?.getAttribute("src")).toBe("//cdn.example/1.jpg")
+    })
+
+    it("falls back to the Rule34 thumbnail when local media fails", async () => {
+        const m = await importAll()
+        await enableServer(m, true)
+        m.downloaded.val = new Set([1])
+        const card = await mountCard(m, 1)
+        const image = card.querySelector("img") as HTMLImageElement
+
+        image.dispatchEvent(new Event("error"))
+
+        expect(image.getAttribute("src")).toBe("//cdn.example/1.jpg")
+    })
+
     it("hides the badge when the server is toggled off, keeping the result", async () => {
         const m = await importAll()
         await enableServer(m, true)

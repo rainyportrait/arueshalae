@@ -71,6 +71,9 @@ export function Settings() {
     // Server connection state. The enable toggle works on a derive over the
     // persisted object; the test result is local UI state that never persists.
     const serverEnabled = van.derive<boolean>(() => serverSettings.val.enabled)
+    const preferDownloaded = van.derive<boolean>(
+        () => serverSettings.val.preferDownloaded !== false,
+    )
     const testing = van.state(false)
     const testResult = van.state<string | null>(null)
 
@@ -161,7 +164,7 @@ export function Settings() {
             Toggle({
                 label: "Load original image right away",
                 description:
-                    "Skip the sample image and load the full-resolution original on the post page.",
+                    "When loading from Rule34, skip the sample image and load the full-resolution original.",
                 state: preferOriginal,
                 onToggle: (value) => (preferOriginal.val = value),
             }),
@@ -187,6 +190,14 @@ export function Settings() {
                 state: serverEnabled,
                 onToggle: (value) =>
                     (serverSettings.val = { ...serverSettings.val, enabled: value }),
+            }),
+            Toggle({
+                label: "Prefer downloaded media",
+                description:
+                    "Serve images, videos, and thumbnails from your Arueshalae server when available.",
+                state: preferDownloaded,
+                onToggle: (value) =>
+                    (serverSettings.val = { ...serverSettings.val, preferDownloaded: value }),
             }),
             div(
                 { class: clsx("flex items-center gap-2") },

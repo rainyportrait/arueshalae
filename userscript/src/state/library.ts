@@ -17,10 +17,20 @@ export type LibraryPost = {
 
 export const libraryPosts = van.state<Map<number, LibraryPost>>(new Map())
 
+let nextRequestSequence = 0
+const latestRequestByPost = new Map<number, number>()
+
 export async function refreshLibrary(postIds: number[]): Promise<void> {
     const account = auth.rawVal
     const settings = serverSettings.rawVal
     if (!settings.enabled || account.status !== "authenticated") return
+
+    const requests = new Map<number, number>()
+    for (const postId of postIds) {
+        const sequence = ++nextRequestSequence
+        latestRequestByPost.set(postId, sequence)
+        requests.set(postId, sequence)
+    }
 
     const { posts } = await syncCommand<{ posts: LibraryPost[] }>("memberships", {
         ids: postIds,
@@ -37,11 +47,14 @@ export async function refreshLibrary(postIds: number[]): Promise<void> {
     }
 
     const next = new Map(libraryPosts.rawVal)
+    let changed = false
     for (const post of posts) {
+        if (latestRequestByPost.get(post.postId) !== requests.get(post.postId)) continue
         next.set(post.postId, post)
+        changed = true
         if (post.downloaded) markDownloaded([post.postId])
     }
-    libraryPosts.val = next
+    if (changed) libraryPosts.val = next
 }
 
 // Load membership with the details page. Explicit favorite and sync actions
@@ -62,5 +75,6 @@ van.derive(() => {
 van.derive(() => {
     auth.val
     serverSettings.val
+    latestRequestByPost.clear()
     libraryPosts.val = new Map()
 })

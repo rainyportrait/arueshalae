@@ -159,10 +159,10 @@ impl<'a> Search<'a> {
 
         for term in input.split_whitespace() {
             if let Some(t) = term.strip_prefix("-") {
-                if !t.is_empty() {
+                if !t.is_empty() && !result.exclude.contains(&t) {
                     result.exclude.push(t)
                 }
-            } else {
+            } else if !result.include.contains(&term) {
                 result.include.push(term)
             }
         }
@@ -313,20 +313,32 @@ impl Database {
         let mut query_builder = sqlx::QueryBuilder::new(
             r#"SELECT p.post_id
             FROM posts p
-            JOIN post_tags pt ON p.post_id = pt.post_id
-            JOIN tags t ON t.tag_id = pt.tag_id
+            JOIN post_media pm ON pm.post_id = p.post_id
             LEFT JOIN favorite_order f ON f.post_id = p.post_id
-            WHERE (f.post_id IS NOT NULL OR p.availability = 'deleted')
-              AND t.name IN "#,
+            WHERE (f.post_id IS NOT NULL OR p.availability = 'deleted')"#,
         );
-        query_builder.push_tuples(&search.include, |mut builder, term| {
-            builder.push_bind(term);
-        });
-        query_builder.push(
-            r#" GROUP BY p.post_id
-            HAVING COUNT(1) = "#,
-        );
-        query_builder.push_bind(search.include.len() as i64);
+        for term in &search.include {
+            query_builder.push(
+                r#" AND EXISTS (
+                    SELECT 1
+                    FROM post_tags pt
+                    JOIN tags t ON t.tag_id = pt.tag_id
+                    WHERE pt.post_id = p.post_id AND t.name = "#,
+            );
+            query_builder.push_bind(term);
+            query_builder.push(")");
+        }
+        for term in &search.exclude {
+            query_builder.push(
+                r#" AND NOT EXISTS (
+                    SELECT 1
+                    FROM post_tags pt
+                    JOIN tags t ON t.tag_id = pt.tag_id
+                    WHERE pt.post_id = p.post_id AND t.name = "#,
+            );
+            query_builder.push_bind(term);
+            query_builder.push(")");
+        }
         query_builder.push(" ORDER BY p.post_id DESC");
 
         Ok(query_builder
@@ -515,5 +527,68 @@ impl PostData {
         let tags = tags.unwrap_or_default();
 
         Ok(PostData { image, tags })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use camino::Utf8Path;
+    use tempfile::tempdir;
+
+    use super::*;
+
+    async fn test_database() -> (tempfile::TempDir, Database) {
+        let directory = tempdir().unwrap();
+        let path = Utf8Path::from_path(directory.path())
+            .unwrap()
+            .join("test.db");
+        let database = Database::new(&path).await.unwrap();
+
+        (directory, database)
+    }
+
+    async fn seed_search_posts(database: &Database) {
+        sqlx::query(
+            r#"INSERT INTO posts (post_id, availability) VALUES
+                (1, 'available'), (2, 'available'), (3, 'available'),
+                (4, 'available'), (5, 'available');
+            INSERT INTO post_media (post_id, storage_name, extension, mime, original) VALUES
+                (1, '1.png', 'png', 'image/png', 1),
+                (2, '2.png', 'png', 'image/png', 1),
+                (3, '3.png', 'png', 'image/png', 1),
+                (5, '5.png', 'png', 'image/png', 1);
+            INSERT INTO favorite_order (position, post_id) VALUES
+                (0, 1), (1, 2), (2, 3), (3, 4), (4, 5);
+            INSERT INTO tags (tag_id, name, kind) VALUES
+                (1, 'cat', 'general'), (2, 'dog', 'general');
+            INSERT INTO post_tags (post_id, tag_id) VALUES
+                (1, 1), (1, 2), (2, 1), (3, 2), (4, 1)"#,
+        )
+        .execute(&database.pool)
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn search_honors_exclusions_and_empty_queries() {
+        let (_directory, database) = test_database().await;
+        seed_search_posts(&database).await;
+
+        assert_eq!(
+            database.search(&Search::new("cat -dog")).await.unwrap(),
+            vec![PostId(2)]
+        );
+        assert_eq!(
+            database.search(&Search::new("cat cat")).await.unwrap(),
+            vec![PostId(2), PostId(1)]
+        );
+        assert_eq!(
+            database.search(&Search::new("-dog")).await.unwrap(),
+            vec![PostId(5), PostId(2)]
+        );
+        assert_eq!(
+            database.search(&Search::new("")).await.unwrap(),
+            vec![PostId(5), PostId(3), PostId(2), PostId(1)]
+        );
     }
 }

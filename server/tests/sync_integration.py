@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import zlib
 
@@ -173,6 +174,19 @@ with tempfile.TemporaryDirectory(prefix="arue-sync-test-") as folder:
             command("membership", postId=790, value="favorited")
             assert upload(790, tiny_png, [{"name": "cat", "kind": "general"}]) == {"ok": True}
 
+            def search(term):
+                result = req("/api/posts/search?term=" + urllib.parse.quote(term))
+                return json.loads(result)["postIds"]
+
+            assert search("cat") == [790, 789]
+            assert search("cat cat") == [790, 789]
+            assert search("cat -dog") == [790]
+            assert set(search("-dog")) == {790, 456, 123}
+            assert set(search("")) == {790, 789, 456, 123}
+            suggestions = json.loads(req("/api/tags?term="))["tags"]
+            assert suggestions[0]["name"] == "cat"
+            assert suggestions[0]["uses"] == 2
+
             rejected_request(404, "/api/posts/999/media")
             original = folder / "0000012_123.png"
             original.rename(folder / "hidden.png")
@@ -206,7 +220,7 @@ with tempfile.TemporaryDirectory(prefix="arue-sync-test-") as folder:
                 "PASS: legacy migration, original filenames, retained media, "
                 "re-favorite reuse, cancelled upload, real media upload/read, "
                 "count offset, normalized order, filtered IDs, tag links, foreign keys, "
-                "small images, HTTP error classification"
+                "small images, search filters, autocomplete ranking, HTTP error classification"
             )
         finally:
             process.terminate()

@@ -5,8 +5,3 @@ use serde::{Deserialize, Serialize};
 #[serde(transparent)]
 #[sqlx(transparent)]
 pub struct PostId(pub i64);
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize, sqlx::Type)]
-#[serde(transparent)]
-#[sqlx(transparent)]
-pub struct TagId(pub i64);

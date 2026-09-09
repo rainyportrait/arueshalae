@@ -19,7 +19,7 @@ use tracing::info;
 
 use crate::{
     database::Database,
-    ids::{PostId, TagId},
+    ids::PostId,
     json_ok,
     media_processor::{MediaProcessor, MediaProcessorResult, file_name, mini_thumb},
     server::{AppError, AppResult, AppState, SearchQuery},
@@ -282,9 +282,11 @@ impl Database {
     // whole library. The ids come back in no particular order.
     async fn downloaded_post_ids(&self, requested: Option<&[PostId]>) -> Result<Vec<PostId>> {
         let Some(requested) = requested else {
-            return Ok(sqlx::query_scalar("SELECT post_id FROM post_media")
-                .fetch_all(&self.pool)
-                .await?);
+            return Ok(sqlx::query_scalar!(
+                r#"SELECT post_id AS "post_id: PostId" FROM post_media"#
+            )
+            .fetch_all(&self.pool)
+            .await?);
         };
         if requested.is_empty() {
             return Ok(Vec::new());
@@ -359,27 +361,27 @@ impl Database {
 }
 
 async fn upload_is_allowed(connection: &mut SqliteConnection, post_id: PostId) -> Result<bool> {
-    Ok(sqlx::query_scalar(
+    Ok(sqlx::query_scalar!(
         r#"SELECT EXISTS(
             SELECT 1
             FROM posts p
             LEFT JOIN favorite_order f USING (post_id)
             WHERE post_id = ?
               AND (f.post_id IS NOT NULL OR p.availability = 'deleted')
-        )"#,
+        ) AS "exists!: bool""#,
+        post_id.0
     )
-    .bind(post_id)
     .fetch_one(connection)
     .await?)
 }
 
 async fn has_media(connection: &mut SqliteConnection, post_id: PostId) -> Result<bool> {
-    Ok(
-        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM post_media WHERE post_id = ?)")
-            .bind(post_id)
-            .fetch_one(connection)
-            .await?,
+    Ok(sqlx::query_scalar!(
+        r#"SELECT EXISTS(SELECT 1 FROM post_media WHERE post_id = ?) AS "exists!: bool""#,
+        post_id.0
     )
+    .fetch_one(connection)
+    .await?)
 }
 
 async fn insert_media(
@@ -387,7 +389,7 @@ async fn insert_media(
     post_id: PostId,
     media: &StagedMedia,
 ) -> Result<()> {
-    sqlx::query(
+    sqlx::query!(
         r#"INSERT INTO post_media (
             post_id,
             storage_name,
@@ -395,12 +397,12 @@ async fn insert_media(
             mime,
             original
         ) VALUES (?, ?, ?, ?, ?)"#,
+        post_id.0,
+        media.storage_name,
+        media.extension,
+        media.mime,
+        media.original,
     )
-    .bind(post_id)
-    .bind(&media.storage_name)
-    .bind(media.extension)
-    .bind(media.mime)
-    .bind(media.original)
     .execute(connection)
     .await?;
 
@@ -413,24 +415,22 @@ async fn insert_tags(
     tags: &[Tag],
 ) -> Result<()> {
     for tag in tags {
-        sqlx::query("INSERT INTO tags (name, kind) VALUES (?, ?) ON CONFLICT DO NOTHING")
-            .bind(&tag.name)
-            .bind(tag.kind.as_str())
-            .execute(&mut *connection)
-            .await?;
-
-        let tag_id: TagId = sqlx::query_scalar("SELECT tag_id FROM tags WHERE name = ?")
-            .bind(&tag.name)
-            .fetch_one(&mut *connection)
-            .await?;
-
-        sqlx::query(
-            r#"INSERT INTO post_tags (post_id, tag_id)
-            VALUES (?, ?)
-            ON CONFLICT DO NOTHING"#,
+        let kind = tag.kind.as_str();
+        sqlx::query!(
+            "INSERT INTO tags (name, kind) VALUES (?, ?) ON CONFLICT DO NOTHING",
+            tag.name,
+            kind,
         )
-        .bind(post_id)
-        .bind(tag_id)
+        .execute(&mut *connection)
+        .await?;
+
+        sqlx::query!(
+            r#"INSERT INTO post_tags (post_id, tag_id)
+            VALUES (?, (SELECT tag_id FROM tags WHERE name = ?))
+            ON CONFLICT DO NOTHING"#,
+            post_id.0,
+            tag.name,
+        )
         .execute(&mut *connection)
         .await?;
     }

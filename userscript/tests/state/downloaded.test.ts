@@ -72,9 +72,10 @@ async function importAll() {
     const { list } = await import("../../src/state/list.ts")
     const { favorites } = await import("../../src/state/favorites.ts")
     const { details: detailsState } = await import("../../src/state/details.ts")
+    const { gallery } = await import("../../src/state/gallery.ts")
     const { auth } = await import("../../src/state/auth.ts")
     const { serverSettings } = await import("../../src/state/settings.ts")
-    return { ...downloaded, list, favorites, detailsState, auth, serverSettings }
+    return { ...downloaded, list, favorites, detailsState, gallery, auth, serverSettings }
 }
 
 async function enableServer(m: Awaited<ReturnType<typeof importAll>>): Promise<void> {
@@ -208,6 +209,27 @@ describe("state/downloaded", () => {
 
         expect(api.checkDownloads).toHaveBeenCalledWith([42])
         expect(m.downloaded.val.has(42)).toBe(true)
+    })
+
+    it("checks every post loaded into the gallery filmstrip", async () => {
+        const m = await importAll()
+        await enableServer(m)
+        api.checkDownloads.mockResolvedValue(new Set([2]))
+        const origin = { kind: "list" as const, tags: "test", pid: 0 }
+
+        m.gallery.val = {
+            status: "ready",
+            origin,
+            pages: [
+                { pid: 0, posts: [post(1)] },
+                { pid: 42, posts: [post(2)] },
+            ],
+            lastPagePID: 42,
+        }
+        await flushVan()
+
+        expect(api.checkDownloads).toHaveBeenCalledWith([1, 2])
+        expect(m.downloaded.val.has(2)).toBe(true)
     })
 
     it("keeps the set's identity stable when a check adds nothing", async () => {

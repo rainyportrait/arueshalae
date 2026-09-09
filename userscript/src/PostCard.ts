@@ -9,7 +9,7 @@ import { setCardSpan } from "./masonry.ts"
 import { thumbnailUrl } from "./media-source.ts"
 import { postHref, route } from "./router.ts"
 import { auth } from "./state/auth.ts"
-import { downloaded } from "./state/downloaded.ts"
+import { downloaded, queueDownloadCheck } from "./state/downloaded.ts"
 import { serverSettings } from "./state/settings.ts"
 
 const { img, span } = van.tags
@@ -100,7 +100,10 @@ export function PostCard(post: Post) {
             title: `Post #${post.id}`,
         },
         img({
-            src: () => thumbnailUrl(post),
+            src: () => {
+                queueDownloadCheck(post.id)
+                return thumbnailUrl(post)
+            },
             alt: `Post ${post.id}`,
             loading: "lazy",
             decoding: "async",

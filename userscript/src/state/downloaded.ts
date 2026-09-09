@@ -3,6 +3,8 @@ import van from "vanjs-core"
 import { checkDownloads } from "../api/server.ts"
 import { details } from "./details.ts"
 import { favorites } from "./favorites.ts"
+import { loadedPosts } from "./gallery-collection.ts"
+import { gallery } from "./gallery.ts"
 import { list } from "./list.ts"
 import { serverSettings } from "./settings.ts"
 
@@ -22,6 +24,26 @@ export const downloaded = van.state<Set<number>>(new Set())
 // a check has *succeeded* — a failed check leaves its ids unanswered so the
 // next settle retries them (the server may have come back).
 const answered = new Set<number>()
+const checking = new Set<number>()
+
+// PostCard is used outside the list/favorites loaders (notably on profiles),
+// so a card also registers its own id. Collect cards built in the same render
+// into one server request rather than issuing one request per thumbnail.
+const queued = new Set<number>()
+let checkQueued = false
+
+export function queueDownloadCheck(id: number): void {
+    if (!serverSettings.val.enabled || answered.has(id) || checking.has(id)) return
+    queued.add(id)
+    if (checkQueued) return
+    checkQueued = true
+    queueMicrotask(() => {
+        checkQueued = false
+        const ids = [...queued]
+        queued.clear()
+        if (serverSettings.rawVal.enabled) checkDownloadsPage(ids)
+    })
+}
 
 // Fold a /api/posts/downloaded result into the shared set. A no-op (no state
 // write) when
@@ -60,31 +82,36 @@ export function checkDownloadsPage(
     ids: number[],
     check: (postIds: number[]) => Promise<Set<number>> = checkDownloads,
 ): void {
-    const unknown = ids.filter((id) => !answered.has(id))
+    const unknown = ids.filter((id) => !answered.has(id) && !checking.has(id))
     if (unknown.length === 0) return
+    for (const id of unknown) checking.add(id)
     void check(unknown).then(
         (result) => {
-            for (const id of unknown) answered.add(id)
+            for (const id of unknown) {
+                checking.delete(id)
+                answered.add(id)
+            }
             markDownloaded(result)
         },
         () => {
+            for (const id of unknown) checking.delete(id)
             /* non-fatal: the badges stay hidden and a later settle retries */
         },
     )
 }
 
-// Check a grid page as soon as it settles (and re-check the current one when
-// the server is enabled mid-session). Reads the list and favorites payloads
-// directly, so this re-runs exactly when a page settles or the server setting
-// changes — never on grid-local re-renders (blacklist toggle, ...).
-// The favorites payload is read only while ready, so its ids are checked once
-// per settled page (the answered set absorbs the replay republishes).
+// Check loaded collections as soon as they settle (and re-check them when the
+// server is enabled mid-session). This includes every page accumulated by the
+// details filmstrip, not just the list/favorites page that opened it.
+// The answered set absorbs overlapping pages and replay republishes.
 van.derive(() => {
     if (!serverSettings.val.enabled) return
     const l = list.val
     if (l.status === "ready") checkDownloadsPage(l.posts.map((p) => p.id))
     const f = favorites.val
     if (f.status === "ready") checkDownloadsPage(f.posts.map((p) => p.id))
+    const g = gallery.val
+    if (g.status === "ready") checkDownloadsPage(loadedPosts(g).map(({ post }) => post.id))
 })
 
 // The details page checks its single post as it settles — guests included,

@@ -129,6 +129,23 @@ describe("PostCard library badge", () => {
         expect(image?.getAttribute("src")).toBe("//cdn.example/1.jpg")
     })
 
+    it("checks its own posts in one batch without relying on a parent page loader", async () => {
+        const m = await importAll()
+        await enableServer(m, true)
+        api.checkDownloads.mockResolvedValue(new Set([2]))
+
+        const first = m.PostCard(post(1))
+        const second = m.PostCard(post(2))
+        document.body.append(first, second)
+        await flushVan()
+
+        expect(api.checkDownloads).toHaveBeenCalledTimes(1)
+        expect(api.checkDownloads).toHaveBeenCalledWith([1, 2])
+        expect(second.querySelector("img")?.getAttribute("src")).toBe(
+            "http://127.0.0.1:34343/api/posts/2/media?type=mini",
+        )
+    })
+
     it("falls back to the Rule34 thumbnail when local media fails", async () => {
         const m = await importAll()
         await enableServer(m, true)

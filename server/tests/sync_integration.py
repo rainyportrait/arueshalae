@@ -89,16 +89,19 @@ with tempfile.TemporaryDirectory(prefix="arue-sync-test-") as folder:
                 )
             )
 
-        def upload(post_id):
+        def upload(post_id, image=png, post_tags=None):
+            if post_tags is None:
+                post_tags = [{"name": "new_tag", "kind": "general"}]
             image_headers = (
                 b'--test\r\nContent-Disposition: form-data; name="image"; '
                 b'filename="test.png"\r\nContent-Type: image/png\r\n\r\n'
             )
             tags = (
                 b'\r\n--test\r\nContent-Disposition: form-data; name="tags"\r\n\r\n'
-                b'[{"name":"new_tag","kind":"general"}]\r\n--test--\r\n'
+                + json.dumps(post_tags).encode()
+                + b'\r\n--test--\r\n'
             )
-            body = image_headers + png + tags
+            body = image_headers + image + tags
             return json.loads(
                 req(
                     f"/api/posts/{post_id}",
@@ -145,10 +148,27 @@ with tempfile.TemporaryDirectory(prefix="arue-sync-test-") as folder:
             assert db.execute(
                 "SELECT post_id FROM post_tags WHERE tag_id=1"
             ).fetchall() == [(123,)]
+
+            tiny_png = (
+                b"\x89PNG\r\n\x1a\n"
+                + chunk(b"IHDR", struct.pack("!2I5B", 1, 1, 8, 2, 0, 0, 0))
+                + chunk(b"IDAT", zlib.compress(b"\0\xff\0\0"))
+                + chunk(b"IEND", b"")
+            )
+            assert len(tiny_png) < 255
+            assert upload(
+                789, tiny_png,
+                [{"name": "cat", "kind": "general"}, {"name": "dog", "kind": "general"}],
+            ) == {"ok": True}
+            assert req("/api/posts/789/media") == tiny_png
+            command("membership", postId=790, value="favorited")
+            assert upload(790, tiny_png, [{"name": "cat", "kind": "general"}]) == {"ok": True}
+            db.close()
             print(
                 "PASS: legacy migration, original filenames, retained media, "
                 "re-favorite reuse, cancelled upload, real media upload/read, "
-                "count offset, normalized order, filtered IDs, tag links, foreign keys"
+                "count offset, normalized order, filtered IDs, tag links, foreign keys, "
+                "small images"
             )
         finally:
             process.terminate()

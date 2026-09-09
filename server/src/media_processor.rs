@@ -4,7 +4,7 @@ use crate::ids::PostId;
 use anyhow::{Context, Result, anyhow, bail};
 use camino::{Utf8Path, Utf8PathBuf};
 use infer::MatcherType;
-use tempfile::NamedTempFile;
+use tempfile::{Builder, NamedTempFile};
 use tokio::{
     fs::{File, metadata},
     io::{AsyncReadExt, AsyncWriteExt},
@@ -197,11 +197,12 @@ impl MediaProcessor {
     }
 
     async fn file_type(&self) -> Result<infer::Type> {
-        let mut buf = [0; HEADER_SIZE];
+        let mut buf = Vec::with_capacity(HEADER_SIZE);
         let bytes_read = File::open(&self.file.path())
             .await
             .context("Failed to open file for type infer")?
-            .read_exact(&mut buf)
+            .take(HEADER_SIZE as u64)
+            .read_to_end(&mut buf)
             .await
             .context("Failed to read header for type infer")?;
         if bytes_read == 0 {
@@ -220,16 +221,25 @@ pub async fn mini_thumb(
     base_path: &Utf8Path,
 ) -> Result<Utf8PathBuf> {
     let new_path = base_path.join(".minis").join(format!("mini_{name}.jpeg"));
-    if new_path.is_file() {
+    if metadata(&new_path)
+        .await
+        .is_ok_and(|file| file.is_file() && file.len() > 0)
+    {
         return Ok(new_path);
     }
 
-    debug!("vipsthumbnail {original_path} -o {new_path} --size {MINI_SIZE}");
+    let temporary = Builder::new()
+        .prefix("mini-")
+        .suffix(".jpeg")
+        .tempfile_in(base_path.join(".minis"))?
+        .into_temp_path();
+
+    debug!("vipsthumbnail {original_path} -o {temporary:?} --size {MINI_SIZE}");
 
     if !Command::new("vipsthumbnail")
         .arg(original_path)
         .arg("-o")
-        .arg(&new_path)
+        .arg(&temporary)
         .arg("--size")
         .arg(format!("{MINI_SIZE}x"))
         .stdout(Stdio::null())
@@ -242,6 +252,12 @@ pub async fn mini_thumb(
     {
         bail!("libvips failed to create mini thumbnail")
     }
+
+    if metadata(&temporary).await?.len() == 0 {
+        bail!("libvips created an empty mini thumbnail")
+    }
+
+    tokio::fs::rename(&temporary, &new_path).await?;
 
     Ok(new_path)
 }
@@ -259,4 +275,28 @@ async fn move_file(from: &Path, to: &Utf8Path) -> Result<()> {
 
 pub fn file_name(post_id: PostId, extension: &str) -> String {
     format!("{}.{extension}", post_id.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Write;
+
+    use super::MediaProcessor;
+
+    #[tokio::test]
+    async fn infers_a_short_png() {
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        file.write_all(&[
+            0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, b'I', b'H',
+            b'D', b'R', 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00,
+            0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0D, b'I', b'D', b'A', b'T', 0x08,
+            0xD7, 0x63, 0xF8, 0xCF, 0xC0, 0xF0, 0x1F, 0x00, 0x05, 0x00, 0x01, 0xFF, 0x89, 0x99,
+            0x3D, 0x1D, 0x00, 0x00, 0x00, 0x00, b'I', b'E', b'N', b'D', 0xAE, 0x42, 0x60, 0x82,
+        ])
+        .unwrap();
+
+        let file_type = MediaProcessor { file }.file_type().await.unwrap();
+
+        assert_eq!(file_type.mime_type(), "image/png");
+    }
 }

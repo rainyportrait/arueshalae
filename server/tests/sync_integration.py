@@ -8,6 +8,7 @@ import struct
 import subprocess
 import tempfile
 import time
+import urllib.error
 import urllib.request
 import zlib
 
@@ -89,6 +90,14 @@ with tempfile.TemporaryDirectory(prefix="arue-sync-test-") as folder:
                 )
             )
 
+        def rejected_request(status, path, data=None, headers=None):
+            try:
+                req(path, data, headers)
+            except urllib.error.HTTPError as error:
+                assert error.code == status, error.read()
+                return error.read()
+            raise AssertionError(f"{path} should return {status}")
+
         def upload(post_id, image=png, post_tags=None):
             if post_tags is None:
                 post_tags = [{"name": "new_tag", "kind": "general"}]
@@ -163,12 +172,41 @@ with tempfile.TemporaryDirectory(prefix="arue-sync-test-") as folder:
             assert req("/api/posts/789/media") == tiny_png
             command("membership", postId=790, value="favorited")
             assert upload(790, tiny_png, [{"name": "cat", "kind": "general"}]) == {"ok": True}
+
+            rejected_request(404, "/api/posts/999/media")
+            original = folder / "0000012_123.png"
+            original.rename(folder / "hidden.png")
+            try:
+                rejected_request(404, "/api/posts/123/media")
+                rejected_request(404, "/api/posts/123/media?type=mini")
+            finally:
+                (folder / "hidden.png").rename(original)
+
+            rejected_request(
+                400, "/api/posts/123",
+                b'--test\r\nContent-Disposition: form-data; name="tags"\r\n\r\n{bad json}\r\n--test--\r\n',
+                {"Content-Type": "multipart/form-data; boundary=test"},
+            )
+            rejected_request(
+                400, "/api/posts/123", b"--test--\r\n",
+                {"Content-Type": "multipart/form-data; boundary=test"},
+            )
+
+            # A database failure must be a logged 500, not a misleading 404.
+            db.execute("ALTER TABLE post_media RENAME TO unavailable_media")
+            db.commit()
+            try:
+                assert rejected_request(500, "/api/posts/123/media") == b"Internal server error"
+            finally:
+                db.execute("ALTER TABLE unavailable_media RENAME TO post_media")
+                db.commit()
+            assert "post_media" in (folder / "log").read_text()
             db.close()
             print(
                 "PASS: legacy migration, original filenames, retained media, "
                 "re-favorite reuse, cancelled upload, real media upload/read, "
                 "count offset, normalized order, filtered IDs, tag links, foreign keys, "
-                "small images"
+                "small images, HTTP error classification"
             )
         finally:
             process.terminate()

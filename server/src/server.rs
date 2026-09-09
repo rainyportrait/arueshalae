@@ -89,15 +89,39 @@ pub async fn spawn_server(
     })
 }
 
-pub struct AppError(anyhow::Error);
+#[derive(Debug)]
+pub enum AppError {
+    BadRequest(String),
+    NotFound(String),
+    Conflict(String),
+    Internal(anyhow::Error),
+}
+
+impl AppError {
+    pub fn bad_request(message: impl Into<String>) -> Self {
+        Self::BadRequest(message.into())
+    }
+
+    pub fn not_found(message: impl Into<String>) -> Self {
+        Self::NotFound(message.into())
+    }
+
+    pub fn conflict(message: impl Into<String>) -> Self {
+        Self::Conflict(message.into())
+    }
+}
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Something went wrong: {}", self.0),
-        )
-            .into_response()
+        match self {
+            Self::BadRequest(message) => (StatusCode::BAD_REQUEST, message).into_response(),
+            Self::NotFound(message) => (StatusCode::NOT_FOUND, message).into_response(),
+            Self::Conflict(message) => (StatusCode::CONFLICT, message).into_response(),
+            Self::Internal(err) => {
+                error!("Request failed: {err:#}");
+                (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response()
+            }
+        }
     }
 }
 
@@ -106,7 +130,7 @@ where
     E: Into<anyhow::Error>,
 {
     fn from(err: E) -> Self {
-        Self(err.into())
+        Self::Internal(err.into())
     }
 }
 

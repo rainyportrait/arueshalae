@@ -1,11 +1,11 @@
-use std::io::Write;
+use std::{io::ErrorKind, io::Write};
 
 use anyhow::{Context, Result};
 use axum::{
     Json,
     body::Body,
     extract::{Multipart, Path, Query, State},
-    http::{StatusCode, header},
+    http::header,
     response::IntoResponse,
 };
 use camino::Utf8Path;
@@ -22,7 +22,7 @@ use crate::{
     ids::{PostId, TagId},
     json_ok,
     media_processor::{MediaProcessor, MediaProcessorResult, file_name, mini_thumb},
-    server::{AppResult, AppState, SearchQuery},
+    server::{AppError, AppResult, AppState, SearchQuery},
 };
 
 pub async fn create_post(
@@ -208,50 +208,48 @@ pub async fn serve_media(
     }): State<AppState>,
     Path(post_id): Path<PostId>,
     Query(MediaQuery { kind }): Query<MediaQuery>,
-) -> impl IntoResponse {
-    let (name, path, mime) = match database.get_post(post_id).await {
-        Ok(post) => {
-            let name = post.storage_name;
-            let (path, mime) = if post.mime.starts_with("image") {
-                (base_path.join(&name), post.mime)
-            } else {
-                // Videos are served as the JPEG poster ffmpeg generated at
-                // upload time, not as the video itself.
-                (
-                    base_path.join(".thumbs").join(format!("{name}.jpeg")),
-                    "image/jpeg".to_string(),
-                )
-            };
-            if !path.is_file() {
-                return Err((StatusCode::NOT_FOUND, "file not found on disk"));
-            }
-            (name, path, mime)
+) -> AppResult<impl IntoResponse> {
+    let Some(post) = database.get_post(post_id).await? else {
+        return Err(AppError::not_found("post not found"));
+    };
+    let name = post.storage_name;
+    let (path, mime) = if post.mime.starts_with("image") {
+        (base_path.join(&name), post.mime)
+    } else {
+        // Videos are served as the JPEG poster ffmpeg generated at upload time,
+        // not as the video itself.
+        (
+            base_path.join(".thumbs").join(format!("{name}.jpeg")),
+            "image/jpeg".to_string(),
+        )
+    };
+
+    let file = open_media_file(&path).await?;
+    let (file, mime) = match kind {
+        MediaKind::Image => (file, mime),
+        MediaKind::Mini => {
+            drop(file);
+            let path = mini_thumb(&name, &path, &base_path).await?;
+            (open_media_file(&path).await?, "image/jpeg".to_string())
         }
-        Err(_) => return Err((StatusCode::NOT_FOUND, "post not found in database")),
-    };
-
-    let (path, mime) = match kind {
-        MediaKind::Image => (path, mime),
-        MediaKind::Mini => match mini_thumb(&name, &path, &base_path).await {
-            Ok(path) => (path, "image/jpeg".to_string()),
-            Err(_) => {
-                return Err((
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "unable to create mini thumb",
-                ));
-            }
-        },
-    };
-
-    let file = match File::open(&path).await {
-        Ok(file) => file,
-        Err(_) => return Err((StatusCode::NOT_FOUND, "unable to open file")),
     };
 
     let stream = ReaderStream::new(file);
     let body = Body::from_stream(stream);
 
     Ok(([(header::CONTENT_TYPE, mime)], body))
+}
+
+async fn open_media_file(path: &Utf8Path) -> AppResult<File> {
+    match File::open(path).await {
+        Ok(file) => Ok(file),
+        Err(err) if err.kind() == ErrorKind::NotFound => {
+            Err(AppError::not_found("media file not found"))
+        }
+        Err(err) => Err(anyhow::Error::from(err)
+            .context(format!("failed to open {path}"))
+            .into()),
+    }
 }
 
 impl Database {
@@ -337,13 +335,13 @@ impl Database {
             .await?)
     }
 
-    async fn get_post(&self, post_id: PostId) -> Result<PostMedia> {
+    async fn get_post(&self, post_id: PostId) -> Result<Option<PostMedia>> {
         Ok(sqlx::query_as!(
             PostMedia,
             "SELECT storage_name, mime FROM post_media WHERE post_id = ?",
             post_id.0
         )
-        .fetch_one(&self.pool)
+        .fetch_optional(&self.pool)
         .await?)
     }
 }
@@ -473,14 +471,14 @@ impl TagKind {
 }
 
 impl PostData {
-    pub async fn from_multipart(mut value: Multipart) -> Result<Self> {
+    pub async fn from_multipart(mut value: Multipart) -> AppResult<Self> {
         let mut image: Option<NamedTempFile> = None;
         let mut tags: Option<Vec<Tag>> = None;
 
         while let Some(mut field) = value
             .next_field()
             .await
-            .context("Failed to get next field")?
+            .map_err(|error| AppError::bad_request(error.body_text()))?
         {
             let name = field.name().unwrap_or("").to_string();
 
@@ -488,15 +486,23 @@ impl PostData {
                 "image" => {
                     let mut tmp =
                         NamedTempFile::new().context("Failed to create temp file for image")?;
-                    while let Some(chunk) = field.chunk().await? {
+                    while let Some(chunk) = field
+                        .chunk()
+                        .await
+                        .map_err(|error| AppError::bad_request(error.body_text()))?
+                    {
                         tmp.write_all(&chunk).context("Failed writing image data")?;
                     }
                     image = Some(tmp);
                 }
                 "tags" => {
-                    let data = field.text().await?;
-                    let t: Vec<Tag> =
-                        serde_json::from_str(&data).context("Invalid JSON for tags")?;
+                    let data = field
+                        .text()
+                        .await
+                        .map_err(|error| AppError::bad_request(error.body_text()))?;
+                    let t: Vec<Tag> = serde_json::from_str(&data).map_err(|error| {
+                        AppError::bad_request(format!("invalid JSON for tags: {error}"))
+                    })?;
                     tags = Some(t);
                 }
                 _ => {
@@ -505,7 +511,7 @@ impl PostData {
             }
         }
 
-        let image = image.ok_or_else(|| anyhow::anyhow!("missing field: image"))?;
+        let image = image.ok_or_else(|| AppError::bad_request("missing field: image"))?;
         let tags = tags.unwrap_or_default();
 
         Ok(PostData { image, tags })

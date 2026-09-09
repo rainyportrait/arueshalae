@@ -18,6 +18,8 @@ png = (
     b"\x90wS\xde\x00\x00\x00\x0cIDAT\x08\xd7c\xf8\xcf\xc0\x00\x00\x03\x01\x01\x00"
     b"\x18\xdd\x8d\xb8\x00\x00\x00\x00IEND\xaeB`\x82"
 )
+video = b"test-video-payload"
+poster = b"test-video-poster"
 
 with tempfile.TemporaryDirectory(prefix="arue-media-test-") as folder:
     folder = pathlib.Path(folder)
@@ -54,13 +56,17 @@ output.write_bytes(b"complete")
     db.executescript(
         """
         INSERT INTO posts (id, external_id, extension, mime, original)
-        VALUES (12, 123, 'png', 'image/png', 1);
+        VALUES (12, 123, 'png', 'image/png', 1),
+               (13, 124, 'mp4', 'video/mp4', 1);
 
         PRAGMA user_version = 1;
         """
     )
     db.close()
     (folder / "0000012_123.png").write_bytes(png)
+    (folder / "0000013_124.mp4").write_bytes(video)
+    (folder / ".thumbs").mkdir()
+    (folder / ".thumbs/0000013_124.mp4.jpeg").write_bytes(poster)
 
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
@@ -95,6 +101,21 @@ output.write_bytes(b"complete")
                 time.sleep(0.1)
         else:
             raise AssertionError("server did not start")
+
+        with urllib.request.urlopen(base + "/api/posts/124/media", timeout=10) as response:
+            assert response.headers["Content-Type"] == "image/jpeg"
+            assert response.read() == poster
+        with urllib.request.urlopen(
+            urllib.request.Request(
+                base + "/api/posts/124/media?type=video",
+                headers={"Range": "bytes=5-9"},
+            ),
+            timeout=10,
+        ) as response:
+            assert response.status == 206
+            assert response.headers["Content-Type"] == "video/mp4"
+            assert response.headers["Content-Range"] == f"bytes 5-9/{len(video)}"
+            assert response.read() == video[5:10]
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as requests:
             first = requests.submit(request_mini)

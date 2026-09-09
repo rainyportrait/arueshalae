@@ -4,9 +4,9 @@ use anyhow::{Context, Result};
 use axum::{
     Json,
     body::Body,
-    extract::{Multipart, Path, Query, State},
-    http::header,
-    response::IntoResponse,
+    extract::{Multipart, Path, Query, Request, State},
+    http::{HeaderValue, header},
+    response::{IntoResponse, Response},
 };
 use camino::Utf8Path;
 use serde::{Deserialize, Serialize};
@@ -15,6 +15,7 @@ use sqlx::SqliteConnection;
 use tempfile::{NamedTempFile, TempDir};
 use tokio::fs::File;
 use tokio_util::io::ReaderStream;
+use tower_http::services::ServeFile;
 use tracing::info;
 
 use crate::{
@@ -192,6 +193,7 @@ enum MediaKind {
     #[default]
     Image,
     Mini,
+    Video,
 }
 
 #[derive(Deserialize)]
@@ -208,11 +210,26 @@ pub async fn serve_media(
     }): State<AppState>,
     Path(post_id): Path<PostId>,
     Query(MediaQuery { kind }): Query<MediaQuery>,
-) -> AppResult<impl IntoResponse> {
+    request: Request,
+) -> AppResult<Response> {
     let Some(post) = database.get_post(post_id).await? else {
         return Err(AppError::not_found("post not found"));
     };
     let name = post.storage_name;
+
+    if matches!(kind, MediaKind::Video) {
+        let path = base_path.join(name);
+        let mut response = ServeFile::new(path)
+            .try_call(request)
+            .await
+            .context("failed to serve video")?;
+        response.headers_mut().insert(
+            header::CONTENT_TYPE,
+            HeaderValue::from_str(&post.mime).context("invalid stored media MIME type")?,
+        );
+        return Ok(response.into_response());
+    }
+
     let (path, mime) = if post.mime.starts_with("image") {
         (base_path.join(&name), post.mime)
     } else {
@@ -232,12 +249,13 @@ pub async fn serve_media(
             let path = mini_thumb(&name, &path, &base_path).await?;
             (open_media_file(&path).await?, "image/jpeg".to_string())
         }
+        MediaKind::Video => unreachable!("video requests return before poster processing"),
     };
 
     let stream = ReaderStream::new(file);
     let body = Body::from_stream(stream);
 
-    Ok(([(header::CONTENT_TYPE, mime)], body))
+    Ok(([(header::CONTENT_TYPE, mime)], body).into_response())
 }
 
 async fn open_media_file(path: &Utf8Path) -> AppResult<File> {

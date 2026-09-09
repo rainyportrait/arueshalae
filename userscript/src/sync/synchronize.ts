@@ -3,17 +3,32 @@ import { reconcilePrefix, reconcileRemovals } from "./reconcile.ts"
 import { FAVORITES_PAGE_SIZE, Rule34Reader } from "./rule34.ts"
 
 type Baseline = { ids: number[]; initialized: boolean; countOffset: number; revision: number }
-type Progress = (message: string) => void
+
+// The phases of an explicit sync. synchronize() reports the reading,
+// verifying, and checking-removals phases; state/sync.ts wraps them with
+// "starting" and "downloading".
+export type SyncPhase =
+    | { phase: "starting" }
+    | { phase: "reading"; page: number; pages: number }
+    | { phase: "verifying" }
+    | { phase: "checking-removals"; done: number; total: number }
+    | { phase: "downloading"; done: number; total: number }
+
+type Progress = (phase: SyncPhase) => void
 
 export async function synchronize(reader: Rule34Reader, progress: Progress): Promise<number> {
     const baseline = await syncCommand<Baseline>("baseline")
     const reportedCount = await reader.reportedCount()
     const first = await reader.favoritesPage(0)
     const pages = new Map<number, number[]>([[0, first.ids]])
+    // lastPosition is the pid of the last page, a multiple of the page size,
+    // so the total page count is known as soon as the first page is read.
+    const totalPages = Math.floor(first.lastPosition / FAVORITES_PAGE_SIZE) + 1
+    progress({ phase: "reading", page: 1, pages: totalPages })
     const readPage = async (position: number): Promise<number[]> => {
         const cached = pages.get(position)
         if (cached !== undefined) return cached
-        progress(`Reading favorites ${position + 1}–${position + FAVORITES_PAGE_SIZE}`)
+        progress({ phase: "reading", page: position / FAVORITES_PAGE_SIZE + 1, pages: totalPages })
         const ids = (await reader.favoritesPage(position)).ids
         pages.set(position, ids)
         return ids
@@ -24,7 +39,7 @@ export async function synchronize(reader: Rule34Reader, progress: Progress): Pro
         : await readAll(first.lastPosition, readPage)
 
     if (pages.size > 1) {
-        progress("Verifying favorites have not changed")
+        progress({ phase: "verifying" })
         const verifyCount = await reader.reportedCount()
         const verifyFirst = (await reader.favoritesPage(0)).ids
         if (verifyCount !== reportedCount || !sameIds(first.ids, verifyFirst)) {
@@ -36,7 +51,7 @@ export async function synchronize(reader: Rule34Reader, progress: Progress): Pro
     const disappeared = baseline.ids.filter((postId) => !current.has(postId))
     const deleted: number[] = []
     for (const [index, postId] of disappeared.entries()) {
-        progress(`Checking removed favorite ${index + 1} of ${disappeared.length}`)
+        progress({ phase: "checking-removals", done: index + 1, total: disappeared.length })
         if ((await reader.postDetails(postId)) === null) deleted.push(postId)
     }
 

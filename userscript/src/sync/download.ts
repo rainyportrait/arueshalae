@@ -7,11 +7,16 @@ import { Rule34Reader } from "./rule34.ts"
 
 const MEDIA_TIMEOUT_MS = 5 * 60 * 1000
 
-export async function drainDownloads(reader: Rule34Reader): Promise<void> {
+export async function drainDownloads(
+    reader: Rule34Reader,
+    progress: (done: number, total: number) => void,
+): Promise<void> {
     const { ids } = await syncCommand<{ ids: number[] }>("downloads")
-    for (const postId of ids) {
+    for (let index = 0; index < ids.length; index++) {
+        // Report before downloading so the bar moves the moment work starts.
+        progress(index + 1, ids.length)
         try {
-            await downloadPost(reader, postId)
+            await downloadPost(reader, ids[index])
         } catch {
             // Missing media remains eligible for the next explicit Sync.
         }

@@ -3,7 +3,7 @@ import van from "vanjs-core"
 import { syncCommand } from "../api/sync.ts"
 import { drainDownloads } from "../sync/download.ts"
 import { Rule34Reader } from "../sync/rule34.ts"
-import { synchronize } from "../sync/synchronize.ts"
+import { type SyncPhase, synchronize } from "../sync/synchronize.ts"
 import { auth } from "./auth.ts"
 import { details } from "./details.ts"
 import { refreshLibrary } from "./library.ts"
@@ -17,9 +17,11 @@ export type SyncStatus = {
     lastSyncAt: number | null
 }
 
+export type { SyncPhase }
+
 export type SyncRun =
     | { status: "idle" }
-    | { status: "running"; message: string }
+    | { status: "running"; phase: SyncPhase }
     | { status: "complete"; message: string }
     | { status: "failed"; message: string }
 
@@ -34,16 +36,17 @@ export async function startSync(): Promise<void> {
         return
     }
 
-    syncRun.val = { status: "running", message: "Starting synchronization…" }
+    syncRun.val = { status: "running", phase: { phase: "starting" } }
     const reader = new Rule34Reader(account.userId)
 
     try {
         await withBrowserLock(async () => {
-            const count = await synchronize(reader, (message) => {
-                syncRun.val = { status: "running", message }
+            const count = await synchronize(reader, (phase) => {
+                syncRun.val = { status: "running", phase }
             })
-            syncRun.val = { status: "running", message: "Downloading missing media…" }
-            await drainDownloads(reader)
+            await drainDownloads(reader, (done, total) => {
+                syncRun.val = { status: "running", phase: { phase: "downloading", done, total } }
+            })
             syncRun.val = {
                 status: "complete",
                 message: `Synchronized ${count.toLocaleString()} favorites.`,

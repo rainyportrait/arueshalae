@@ -183,8 +183,7 @@ export function Settings() {
             ),
             Toggle({
                 label: "Enable server support",
-                description:
-                    "Let the userscript talk to the server (post pages and favorites once wired up).",
+                description: "Let the userscript talk to the server.",
                 state: serverEnabled,
                 onToggle: (value) =>
                     (serverSettings.val = { ...serverSettings.val, enabled: value }),

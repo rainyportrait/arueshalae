@@ -32,6 +32,12 @@ const checking = new Set<number>()
 const queued = new Set<number>()
 let checkQueued = false
 
+// Results belong to the server URL that answered them. Bump this generation
+// whenever that context changes so an old in-flight response cannot populate
+// the new server's cache.
+let serverContext = serverSettings.rawVal.url.trim().replace(/\/+$/, "")
+let serverGeneration = 0
+
 export function queueDownloadCheck(id: number): void {
     if (!serverSettings.val.enabled || answered.has(id) || checking.has(id)) return
     queued.add(id)
@@ -84,9 +90,11 @@ export function checkDownloadsPage(
 ): void {
     const unknown = ids.filter((id) => !answered.has(id) && !checking.has(id))
     if (unknown.length === 0) return
+    const generation = serverGeneration
     for (const id of unknown) checking.add(id)
     void check(unknown).then(
         (result) => {
+            if (generation !== serverGeneration) return
             for (const id of unknown) {
                 checking.delete(id)
                 answered.add(id)
@@ -94,11 +102,25 @@ export function checkDownloadsPage(
             markDownloaded(result)
         },
         () => {
+            if (generation !== serverGeneration) return
             for (const id of unknown) checking.delete(id)
             /* non-fatal: the badges stay hidden and a later settle retries */
         },
     )
 }
+
+van.derive(() => {
+    const settings = serverSettings.val
+    const context = settings.url.trim().replace(/\/+$/, "")
+    if (context === serverContext) return
+
+    serverContext = context
+    serverGeneration += 1
+    answered.clear()
+    checking.clear()
+    queued.clear()
+    downloaded.val = new Set()
+})
 
 // Check loaded collections as soon as they settle (and re-check them when the
 // server is enabled mid-session). This includes every page accumulated by the

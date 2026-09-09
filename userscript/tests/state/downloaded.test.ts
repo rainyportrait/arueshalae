@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { PostDetails as PostDetailsData } from "../../src/api/post-details.ts"
 import type { Post, PostList } from "../../src/api/post-list.ts"
 import { flushVan, resetDom } from "../dom.ts"
+import { deferred } from "../helpers/deferred.ts"
 
 // The triggers ask the server via api/server.ts; keep them off the network.
 const api = vi.hoisted(() => ({
@@ -248,5 +249,26 @@ describe("state/downloaded", () => {
         m.markDownloaded([5])
         expect(m.downloaded.val).not.toBe(before)
         expect(m.downloaded.val.has(5)).toBe(true)
+    })
+
+    it("drops cached and in-flight results when the server changes", async () => {
+        const m = await importAll()
+        await enableServer(m)
+        m.markDownloaded([1])
+        const oldServer = deferred<Set<number>>()
+
+        m.checkDownloadsPage([2], () => oldServer.promise)
+        m.serverSettings.val = { ...m.serverSettings.val, url: "http://127.0.0.1:35353" }
+        await flushVan()
+        oldServer.resolve(new Set([2]))
+        await flushVan()
+
+        expect(m.downloaded.val).toEqual(new Set())
+
+        const check = vi.fn(async () => new Set([1]))
+        m.checkDownloadsPage([1], check)
+        await flushVan()
+        expect(check).toHaveBeenCalledWith([1])
+        expect(m.downloaded.val).toEqual(new Set([1]))
     })
 })

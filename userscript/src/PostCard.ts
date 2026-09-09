@@ -37,14 +37,19 @@ function cardHref(post: Post): string {
 // just this node
 // — never the card or its img, a swap of which would reload the thumbnail.
 // It reads route/auth only inside its own binding, so navigation re-runs the
-// badge, not the grid. Hidden on the logged-in user's own favorites page,
-// where the server would badge nearly every card (see state/downloaded.ts).
+// badge, not the grid. Hidden on the logged-in user's own favorites page and
+// while its old grid remains visible during a details navigation, where the
+// server would badge nearly every card (see state/downloaded.ts).
 function LibraryBadge({ post }: { post: Post }): ChildDom {
     return () => {
         const r = route.val
         const a = auth.val
         const ownFavorites =
-            r.type === "favorites" && a.status === "authenticated" && r.id === a.userId
+            a.status === "authenticated" &&
+            ((r.type === "favorites" && r.id === a.userId) ||
+                (r.type === "postdetails" &&
+                    r.origin?.kind === "favorites" &&
+                    r.origin.uid === a.userId))
         if (ownFavorites || !serverSettings.val.enabled || !downloaded.val.has(post.id))
             return document.createComment("")
         return span(

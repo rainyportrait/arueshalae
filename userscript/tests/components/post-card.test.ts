@@ -188,4 +188,23 @@ describe("PostCard library badge", () => {
 
         expect(badge(card)).not.toBeNull()
     })
+
+    it("keeps the badge hidden while opening a post from own favorites", async () => {
+        const m = await importAll()
+        await enableServer(m, true)
+        m.downloaded.val = new Set([1])
+        m.route.val = { type: "favorites", id: 7, pid: 0 }
+        m.auth.val = { status: "authenticated", userId: 7 }
+
+        const card = await mountCard(m, 1)
+        m.route.val = {
+            type: "postdetails",
+            id: 1,
+            tags: undefined,
+            origin: { kind: "favorites", uid: 7, pid: 0 },
+        }
+        await flushVan()
+
+        expect(badge(card)).toBeNull()
+    })
 })

@@ -1,3 +1,4 @@
 rule34/
 target/
 dev.db
+__pycache__/

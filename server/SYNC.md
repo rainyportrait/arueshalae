@@ -12,9 +12,10 @@ posts form a prefix. When the remaining remote order is a subsequence of the
 baseline, the userscript uses binary search to locate removals. It switches to a
 sequential scan when that is cheaper or the ordering assumption does not hold.
 
-Before publishing a longer run, the userscript rechecks the count and newest
-page. It checks each disappeared post's detail page so the server can distinguish
-an unfavorite from an upstream deletion. An ambiguous response aborts the update.
+The userscript checks each disappeared post's detail page so the server can
+distinguish an unfavorite from an upstream deletion. An ambiguous response aborts
+the update. Immediately before publishing every run, it rechecks the count and
+newest page so changes made while those checks were in flight are also detected.
 
 The completed ordered list is sent in one request. Presence in `favorite_order`
 means that a post is currently favorited; absent posts and their media remain in

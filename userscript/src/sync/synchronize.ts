@@ -38,21 +38,23 @@ export async function synchronize(reader: Rule34Reader, progress: Progress): Pro
         ? await readIncrementally(baseline, reportedCount, first.lastPosition, readPage)
         : await readAll(first.lastPosition, readPage)
 
-    if (pages.size > 1) {
-        progress({ phase: "verifying" })
-        const verifyCount = await reader.reportedCount()
-        const verifyFirst = (await reader.favoritesPage(0)).ids
-        if (verifyCount !== reportedCount || !sameIds(first.ids, verifyFirst)) {
-            throw new Error("Favorites changed during synchronization; run Sync again")
-        }
-    }
-
     const current = new Set(ids)
     const disappeared = baseline.ids.filter((postId) => !current.has(postId))
     const deleted: number[] = []
     for (const [index, postId] of disappeared.entries()) {
         progress({ phase: "checking-removals", done: index + 1, total: disappeared.length })
         if ((await reader.postDetails(postId)) === null) deleted.push(postId)
+    }
+
+    // Validate as late as possible, after removal classification, so a change
+    // made while the potentially long-running checks were in flight cannot be
+    // published as the current observation. Rule34 exposes no snapshot token,
+    // so count + newest-page identity is the strongest inexpensive check.
+    progress({ phase: "verifying" })
+    const verifyCount = await reader.reportedCount()
+    const verifyFirst = (await reader.favoritesPage(0)).ids
+    if (verifyCount !== reportedCount || !sameIds(first.ids, verifyFirst)) {
+        throw new Error("Favorites changed during synchronization; run Sync again")
     }
 
     await syncCommand("reconcile", { ids, deleted, reportedCount, revision: baseline.revision })

@@ -7,6 +7,9 @@
 
 ## Build & dev loop
 
+- The project root has neither a package manifest nor a Cargo workspace: `pnpm` must be run
+  from `userscript/` and `cargo` from `server/`. Running either in the project root fails.
+
 Userscript (run pnpm commands from `userscript/`):
 
 - `just build-userscript` builds the userscript end to end with tailwindcss and esbuild (output in

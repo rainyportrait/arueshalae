@@ -6,7 +6,7 @@ export type Tag = {
     name: string
     slug: string
     type: TagType
-    count: number
+    count?: number
 }
 
 // Exported so the autocomplete can validate its `type` field the same way.

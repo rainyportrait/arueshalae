@@ -11,14 +11,15 @@ export type PostMedia =
 
 export type PostDetails = {
     id: number
-    title: string
+    availability?: "available" | "deleted" | "unknown"
+    title?: string
     media: PostMedia
-    posted: string
-    poster: string
-    posterHref: string
-    source: string
-    sourceHref: string
-    rating: string
+    posted?: string
+    poster?: string
+    posterHref?: string
+    source?: string
+    sourceHref?: string
+    rating?: string
     score: number
     tags: Tag[]
 }

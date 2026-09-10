@@ -102,6 +102,46 @@ export async function checkDownloads(postIds: number[]): Promise<Set<number>> {
     return new Set(downloaded)
 }
 
+type CachedPostDetailsResponse = {
+    id: number
+    availability: "available" | "deleted" | "unknown"
+    score: number
+    mediaKind: "image" | "video"
+    tags: { name: string; kind: Tag["type"] }[]
+}
+
+export async function fetchCachedPostDetails(postId: number): Promise<PostDetails> {
+    const cached = await fetchServerJson<CachedPostDetailsResponse>(`api/posts/${postId}/details`)
+    const mediaBase = `${serverBaseUrl()}/api/posts/${postId}/media`
+    const media: PostMedia =
+        cached.mediaKind === "video"
+            ? {
+                  kind: "video",
+                  src: `${mediaBase}?type=video`,
+                  poster: mediaBase,
+                  width: 0,
+                  height: 0,
+              }
+            : {
+                  kind: "image",
+                  src: mediaBase,
+                  originalImage: mediaBase,
+                  width: 0,
+                  height: 0,
+              }
+    return {
+        id: cached.id,
+        availability: cached.availability,
+        media,
+        score: cached.score,
+        tags: cached.tags.map((tag) => ({
+            name: tag.name.replaceAll("_", " "),
+            slug: tag.name,
+            type: tag.kind,
+        })),
+    }
+}
+
 // --- Saving posts -----------------------------------------------------------
 
 // The tag shape the server's /api/posts endpoint expects. `name` is the tag's

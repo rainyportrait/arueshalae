@@ -49,12 +49,16 @@ function TagLink({ tag }: { tag: Tag }) {
                 ),
             },
             span({ class: clsx("min-w-0 truncate text-sm", TAG_META[tag.type].color) }, tag.name),
-            span(
-                {
-                    class: "ml-auto shrink-0 text-xs text-zinc-500 tabular-nums",
-                },
-                tag.count.toLocaleString(),
-            ),
+            ...(tag.count === undefined
+                ? []
+                : [
+                      span(
+                          {
+                              class: "ml-auto shrink-0 text-xs text-zinc-500 tabular-nums",
+                          },
+                          tag.count.toLocaleString(),
+                      ),
+                  ]),
         ),
         button(
             {

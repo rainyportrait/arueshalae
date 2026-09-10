@@ -45,7 +45,7 @@ function StatsSection({ post }: { post: PostDetailsData }) {
             "by",
             Link(
                 {
-                    href: post.posterHref,
+                    href: post.posterHref ?? "",
                     class: "truncate text-rose-300 hover:text-rose-200",
                 },
                 post.poster,
@@ -62,7 +62,7 @@ function StatsSection({ post }: { post: PostDetailsData }) {
                     target: "_blank",
                     rel: "noopener noreferrer",
                     class: "break-all text-cyan-300 hover:text-cyan-200",
-                    title: post.source,
+                    title: post.source ?? "",
                 },
                 post.source,
             ),
@@ -787,9 +787,9 @@ function buildShell(): Node {
         swipeStart = undefined
         videoSeeking = false
     })
-    let shown: { id: number; el: HTMLElement; fill: boolean } | undefined
+    let shown: { post: PostDetailsData; el: HTMLElement; fill: boolean } | undefined
     const swapMedia = (post: PostDetailsData, fill: boolean): void => {
-        if (shown?.id === post.id) {
+        if (shown?.post === post) {
             // Same post, but focus mode may have flipped the sizing cap.
             if (shown.fill !== fill) {
                 shown.fill = fill
@@ -803,7 +803,7 @@ function buildShell(): Node {
         const next = buildMediaEl(post, showOriginal, fill)
         next.el.style.opacity = "0"
         mediaHolder.append(next.el)
-        shown = { id: post.id, el: next.el, fill }
+        shown = { post, el: next.el, fill }
         if (next.el instanceof HTMLVideoElement)
             next.el.addEventListener("seeking", () => {
                 // Only the currently shown video counts (a superseded

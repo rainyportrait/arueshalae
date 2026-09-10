@@ -11,6 +11,7 @@ const api = vi.hoisted(() => ({
     fetchPostList: vi.fn(),
     checkDownloads: vi.fn(),
     getDownloadCount: vi.fn(),
+    fetchCachedPostDetails: vi.fn(),
     fetchProfile: vi.fn(async () => ({ favorites: 0 })),
 }))
 
@@ -23,6 +24,7 @@ vi.mock("../../src/api/post-list.ts", () => ({ fetchPostList: api.fetchPostList 
 vi.mock("../../src/api/server.ts", () => ({
     checkDownloads: api.checkDownloads,
     getDownloadCount: api.getDownloadCount,
+    fetchCachedPostDetails: api.fetchCachedPostDetails,
     ServerError: class ServerError extends Error {},
 }))
 // The button tests log the user in, which fires the profile loader in
@@ -71,6 +73,7 @@ describe("PostDetails gallery", () => {
         api.fetchPostList.mockReset()
         api.checkDownloads.mockReset()
         api.getDownloadCount.mockReset()
+        api.fetchCachedPostDetails.mockReset()
         // The details loader and the gallery's neighbor prefetch fire for the
         // postdetails routes the tests set: answer with the test's own fixture.
         api.fetchPostDetails.mockImplementation((id: number) => Promise.resolve(details(id)))
@@ -177,6 +180,42 @@ describe("PostDetails gallery", () => {
         expect(prev?.className).toContain("cursor-pointer")
         expect(prev?.className).not.toContain("opacity-30")
         expect(next?.className).toContain("opacity-30")
+    })
+})
+
+describe("PostDetails cached details", () => {
+    beforeEach(() => {
+        vi.resetModules()
+        api.fetchPostDetails.mockReset()
+        api.fetchCachedPostDetails.mockReset()
+        api.checkDownloads.mockResolvedValue(new Set())
+        resetDom("https://rule34.xxx/index.php?page=account&s=options")
+    })
+
+    it("shows cached details first and upgrades them when Rule34 settles", async () => {
+        const cached = deferred<PostDetailsData>()
+        const upstream = deferred<PostDetailsData>()
+        api.fetchCachedPostDetails.mockReturnValue(cached.promise)
+        api.fetchPostDetails.mockReturnValue(upstream.promise)
+        const { serverSettings } = await import("../../src/state/settings.ts")
+        serverSettings.val = {
+            ...serverSettings.val,
+            enabled: true,
+            useCachedPostDetails: true,
+        }
+        const { details: detailsState } = await import("../../src/state/details.ts")
+        const { route } = await import("../../src/router.ts")
+        route.val = { type: "postdetails", id: 9, tags: undefined, origin: undefined }
+
+        const cachedPost = { ...details(9), score: 7, title: undefined }
+        cached.resolve(cachedPost)
+        await flushVan()
+        expect(detailsState.val).toMatchObject({ status: "ready", post: cachedPost })
+
+        const upstreamPost = { ...details(9), score: 11, title: "current" }
+        upstream.resolve(upstreamPost)
+        await flushVan()
+        expect(detailsState.val).toMatchObject({ status: "ready", post: upstreamPost })
     })
 })
 

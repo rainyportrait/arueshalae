@@ -12,6 +12,7 @@ import {
     type MediaFetcher,
     ServerError,
     checkDownloads,
+    fetchCachedPostDetails,
     getDownloadCount,
     mediaUrlFor,
     savePostToServer,
@@ -184,6 +185,38 @@ describe("server client", () => {
 
         await expect(getDownloadCount()).resolves.toBe(42)
         expect(calls[0]?.url).toBe("http://127.0.0.1:34343/api/posts/count")
+    })
+
+    it("adapts cached details into the partial post-details shape", async () => {
+        mockFetch(calls, () =>
+            jsonResponse({
+                id: 42,
+                availability: "deleted",
+                score: -3,
+                mediaKind: "video",
+                tags: [{ name: "animated_webm", kind: "metadata" }],
+            }),
+        )
+
+        await expect(fetchCachedPostDetails(42)).resolves.toEqual({
+            id: 42,
+            availability: "deleted",
+            score: -3,
+            media: {
+                kind: "video",
+                src: "http://127.0.0.1:34343/api/posts/42/media?type=video",
+                poster: "http://127.0.0.1:34343/api/posts/42/media",
+                width: 0,
+                height: 0,
+            },
+            tags: [
+                {
+                    name: "animated webm",
+                    slug: "animated_webm",
+                    type: "metadata",
+                },
+            ],
+        })
     })
 
     it("marks membership unfavorited through the post endpoint", async () => {

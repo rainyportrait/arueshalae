@@ -175,6 +175,17 @@ pub async fn get_download_count(
     json_ok!({"count": database.get_download_count().await?})
 }
 
+pub async fn get_cached_post_details(
+    State(AppState { database, .. }): State<AppState>,
+    Path(post_id): Path<PostId>,
+) -> AppResult<Json<CachedPostDetails>> {
+    database
+        .cached_post_details(post_id)
+        .await?
+        .map(Json)
+        .ok_or_else(|| AppError::not_found("cached post details not found"))
+}
+
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "lowercase")]
 enum MediaKind {
@@ -317,6 +328,46 @@ impl Database {
             .await?)
     }
 
+    async fn cached_post_details(&self, post_id: PostId) -> Result<Option<CachedPostDetails>> {
+        let Some(post) = sqlx::query_as!(
+            CachedPostRow,
+            r#"SELECT p.availability, p.score, pm.mime
+            FROM posts p
+            JOIN post_media pm USING (post_id)
+            WHERE p.post_id = ?"#,
+            post_id.0
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        else {
+            return Ok(None);
+        };
+
+        let tags = sqlx::query_as!(
+            CachedPostTag,
+            r#"SELECT t.name, t.kind
+            FROM post_tags pt
+            JOIN tags t USING (tag_id)
+            WHERE pt.post_id = ?
+            ORDER BY t.kind, t.name"#,
+            post_id.0
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(Some(CachedPostDetails {
+            id: post_id,
+            availability: post.availability,
+            score: post.score,
+            media_kind: if post.mime.starts_with("video/") {
+                CachedMediaKind::Video
+            } else {
+                CachedMediaKind::Image
+            },
+            tags,
+        }))
+    }
+
     async fn search(&self, search: &Search<'_>) -> Result<Vec<PostId>> {
         let mut query_builder = sqlx::QueryBuilder::new(
             r#"SELECT p.post_id
@@ -451,6 +502,35 @@ pub(crate) async fn replace_tags(
 struct PostMedia {
     storage_name: String,
     mime: String,
+}
+
+struct CachedPostRow {
+    availability: String,
+    score: i64,
+    mime: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CachedPostDetails {
+    id: PostId,
+    availability: String,
+    score: i64,
+    media_kind: CachedMediaKind,
+    tags: Vec<CachedPostTag>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "lowercase")]
+enum CachedMediaKind {
+    Image,
+    Video,
+}
+
+#[derive(Serialize)]
+struct CachedPostTag {
+    name: String,
+    kind: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -599,6 +679,50 @@ mod tests {
         assert_eq!(
             database.search(&Search::new("")).await.unwrap(),
             vec![PostId(5), PostId(3), PostId(2), PostId(1)]
+        );
+    }
+
+    #[tokio::test]
+    async fn cached_details_include_downloaded_media_tags_and_score() {
+        let (_directory, database) = test_database().await;
+        sqlx::query(
+            r#"INSERT INTO posts (post_id, availability, score)
+                VALUES (7, 'deleted', -12), (8, 'available', 4);
+            INSERT INTO post_media (post_id, storage_name, extension, mime, original)
+                VALUES (7, '7.webm', 'webm', 'video/webm', 1);
+            INSERT INTO tags (tag_id, name, kind)
+                VALUES (1, 'animated', 'metadata'), (2, 'hero', 'character');
+            INSERT INTO post_tags (post_id, tag_id)
+                VALUES (7, 1), (7, 2), (8, 2)"#,
+        )
+        .execute(&database.pool)
+        .await
+        .unwrap();
+
+        let details = database
+            .cached_post_details(PostId(7))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(details).unwrap(),
+            serde_json::json!({
+                "id": 7,
+                "availability": "deleted",
+                "score": -12,
+                "mediaKind": "video",
+                "tags": [
+                    {"name": "hero", "kind": "character"},
+                    {"name": "animated", "kind": "metadata"}
+                ]
+            })
+        );
+        assert!(
+            database
+                .cached_post_details(PostId(8))
+                .await
+                .unwrap()
+                .is_none()
         );
     }
 }

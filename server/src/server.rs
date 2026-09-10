@@ -18,7 +18,10 @@ use tracing::error;
 
 use crate::{
     database::Database,
-    posts::{create_post, get_download_count, list_downloaded_posts, search, serve_media},
+    posts::{
+        create_post, get_cached_post_details, get_download_count, list_downloaded_posts, search,
+        serve_media,
+    },
     tags::search_tags,
 };
 
@@ -68,6 +71,7 @@ pub fn create_router(database: &Database, base_path: &Utf8Path) -> Router {
         .route("/api/posts/downloaded", get(list_downloaded_posts))
         .route("/api/posts/search", get(search))
         .route("/api/posts/count", get(get_download_count))
+        .route("/api/posts/{post_id}/details", get(get_cached_post_details))
         .route("/api/posts/{post_id}/media", get(serve_media))
         .route("/api/tags", get(search_tags))
         .layer(

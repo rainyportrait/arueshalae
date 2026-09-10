@@ -74,6 +74,9 @@ export function Settings() {
     const preferDownloaded = van.derive<boolean>(
         () => serverSettings.val.preferDownloaded !== false,
     )
+    const useCachedPostDetails = van.derive<boolean>(
+        () => serverSettings.val.useCachedPostDetails !== false,
+    )
     const testing = van.state(false)
     const testResult = van.state<string | null>(null)
 
@@ -195,6 +198,14 @@ export function Settings() {
                 state: preferDownloaded,
                 onToggle: (value) =>
                     (serverSettings.val = { ...serverSettings.val, preferDownloaded: value }),
+            }),
+            Toggle({
+                label: "Use cached post details",
+                description:
+                    "Show locally cached media, tags, and score while current details load from Rule34.",
+                state: useCachedPostDetails,
+                onToggle: (value) =>
+                    (serverSettings.val = { ...serverSettings.val, useCachedPostDetails: value }),
             }),
             div(
                 { class: "flex items-center gap-2" },

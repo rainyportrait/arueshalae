@@ -134,6 +134,7 @@ describe("server client", () => {
         expect(calls).toHaveLength(1)
         expect(calls[0]?.url).toBe("http://127.0.0.1:34343/api/posts/123/observation")
         expect(JSON.parse(String(calls[0]?.init.body))).toEqual({
+            score: 0,
             tags: [
                 { name: "tree_bark", kind: "artist" },
                 { name: "1boy", kind: "character" },
@@ -194,6 +195,17 @@ describe("server client", () => {
         expect(calls[0]?.url).toBe("http://127.0.0.1:34343/api/posts/123/membership")
         expect(calls[0]?.init.method).toBe("POST")
         expect(JSON.parse(String(calls[0]?.init.body))).toEqual({ membership: "unfavorited" })
+    })
+
+    it("sends the up-to-date score when marking membership favorited", async () => {
+        mockFetch(calls, () => jsonResponse({ ok: true }))
+
+        await setFavoriteMembership(123, true, -4)
+
+        expect(JSON.parse(String(calls[0]?.init.body))).toEqual({
+            membership: "favorited",
+            score: -4,
+        })
     })
 
     it("throws ServerError when the membership update fails", async () => {

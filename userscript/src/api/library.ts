@@ -19,10 +19,14 @@ export async function getPendingPostIds(): Promise<number[]> {
     return response.postIds
 }
 
-export async function setFavoriteMembership(postId: number, favorited: boolean): Promise<void> {
+export async function setFavoriteMembership(
+    postId: number,
+    favorited: boolean,
+    score?: number,
+): Promise<void> {
     await fetchServerJson(
         `api/posts/${postId}/membership`,
-        jsonRequest({ membership: favorited ? "favorited" : "unfavorited" }),
+        jsonRequest({ membership: favorited ? "favorited" : "unfavorited", score }),
     )
 }
 
@@ -31,7 +35,7 @@ export async function setFavoriteMembership(postId: number, favorited: boolean):
 export async function observePost(post: PostDetails): Promise<void> {
     await fetchServerJson(
         `api/posts/${post.id}/observation`,
-        jsonRequest({ tags: serverTags(post.tags) }),
+        jsonRequest({ tags: serverTags(post.tags), score: post.score }),
     )
 }
 

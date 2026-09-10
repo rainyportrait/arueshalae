@@ -8,6 +8,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("./migrations/202508291609-init.sql"),
     include_str!("./migrations/20260906-sync.sql"),
     include_str!("./migrations/20260909-sync-revision.sql"),
+    include_str!("./migrations/20260911-post-score.sql"),
 ];
 
 #[derive(Clone)]

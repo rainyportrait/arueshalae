@@ -40,8 +40,9 @@ The synchronization API uses descriptive routes:
 - `GET /api/posts/pending` returns `{ "postIds": [...] }` for current favorites
   whose media is missing, excluding posts confirmed deleted upstream.
 - `POST /api/posts/{id}/membership` accepts a `membership` of `favorited` or
-  `unfavorited`.
-- `POST /api/posts/{id}/observation` accepts the current `tags` from a post page.
+  `unfavorited`; a new favorite also supplies the score returned by its upvote.
+- `POST /api/posts/{id}/observation` accepts the current `tags` and `score` from
+  a post page.
 - `POST /api/posts/{id}/availability` accepts an `availability` of `available` or
   `deleted`.
 
@@ -50,7 +51,7 @@ the front and opportunistically downloads its media; an unfavorite leaves any
 stored media intact.
 
 When the userscript has a favorited post's detail page in hand, it reports the
-current tags and availability. The server ignores observations for posts that
+current tags, score, and availability. The server ignores observations for posts that
 are not current favorites; an ordinary post visit never creates membership.
 Availability reports remain separate: they can create a post record because the
 download scan must record a confirmed upstream deletion before media exists.

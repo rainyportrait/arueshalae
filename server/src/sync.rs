@@ -32,11 +32,13 @@ pub struct ReconcileRequest {
 #[derive(Deserialize)]
 pub struct MembershipRequest {
     membership: Membership,
+    score: Option<i64>,
 }
 
 #[derive(Deserialize)]
 pub struct ObservationRequest {
     tags: Vec<Tag>,
+    score: i64,
 }
 
 #[derive(Deserialize)]
@@ -134,7 +136,13 @@ pub async fn set_post_membership(
 ) -> AppResult<Json<Value>> {
     let Json(request) = parse_json(payload)?;
     let mut transaction = database.pool.begin_with("BEGIN IMMEDIATE").await?;
-    let response = set_membership(&mut transaction, post_id, &request.membership).await?;
+    let response = set_membership(
+        &mut transaction,
+        post_id,
+        &request.membership,
+        request.score,
+    )
+    .await?;
     transaction.commit().await?;
     Ok(Json(response))
 }
@@ -146,7 +154,7 @@ pub async fn observe_post_details(
 ) -> AppResult<Json<Value>> {
     let Json(request) = parse_json(payload)?;
     let mut transaction = database.pool.begin_with("BEGIN IMMEDIATE").await?;
-    let response = observe_post(&mut transaction, post_id, &request.tags).await?;
+    let response = observe_post(&mut transaction, post_id, &request.tags, request.score).await?;
     transaction.commit().await?;
     Ok(Json(response))
 }
@@ -171,6 +179,7 @@ async fn observe_post(
     connection: &mut SqliteConnection,
     post_id: PostId,
     tags: &[Tag],
+    score: i64,
 ) -> AppResult<Value> {
     validate_ids(&[post_id])?;
     let favorited = sqlx::query_scalar!(
@@ -184,6 +193,7 @@ async fn observe_post(
     }
 
     set_post_availability(connection, post_id, &Availability::Available).await?;
+    set_post_score(connection, post_id, score).await?;
     replace_tags(connection, post_id, tags).await?;
     Ok(json!({"observed": true}))
 }
@@ -290,10 +300,16 @@ async fn set_membership(
     connection: &mut SqliteConnection,
     post_id: PostId,
     membership: &Membership,
+    score: Option<i64>,
 ) -> AppResult<Value> {
     validate_ids(&[post_id])?;
     match membership {
-        Membership::Favorited => prepend_favorite(connection, post_id).await?,
+        Membership::Favorited => {
+            prepend_favorite(connection, post_id).await?;
+            if let Some(score) = score {
+                set_post_score(connection, post_id, score).await?;
+            }
+        }
         Membership::Unfavorited => {
             sqlx::query!("DELETE FROM favorite_order WHERE post_id = ?", post_id.0)
                 .execute(&mut *connection)
@@ -304,6 +320,21 @@ async fn set_membership(
         .execute(connection)
         .await?;
     Ok(json!({"ok": true}))
+}
+
+async fn set_post_score(
+    connection: &mut SqliteConnection,
+    post_id: PostId,
+    score: i64,
+) -> AppResult<()> {
+    sqlx::query!(
+        "UPDATE posts SET score = ? WHERE post_id = ?",
+        score,
+        post_id.0
+    )
+    .execute(connection)
+    .await?;
+    Ok(())
 }
 
 async fn prepend_favorite(connection: &mut SqliteConnection, post_id: PostId) -> AppResult<()> {

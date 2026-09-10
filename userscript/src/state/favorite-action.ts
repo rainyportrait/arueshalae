@@ -6,6 +6,7 @@ import {
     type RemoveFavoriteResult,
     addFavorite,
     removeFavorite,
+    votePost,
 } from "../api/favorites.ts"
 import { setFavoriteMembership } from "../api/library.ts"
 import type { PostDetails } from "../api/post-details.ts"
@@ -33,9 +34,10 @@ export type FavoriteStatus =
 type MembershipWriter = (post: PostDetails) => Promise<void>
 type UnfavoriteWriter = (postId: number) => Promise<void>
 type SessionCheck = (userId: number) => Promise<boolean>
+type Vote = (postId: number, direction: "up") => Promise<number>
 
 const productionFavorite: MembershipWriter = async (post) => {
-    await setFavoriteMembership(post.id, true)
+    await setFavoriteMembership(post.id, true, post.score)
     await downloadKnownPost(post).catch(() => {})
 }
 const productionUnfavorite: UnfavoriteWriter = (postId) => setFavoriteMembership(postId, false)
@@ -86,6 +88,7 @@ export async function addFavoriteWithStatus(
     isCurrent: () => boolean,
     add: typeof addFavorite = addFavorite,
     write: MembershipWriter = productionFavorite,
+    vote: Vote = votePost,
 ): Promise<void> {
     favorite.val = "adding"
 
@@ -101,6 +104,13 @@ export async function addFavoriteWithStatus(
     if (!result.ok && result.reason === "not-logged-in") {
         favorite.val = "idle"
         return
+    }
+
+    if (result.ok) {
+        try {
+            post.score = await vote(post.id, "up")
+        } catch {}
+        if (!isCurrent()) return
     }
 
     const endState: FavoriteStatus = result.ok ? "added" : "already"

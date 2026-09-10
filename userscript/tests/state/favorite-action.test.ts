@@ -32,6 +32,7 @@ type RemoveFn = (id: number) => Promise<RemoveFavoriteResult>
 type SessionCheckFn = (userId: number) => Promise<boolean>
 type UnfavoriteFn = (postId: number) => Promise<void>
 type SaveFn = (post: PostDetails) => Promise<void>
+type VoteFn = (postId: number, direction: "up") => Promise<number>
 
 function makePost(id: number): PostDetails {
     return {
@@ -74,6 +75,7 @@ describe("favorite button lifecycle", () => {
     let sessionCheck: Mock<SessionCheckFn>
     let unfavorite: Mock<UnfavoriteFn>
     let save: Mock<SaveFn>
+    let vote: Mock<VoteFn>
 
     beforeEach(async () => {
         vi.resetModules()
@@ -89,6 +91,7 @@ describe("favorite button lifecycle", () => {
         sessionCheck = vi.fn<SessionCheckFn>()
         unfavorite = vi.fn<UnfavoriteFn>()
         save = vi.fn<SaveFn>()
+        vote = vi.fn<VoteFn>().mockResolvedValue(17)
     })
 
     it("adds the favorite, saves it to the library, and settles added", async () => {
@@ -99,7 +102,7 @@ describe("favorite button lifecycle", () => {
         const saveGate = deferred<void>()
         save.mockReturnValue(saveGate.promise)
 
-        const done = addFavoriteWithStatus(post, favorite, () => true, add, save)
+        const done = addFavoriteWithStatus(post, favorite, () => true, add, save, vote)
         await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(1))
         expect(favorite.val).toBe("saving")
         expect(membershipWrites.val.has(1)).toBe(true)
@@ -108,7 +111,8 @@ describe("favorite button lifecycle", () => {
         await done
 
         expect(add).toHaveBeenCalledWith(1)
-        expect(save).toHaveBeenCalledTimes(1)
+        expect(vote).toHaveBeenCalledWith(1, "up")
+        expect(save).toHaveBeenCalledWith(expect.objectContaining({ id: 1, score: 17 }))
         expect(favorite.val).toBe("added")
         expect(downloaded.val.has(1)).toBe(false)
         expect(membershipWrites.val.size).toBe(0)
@@ -120,7 +124,7 @@ describe("favorite button lifecycle", () => {
         const post = makePost(1)
         add.mockResolvedValue({ ok: true })
 
-        await addFavoriteWithStatus(post, favorite, () => true, add, save)
+        await addFavoriteWithStatus(post, favorite, () => true, add, save, vote)
 
         expect(favorite.val).toBe("added")
         expect(save).not.toHaveBeenCalled()
@@ -134,7 +138,7 @@ describe("favorite button lifecycle", () => {
         const post = makePost(1)
         add.mockResolvedValue({ ok: true })
 
-        await addFavoriteWithStatus(post, favorite, () => true, add, save)
+        await addFavoriteWithStatus(post, favorite, () => true, add, save, vote)
 
         expect(favorite.val).toBe("added")
         expect(save).toHaveBeenCalledTimes(1)
@@ -148,7 +152,7 @@ describe("favorite button lifecycle", () => {
         const saveGate = deferred<void>()
         save.mockReturnValue(saveGate.promise)
 
-        const done = addFavoriteWithStatus(post, favorite, () => true, add, save)
+        const done = addFavoriteWithStatus(post, favorite, () => true, add, save, vote)
         await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(1))
 
         saveGate.resolve(undefined)
@@ -164,7 +168,7 @@ describe("favorite button lifecycle", () => {
         const post = makePost(1)
         add.mockRejectedValue(new TypeError("fetch failed"))
 
-        await addFavoriteWithStatus(post, favorite, () => true, add, save)
+        await addFavoriteWithStatus(post, favorite, () => true, add, save, vote)
 
         expect(favorite.val).toBe("idle")
         expect(save).not.toHaveBeenCalled()
@@ -176,7 +180,7 @@ describe("favorite button lifecycle", () => {
         const post = makePost(1)
         add.mockResolvedValue({ ok: false, reason: "not-logged-in" })
 
-        await addFavoriteWithStatus(post, favorite, () => true, add, save)
+        await addFavoriteWithStatus(post, favorite, () => true, add, save, vote)
 
         expect(favorite.val).toBe("idle")
         expect(save).not.toHaveBeenCalled()
@@ -191,7 +195,7 @@ describe("favorite button lifecycle", () => {
         const firstSave = deferred<void>()
         save.mockReturnValueOnce(firstSave.promise)
 
-        const done = addFavoriteWithStatus(post, favorite, () => true, add, save)
+        const done = addFavoriteWithStatus(post, favorite, () => true, add, save, vote)
         await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(1))
         firstSave.reject(new Error("server down"))
         await done
@@ -227,7 +231,7 @@ describe("favorite button lifecycle", () => {
         let current = true
         const isCurrent = () => current
 
-        const done = addFavoriteWithStatus(post, favorite, isCurrent, add, save)
+        const done = addFavoriteWithStatus(post, favorite, isCurrent, add, save, vote)
         await vi.waitFor(() => expect(add).toHaveBeenCalledTimes(1))
         // The user stepped to the next post: the per-post state reset...
         current = false
@@ -248,12 +252,12 @@ describe("favorite button lifecycle", () => {
         const saveGate = deferred<void>()
         save.mockReturnValue(saveGate.promise)
 
-        const first = addFavoriteWithStatus(post, favorite, () => true, add, save)
+        const first = addFavoriteWithStatus(post, favorite, () => true, add, save, vote)
         await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(1))
 
         // A remount of the same post triggers the whole flow again...
         const favorite2 = van.state<FavoriteStatus>("idle")
-        const second = addFavoriteWithStatus(post, favorite2, () => true, add, save)
+        const second = addFavoriteWithStatus(post, favorite2, () => true, add, save, vote)
         await vi.waitFor(() => expect(add).toHaveBeenCalledTimes(2))
 
         saveGate.resolve(undefined)
@@ -441,8 +445,8 @@ describe("favorite button lifecycle", () => {
         )
         const favorite2 = van.state<FavoriteStatus>("idle")
 
-        const first = addFavoriteWithStatus(post1, favorite, () => true, add, save)
-        const second = addFavoriteWithStatus(post2, favorite2, () => true, add, save)
+        const first = addFavoriteWithStatus(post1, favorite, () => true, add, save, vote)
+        const second = addFavoriteWithStatus(post2, favorite2, () => true, add, save, vote)
         await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(1))
         // Post 2's save waits for post 1's.
         expect(favorite2.val).toBe("saving")

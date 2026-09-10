@@ -16,6 +16,7 @@ enum Command {
     Membership {
         post_id: PostId,
         value: Membership,
+        score: Option<i64>,
     },
     Memberships {
         ids: Vec<PostId>,
@@ -23,6 +24,7 @@ enum Command {
     Observation {
         post_id: PostId,
         tags: Vec<Tag>,
+        score: i64,
     },
     Downloads,
 }
@@ -52,7 +54,11 @@ async fn execute(database: &Database, command: &Command) -> AppResult<Value> {
             )
             .await?
         }
-        Command::Membership { post_id, value } => {
+        Command::Membership {
+            post_id,
+            value,
+            score,
+        } => {
             let membership = match value {
                 Membership::Favorited => Membership::Favorited,
                 Membership::Unfavorited => Membership::Unfavorited,
@@ -60,18 +66,28 @@ async fn execute(database: &Database, command: &Command) -> AppResult<Value> {
             set_post_membership(
                 state,
                 Path(*post_id),
-                Ok(Json(MembershipRequest { membership })),
+                Ok(Json(MembershipRequest {
+                    membership,
+                    score: *score,
+                })),
             )
             .await?
         }
         Command::Memberships { ids } => {
             get_post_status(state, Query(PostStatusQuery { ids: ids.clone() })).await?
         }
-        Command::Observation { post_id, tags } => {
+        Command::Observation {
+            post_id,
+            tags,
+            score,
+        } => {
             observe_post_details(
                 state,
                 Path(*post_id),
-                Ok(Json(ObservationRequest { tags: tags.clone() })),
+                Ok(Json(ObservationRequest {
+                    tags: tags.clone(),
+                    score: *score,
+                })),
             )
             .await?
         }
@@ -138,6 +154,12 @@ fn request_payloads_require_their_own_fields() {
         .is_ok()
     );
     assert!(
+        serde_json::from_value::<ObservationRequest>(json!({
+            "tags": []
+        }))
+        .is_err()
+    );
+    assert!(
         serde_json::from_value::<AvailabilityRequest>(json!({
             "availability": "unknown"
         }))
@@ -170,6 +192,7 @@ async fn observations_refresh_only_current_favorites() {
         &database,
         &Command::Observation {
             post_id: PostId(10),
+            score: -12,
             tags: vec![Tag {
                 name: "current_tag".to_string(),
                 kind: crate::posts::TagKind::General,
@@ -195,11 +218,19 @@ async fn observations_refresh_only_current_favorites() {
             .unwrap(),
         "available"
     );
+    assert_eq!(
+        sqlx::query_scalar!("SELECT score FROM posts WHERE post_id = 10")
+            .fetch_one(&database.pool)
+            .await
+            .unwrap(),
+        -12
+    );
 
     let ignored = execute(
         &database,
         &Command::Observation {
             post_id: PostId(20),
+            score: 99,
             tags: vec![Tag {
                 name: "ignored_tag".to_string(),
                 kind: crate::posts::TagKind::General,
@@ -235,6 +266,7 @@ async fn stale_reconciliation_cannot_undo_membership_or_another_reconciliation()
             &Command::Membership {
                 post_id: PostId(40),
                 value,
+                score: None,
             },
         )
         .await
@@ -310,6 +342,7 @@ async fn membership_changes_do_not_rewrite_other_favorites() {
         &Command::Membership {
             post_id: PostId(10),
             value: Membership::Favorited,
+            score: Some(42),
         },
     )
     .await
@@ -322,11 +355,19 @@ async fn membership_changes_do_not_rewrite_other_favorites() {
         execute(&database, &Command::Downloads).await.unwrap()["postIds"],
         json!([10, 30, 20])
     );
+    assert_eq!(
+        sqlx::query_scalar!("SELECT score FROM posts WHERE post_id = 10")
+            .fetch_one(&database.pool)
+            .await
+            .unwrap(),
+        42
+    );
     execute(
         &database,
         &Command::Membership {
             post_id: PostId(10),
             value: Membership::Unfavorited,
+            score: None,
         },
     )
     .await
@@ -378,11 +419,19 @@ async fn migration_preserves_an_existing_sync_database() {
         execute(&database, &Command::Status).await.unwrap()["lastSyncAt"],
         123
     );
+    assert_eq!(
+        sqlx::query_scalar!("SELECT score FROM posts ORDER BY post_id")
+            .fetch_all(&database.pool)
+            .await
+            .unwrap(),
+        vec![0, 0]
+    );
     execute(
         &database,
         &Command::Membership {
             post_id: PostId(30),
             value: Membership::Favorited,
+            score: Some(7),
         },
     )
     .await
@@ -434,6 +483,7 @@ async fn reconciliation_records_deletions_and_refavoriting_restores_availability
         &Command::Membership {
             post_id: PostId(20),
             value: Membership::Favorited,
+            score: None,
         },
     )
     .await

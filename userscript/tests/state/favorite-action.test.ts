@@ -12,7 +12,7 @@ import { deferred } from "../helpers/deferred.ts"
 const api = vi.hoisted(() => ({
     checkDownloads: vi.fn(),
     getDownloadCount: vi.fn(),
-    syncCommand: vi.fn(),
+    getPostStatuses: vi.fn(),
     setFavoriteMembership: vi.fn(),
 }))
 
@@ -22,8 +22,8 @@ vi.mock("../../src/api/server.ts", () => ({
     ServerError: class ServerError extends Error {},
 }))
 
-vi.mock("../../src/api/sync.ts", () => ({
-    syncCommand: api.syncCommand,
+vi.mock("../../src/api/library.ts", () => ({
+    getPostStatuses: api.getPostStatuses,
     setFavoriteMembership: api.setFavoriteMembership,
 }))
 
@@ -79,8 +79,8 @@ describe("favorite button lifecycle", () => {
         vi.resetModules()
         api.checkDownloads.mockReset()
         api.checkDownloads.mockResolvedValue(new Set())
-        api.syncCommand.mockReset()
-        api.syncCommand.mockResolvedValue({ posts: [] })
+        api.getPostStatuses.mockReset()
+        api.getPostStatuses.mockResolvedValue([])
         api.setFavoriteMembership.mockReset()
         resetDom()
         favorite = van.state<FavoriteStatus>("idle")

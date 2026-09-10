@@ -225,7 +225,6 @@ describe("PostDetails favorite button, server state", () => {
                     membership: "favorited",
                     availability: "available",
                     downloaded,
-                    error: null,
                 },
             ],
         ])

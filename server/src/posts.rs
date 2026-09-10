@@ -20,7 +20,7 @@ use tracing::info;
 
 use crate::{
     database::Database,
-    ids::PostId,
+    ids::{PostId, parse_id_list as parse_post_ids},
     json_ok,
     media_processor::{MediaProcessor, MediaProcessorResult, file_name, mini_thumb},
     server::{AppError, AppResult, AppState, SearchQuery},
@@ -121,21 +121,9 @@ where
     let Some(raw) = Option::<String>::deserialize(deserializer)? else {
         return Ok(None);
     };
-    let mut ids = Vec::new();
-    for part in raw.split(',') {
-        let part = part.trim();
-        if part.is_empty() {
-            continue;
-        }
-        let id = part
-            .parse::<i64>()
-            .map_err(|_| serde::de::Error::custom(format!("invalid post id {part:?} in ids")))?;
-        if id <= 0 {
-            return Err(serde::de::Error::custom("post IDs must be positive"));
-        }
-        ids.push(PostId(id));
-    }
-    Ok(Some(ids))
+    parse_post_ids(&raw)
+        .map(Some)
+        .map_err(serde::de::Error::custom)
 }
 
 pub async fn list_downloaded_posts(
@@ -476,13 +464,13 @@ pub struct PostData {
     pub tags: Vec<Tag>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Tag {
     pub name: String,
     pub kind: TagKind,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum TagKind {
     Copyright,

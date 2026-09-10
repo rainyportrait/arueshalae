@@ -1,8 +1,6 @@
-import { syncCommand } from "../api/sync.ts"
+import { type SyncBaseline, getSyncBaseline, reconcileFavorites } from "../api/sync.ts"
 import { reconcilePrefix, reconcileRemovals } from "./reconcile.ts"
 import { FAVORITES_PAGE_SIZE, Rule34Reader } from "./rule34.ts"
-
-type Baseline = { ids: number[]; initialized: boolean; countOffset: number; revision: number }
 
 // The phases of an explicit sync. synchronize() reports the reading,
 // verifying, and checking-removals phases; state/sync.ts wraps them with
@@ -17,7 +15,7 @@ export type SyncPhase =
 type Progress = (phase: SyncPhase) => void
 
 export async function synchronize(reader: Rule34Reader, progress: Progress): Promise<number> {
-    const baseline = await syncCommand<Baseline>("baseline")
+    const baseline = await getSyncBaseline()
     const reportedCount = await reader.reportedCount()
     const first = await reader.favoritesPage(0)
     const pages = new Map<number, number[]>([[0, first.ids]])
@@ -57,12 +55,12 @@ export async function synchronize(reader: Rule34Reader, progress: Progress): Pro
         throw new Error("Favorites changed during synchronization; run Sync again")
     }
 
-    await syncCommand("reconcile", { ids, deleted, reportedCount, revision: baseline.revision })
+    await reconcileFavorites({ ids, deleted, reportedCount, revision: baseline.revision })
     return ids.length
 }
 
 async function readIncrementally(
-    baseline: Baseline,
+    baseline: SyncBaseline,
     reportedCount: number,
     lastPosition: number,
     readPage: (position: number) => Promise<number[]>,

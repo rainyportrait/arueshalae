@@ -63,6 +63,28 @@ export async function fetchServer(
     return response
 }
 
+export async function fetchServerJson<T>(path: string, init?: RequestInit): Promise<T> {
+    const response = await fetchServerResponse(path, init)
+    if (!response.ok) {
+        let message = ""
+        try {
+            message = await response.text()
+        } catch {
+            // Fall back to the status when the response body is unreadable.
+        }
+        throw new ServerError(message || `The server responded with ${response.status}`)
+    }
+    return response.json() as Promise<T>
+}
+
+export function jsonRequest(data: unknown): RequestInit {
+    return {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+    }
+}
+
 // The number of posts the server has downloaded. Used as the connection test:
 // reaching this endpoint also proves we're talking to an arueshalae server.
 export async function getDownloadCount(): Promise<number> {

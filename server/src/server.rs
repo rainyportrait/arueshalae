@@ -43,7 +43,26 @@ pub struct SearchQuery {
 
 pub fn create_router(database: &Database, base_path: &Utf8Path) -> Router {
     Router::new()
-        .route("/api/sync", post(crate::sync::command))
+        .route("/api/sync/status", get(crate::sync::get_status))
+        .route("/api/sync/baseline", get(crate::sync::get_baseline))
+        .route(
+            "/api/sync/reconcile",
+            post(crate::sync::reconcile_favorites),
+        )
+        .route("/api/posts/status", get(crate::sync::get_post_status))
+        .route("/api/posts/pending", get(crate::sync::get_pending_posts))
+        .route(
+            "/api/posts/{post_id}/membership",
+            post(crate::sync::set_post_membership),
+        )
+        .route(
+            "/api/posts/{post_id}/observation",
+            post(crate::sync::observe_post_details),
+        )
+        .route(
+            "/api/posts/{post_id}/availability",
+            post(crate::sync::update_post_availability),
+        )
         .route("/api/posts/{post_id}", post(create_post))
         .layer(DefaultBodyLimit::max(1024 * 1024 * 1024))
         .route("/api/posts/downloaded", get(list_downloaded_posts))

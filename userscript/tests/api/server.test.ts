@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
+import {
+    getPendingPostIds,
+    getPostStatuses,
+    observePost,
+    setFavoriteMembership,
+    setPostAvailability,
+} from "../../src/api/library.ts"
 import type { PostDetails } from "../../src/api/post-details.ts"
 import {
     type MediaFetcher,
@@ -9,7 +16,7 @@ import {
     mediaUrlFor,
     savePostToServer,
 } from "../../src/api/server.ts"
-import { observePost, setFavoriteMembership } from "../../src/api/sync.ts"
+import { getSyncBaseline, getSyncStatus, reconcileFavorites } from "../../src/api/sync.ts"
 import type { Tag } from "../../src/api/tags.ts"
 import { resetDom } from "../dom.ts"
 
@@ -73,16 +80,60 @@ describe("server client", () => {
         expect(calls).toHaveLength(0)
     })
 
+    it("reads sync state and the ordered baseline from descriptive GET routes", async () => {
+        mockFetch(calls, (url) =>
+            jsonResponse(
+                url.toString().endsWith("/baseline")
+                    ? { ids: [3, 2], initialized: true, countOffset: 0, revision: 4 }
+                    : {
+                          favorites: 2,
+                          pending: 1,
+                          initialized: true,
+                          countOffset: 0,
+                          lastSyncAt: 9,
+                      },
+            ),
+        )
+
+        await expect(getSyncStatus()).resolves.toMatchObject({ favorites: 2, pending: 1 })
+        await expect(getSyncBaseline()).resolves.toMatchObject({ ids: [3, 2], revision: 4 })
+        expect(calls.map((call) => call.url)).toEqual([
+            "http://127.0.0.1:34343/api/sync/status",
+            "http://127.0.0.1:34343/api/sync/baseline",
+        ])
+    })
+
+    it("publishes reconciliation to its typed route", async () => {
+        mockFetch(calls, () => jsonResponse({ ok: true }))
+        const body = { ids: [3, 2], deleted: [1], reportedCount: 2, revision: 4 }
+
+        await reconcileFavorites(body)
+
+        expect(calls[0]?.url).toBe("http://127.0.0.1:34343/api/sync/reconcile")
+        expect(JSON.parse(String(calls[0]?.init.body))).toEqual(body)
+    })
+
+    it("reads post status and pending IDs from their GET routes", async () => {
+        mockFetch(calls, (url) =>
+            jsonResponse(url.toString().includes("/status?") ? { posts: [] } : { postIds: [7] }),
+        )
+
+        await expect(getPostStatuses([1, 2])).resolves.toEqual([])
+        await expect(getPendingPostIds()).resolves.toEqual([7])
+        expect(calls.map((call) => call.url)).toEqual([
+            "http://127.0.0.1:34343/api/posts/status?ids=1%2C2",
+            "http://127.0.0.1:34343/api/posts/pending",
+        ])
+    })
+
     it("reports the current post-page tags as an observation", async () => {
         mockFetch(calls, () => jsonResponse({ observed: true }))
 
         await observePost(makePost())
 
         expect(calls).toHaveLength(1)
-        expect(calls[0]?.url).toBe("http://127.0.0.1:34343/api/sync")
+        expect(calls[0]?.url).toBe("http://127.0.0.1:34343/api/posts/123/observation")
         expect(JSON.parse(String(calls[0]?.init.body))).toEqual({
-            action: "observation",
-            postId: 123,
             tags: [
                 { name: "tree_bark", kind: "artist" },
                 { name: "1boy", kind: "character" },
@@ -134,19 +185,15 @@ describe("server client", () => {
         expect(calls[0]?.url).toBe("http://127.0.0.1:34343/api/posts/count")
     })
 
-    it("marks membership unfavorited through the sync endpoint", async () => {
+    it("marks membership unfavorited through the post endpoint", async () => {
         mockFetch(calls, () => jsonResponse({ ok: true }))
 
         await expect(setFavoriteMembership(123, false)).resolves.toBeUndefined()
 
         expect(calls).toHaveLength(1)
-        expect(calls[0]?.url).toBe("http://127.0.0.1:34343/api/sync")
+        expect(calls[0]?.url).toBe("http://127.0.0.1:34343/api/posts/123/membership")
         expect(calls[0]?.init.method).toBe("POST")
-        expect(JSON.parse(String(calls[0]?.init.body))).toMatchObject({
-            action: "membership",
-            postId: 123,
-            value: "unfavorited",
-        })
+        expect(JSON.parse(String(calls[0]?.init.body))).toEqual({ membership: "unfavorited" })
     })
 
     it("throws ServerError when the membership update fails", async () => {
@@ -156,6 +203,15 @@ describe("server client", () => {
         )
 
         await expect(setFavoriteMembership(123, false)).rejects.toBeInstanceOf(ServerError)
+    })
+
+    it("reports availability separately from post observation", async () => {
+        mockFetch(calls, () => jsonResponse({ ok: true }))
+
+        await setPostAvailability(123, "deleted")
+
+        expect(calls[0]?.url).toBe("http://127.0.0.1:34343/api/posts/123/availability")
+        expect(JSON.parse(String(calls[0]?.init.body))).toEqual({ availability: "deleted" })
     })
 })
 

@@ -1,19 +1,10 @@
 import van from "vanjs-core"
 
-import { observePost, syncCommand } from "../api/sync.ts"
+import { type LibraryPost, getPostStatuses, observePost } from "../api/library.ts"
 import { auth } from "./auth.ts"
 import { details } from "./details.ts"
 import { markDownloaded } from "./downloaded.ts"
 import { serverSettings } from "./settings.ts"
-
-export type LibraryPost = {
-    postId: number
-    membership: string
-    availability: string
-    downloaded: boolean
-    error: string | null
-    downloadState?: string
-}
 
 export const libraryPosts = van.state<Map<number, LibraryPost>>(new Map())
 
@@ -32,9 +23,7 @@ export async function refreshLibrary(postIds: number[]): Promise<void> {
         requests.set(postId, sequence)
     }
 
-    const { posts } = await syncCommand<{ posts: LibraryPost[] }>("memberships", {
-        ids: postIds,
-    })
+    const posts = await getPostStatuses(postIds)
 
     // Do not publish a response requested for an account or server which is
     // no longer current.

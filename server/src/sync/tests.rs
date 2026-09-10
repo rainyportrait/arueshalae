@@ -2,6 +2,83 @@ use camino::Utf8Path;
 use serde_json::json;
 
 use super::*;
+use crate::database::Database;
+
+enum Command {
+    Status,
+    Baseline,
+    Reconcile {
+        ids: Vec<PostId>,
+        deleted: Vec<PostId>,
+        reported_count: i64,
+        revision: i64,
+    },
+    Membership {
+        post_id: PostId,
+        value: Membership,
+    },
+    Memberships {
+        ids: Vec<PostId>,
+    },
+    Observation {
+        post_id: PostId,
+        tags: Vec<Tag>,
+    },
+    Downloads,
+}
+
+async fn execute(database: &Database, command: &Command) -> AppResult<Value> {
+    let state = State(AppState {
+        database: database.clone(),
+        base_path: Default::default(),
+    });
+    let Json(response) = match command {
+        Command::Status => get_status(state).await?,
+        Command::Baseline => get_baseline(state).await?,
+        Command::Reconcile {
+            ids,
+            deleted,
+            reported_count,
+            revision,
+        } => {
+            reconcile_favorites(
+                state,
+                Ok(Json(ReconcileRequest {
+                    ids: ids.clone(),
+                    deleted: deleted.clone(),
+                    reported_count: *reported_count,
+                    revision: *revision,
+                })),
+            )
+            .await?
+        }
+        Command::Membership { post_id, value } => {
+            let membership = match value {
+                Membership::Favorited => Membership::Favorited,
+                Membership::Unfavorited => Membership::Unfavorited,
+            };
+            set_post_membership(
+                state,
+                Path(*post_id),
+                Ok(Json(MembershipRequest { membership })),
+            )
+            .await?
+        }
+        Command::Memberships { ids } => {
+            get_post_status(state, Query(PostStatusQuery { ids: ids.clone() })).await?
+        }
+        Command::Observation { post_id, tags } => {
+            observe_post_details(
+                state,
+                Path(*post_id),
+                Ok(Json(ObservationRequest { tags: tags.clone() })),
+            )
+            .await?
+        }
+        Command::Downloads => get_pending_posts(state).await?,
+    };
+    Ok(response)
+}
 
 async fn test_database() -> (tempfile::TempDir, Database) {
     let directory = tempfile::tempdir().unwrap();
@@ -28,33 +105,44 @@ async fn reconcile_ids(database: &Database, ids: &[i64], reported_count: i64) {
 }
 
 #[test]
-fn commands_require_their_own_fields() {
-    for input in [
-        json!({"action": "reconcile"}),
-        json!({"action": "reconcile", "ids": [], "revision": 0}),
-        json!({"action": "reconcile", "ids": [], "reportedCount": 0}),
-        json!({"action": "membership", "postId": 1, "value": "invalid"}),
-        json!({"action": "availability", "postId": 1, "value": "unknown"}),
-    ] {
-        assert!(serde_json::from_value::<Command>(input).is_err());
-    }
-    assert!(matches!(
-        serde_json::from_value::<Command>(json!({
-            "action": "reconcile", "ids": [], "reportedCount": 0, "revision": 0
+fn request_payloads_require_their_own_fields() {
+    assert!(serde_json::from_value::<ReconcileRequest>(json!({})).is_err());
+    assert!(
+        serde_json::from_value::<ReconcileRequest>(json!({
+            "ids": [], "revision": 0
         }))
-        .unwrap(),
-        Command::Reconcile { .. }
-    ));
-    assert!(matches!(
-        serde_json::from_value::<Command>(json!({
-            "action": "membership", "postId": 1, "value": "favorited"
+        .is_err()
+    );
+    assert!(
+        serde_json::from_value::<ReconcileRequest>(json!({
+            "ids": [], "reportedCount": 0
         }))
-        .unwrap(),
-        Command::Membership {
-            post_id: PostId(1),
-            value: Membership::Favorited
-        }
-    ));
+        .is_err()
+    );
+    assert!(
+        serde_json::from_value::<ReconcileRequest>(json!({
+            "ids": [], "reportedCount": 0, "revision": 0
+        }))
+        .is_ok()
+    );
+    assert!(
+        serde_json::from_value::<MembershipRequest>(json!({
+            "membership": "invalid"
+        }))
+        .is_err()
+    );
+    assert!(
+        serde_json::from_value::<MembershipRequest>(json!({
+            "membership": "favorited"
+        }))
+        .is_ok()
+    );
+    assert!(
+        serde_json::from_value::<AvailabilityRequest>(json!({
+            "availability": "unknown"
+        }))
+        .is_err()
+    );
 }
 
 #[tokio::test]
@@ -231,7 +319,7 @@ async fn membership_changes_do_not_rewrite_other_favorites() {
         json!([10, 30, 20])
     );
     assert_eq!(
-        execute(&database, &Command::Downloads).await.unwrap()["ids"],
+        execute(&database, &Command::Downloads).await.unwrap()["postIds"],
         json!([10, 30, 20])
     );
     execute(
@@ -360,7 +448,7 @@ async fn reconciliation_records_deletions_and_refavoriting_restores_availability
     .unwrap();
     assert_eq!(membership["posts"][0]["availability"], "unknown");
     assert_eq!(
-        execute(&database, &Command::Downloads).await.unwrap()["ids"],
+        execute(&database, &Command::Downloads).await.unwrap()["postIds"],
         json!([20, 30, 10])
     );
 }

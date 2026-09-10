@@ -7,51 +7,55 @@ use std::collections::HashSet;
 
 use axum::{
     Json,
-    extract::{State, rejection::JsonRejection},
+    extract::{Path, Query, State, rejection::JsonRejection},
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
 use sqlx::SqliteConnection;
 
 use crate::{
-    database::Database,
-    ids::PostId,
+    ids::{PostId, parse_id_list},
     posts::{Tag, replace_tags},
     server::{AppError, AppResult, AppState},
 };
 
-#[derive(Debug, Deserialize)]
-#[serde(
-    tag = "action",
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase"
-)]
-pub enum Command {
-    Status,
-    Baseline,
-    Reconcile {
-        ids: Vec<PostId>,
-        #[serde(default)]
-        deleted: Vec<PostId>,
-        reported_count: i64,
-        revision: i64,
-    },
-    Membership {
-        post_id: PostId,
-        value: Membership,
-    },
-    Memberships {
-        ids: Vec<PostId>,
-    },
-    Observation {
-        post_id: PostId,
-        tags: Vec<Tag>,
-    },
-    Downloads,
-    Availability {
-        post_id: PostId,
-        value: Availability,
-    },
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReconcileRequest {
+    ids: Vec<PostId>,
+    #[serde(default)]
+    deleted: Vec<PostId>,
+    reported_count: i64,
+    revision: i64,
+}
+
+#[derive(Deserialize)]
+pub struct MembershipRequest {
+    membership: Membership,
+}
+
+#[derive(Deserialize)]
+pub struct ObservationRequest {
+    tags: Vec<Tag>,
+}
+
+#[derive(Deserialize)]
+pub struct AvailabilityRequest {
+    availability: Availability,
+}
+
+#[derive(Deserialize)]
+pub struct PostStatusQuery {
+    #[serde(deserialize_with = "deserialize_ids")]
+    ids: Vec<PostId>,
+}
+
+fn deserialize_ids<'de, D>(deserializer: D) -> Result<Vec<PostId>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let raw = String::deserialize(deserializer)?;
+    parse_id_list(&raw).map_err(serde::de::Error::custom)
 }
 
 #[derive(Debug, Deserialize)]
@@ -68,49 +72,99 @@ pub enum Availability {
     Deleted,
 }
 
-pub async fn command(
+pub async fn get_status(
     State(AppState { database, .. }): State<AppState>,
-    payload: Result<Json<Command>, JsonRejection>,
 ) -> AppResult<Json<Value>> {
-    let Json(command) = payload.map_err(|error| AppError::bad_request(error.body_text()))?;
-    Ok(Json(execute(&database, &command).await?))
+    let mut transaction = database.pool.begin().await?;
+    let response = status(&mut transaction).await?;
+    transaction.commit().await?;
+    Ok(Json(response))
 }
 
-async fn execute(database: &Database, command: &Command) -> AppResult<Value> {
-    let read_only = matches!(
-        command,
-        Command::Status | Command::Baseline | Command::Memberships { .. } | Command::Downloads
-    );
-    let mut transaction = if read_only {
-        database.pool.begin().await?
-    } else {
-        database.pool.begin_with("BEGIN IMMEDIATE").await?
-    };
-
-    let result = match command {
-        Command::Status => status(&mut transaction).await?,
-        Command::Baseline => baseline(&mut transaction).await?,
-        Command::Reconcile {
-            ids,
-            deleted,
-            reported_count,
-            revision,
-        } => reconcile(&mut transaction, ids, deleted, *reported_count, *revision).await?,
-        Command::Membership { post_id, value } => {
-            set_membership(&mut transaction, *post_id, value).await?
-        }
-        Command::Memberships { ids } => memberships(&mut transaction, ids).await?,
-        Command::Observation { post_id, tags } => {
-            observe_post(&mut transaction, *post_id, tags).await?
-        }
-        Command::Downloads => pending_downloads(&mut transaction).await?,
-        Command::Availability { post_id, value } => {
-            set_availability(&mut transaction, *post_id, value).await?
-        }
-    };
-
+pub async fn get_baseline(
+    State(AppState { database, .. }): State<AppState>,
+) -> AppResult<Json<Value>> {
+    let mut transaction = database.pool.begin().await?;
+    let response = baseline(&mut transaction).await?;
     transaction.commit().await?;
-    Ok(result)
+    Ok(Json(response))
+}
+
+pub async fn reconcile_favorites(
+    State(AppState { database, .. }): State<AppState>,
+    payload: Result<Json<ReconcileRequest>, JsonRejection>,
+) -> AppResult<Json<Value>> {
+    let Json(request) = parse_json(payload)?;
+    let mut transaction = database.pool.begin_with("BEGIN IMMEDIATE").await?;
+    let response = reconcile(
+        &mut transaction,
+        &request.ids,
+        &request.deleted,
+        request.reported_count,
+        request.revision,
+    )
+    .await?;
+    transaction.commit().await?;
+    Ok(Json(response))
+}
+
+pub async fn get_post_status(
+    State(AppState { database, .. }): State<AppState>,
+    Query(query): Query<PostStatusQuery>,
+) -> AppResult<Json<Value>> {
+    let mut transaction = database.pool.begin().await?;
+    let response = memberships(&mut transaction, &query.ids).await?;
+    transaction.commit().await?;
+    Ok(Json(response))
+}
+
+pub async fn get_pending_posts(
+    State(AppState { database, .. }): State<AppState>,
+) -> AppResult<Json<Value>> {
+    let mut transaction = database.pool.begin().await?;
+    let response = pending_downloads(&mut transaction).await?;
+    transaction.commit().await?;
+    Ok(Json(response))
+}
+
+pub async fn set_post_membership(
+    State(AppState { database, .. }): State<AppState>,
+    Path(post_id): Path<PostId>,
+    payload: Result<Json<MembershipRequest>, JsonRejection>,
+) -> AppResult<Json<Value>> {
+    let Json(request) = parse_json(payload)?;
+    let mut transaction = database.pool.begin_with("BEGIN IMMEDIATE").await?;
+    let response = set_membership(&mut transaction, post_id, &request.membership).await?;
+    transaction.commit().await?;
+    Ok(Json(response))
+}
+
+pub async fn observe_post_details(
+    State(AppState { database, .. }): State<AppState>,
+    Path(post_id): Path<PostId>,
+    payload: Result<Json<ObservationRequest>, JsonRejection>,
+) -> AppResult<Json<Value>> {
+    let Json(request) = parse_json(payload)?;
+    let mut transaction = database.pool.begin_with("BEGIN IMMEDIATE").await?;
+    let response = observe_post(&mut transaction, post_id, &request.tags).await?;
+    transaction.commit().await?;
+    Ok(Json(response))
+}
+
+pub async fn update_post_availability(
+    State(AppState { database, .. }): State<AppState>,
+    Path(post_id): Path<PostId>,
+    payload: Result<Json<AvailabilityRequest>, JsonRejection>,
+) -> AppResult<Json<Value>> {
+    let Json(request) = parse_json(payload)?;
+    let mut transaction = database.pool.begin_with("BEGIN IMMEDIATE").await?;
+    let response = set_availability(&mut transaction, post_id, &request.availability).await?;
+    transaction.commit().await?;
+    Ok(Json(response))
+}
+
+fn parse_json<T>(payload: Result<Json<T>, JsonRejection>) -> AppResult<Json<T>> {
+    payload.map_err(|error| AppError::bad_request(error.body_text()))
 }
 
 async fn observe_post(
@@ -338,7 +392,7 @@ async fn pending_downloads(connection: &mut SqliteConnection) -> AppResult<Value
     )
     .fetch_all(connection)
     .await?;
-    Ok(json!({"ids": ids}))
+    Ok(json!({"postIds": ids}))
 }
 
 async fn set_availability(
@@ -388,22 +442,11 @@ async fn memberships(connection: &mut SqliteConnection, ids: &[PostId]) -> AppRe
         .fetch_optional(&mut *connection)
         .await?;
         let Some(row) = row else { continue };
-        let state = if row.downloaded {
-            "downloaded"
-        } else if row.availability == "deleted" {
-            "unavailable"
-        } else if row.favorited {
-            "missing"
-        } else {
-            "not queued"
-        };
         posts.push(json!({
             "postId": post_id,
             "membership": if row.favorited { "favorited" } else { "unfavorited" },
             "availability": row.availability,
             "downloaded": row.downloaded,
-            "downloadState": state,
-            "error": Value::Null,
         }));
     }
     Ok(json!({"posts": posts}))

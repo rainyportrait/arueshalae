@@ -4,13 +4,13 @@ import { flushVan, resetDom } from "../dom.ts"
 import { deferred } from "../helpers/deferred.ts"
 
 const api = vi.hoisted(() => ({
-    syncCommand: vi.fn(),
+    getPostStatuses: vi.fn(),
     observePost: vi.fn(),
     fetchProfile: vi.fn(async () => ({ favorites: 0 })),
 }))
 
-vi.mock("../../src/api/sync.ts", () => ({
-    syncCommand: api.syncCommand,
+vi.mock("../../src/api/library.ts", () => ({
+    getPostStatuses: api.getPostStatuses,
     observePost: api.observePost,
 }))
 vi.mock("../../src/api/auth.ts", async (importOriginal) => ({
@@ -21,7 +21,7 @@ vi.mock("../../src/api/auth.ts", async (importOriginal) => ({
 describe("state/library", () => {
     beforeEach(() => {
         vi.resetModules()
-        api.syncCommand.mockReset()
+        api.getPostStatuses.mockReset()
         api.observePost.mockReset()
         resetDom("https://rule34.xxx/index.php?page=account&s=options")
     })
@@ -33,37 +33,31 @@ describe("state/library", () => {
         auth.val = { status: "authenticated", userId: 7 }
         serverSettings.val = { ...serverSettings.val, enabled: true }
         await flushVan()
-        api.syncCommand.mockReset()
+        api.getPostStatuses.mockReset()
 
-        const older = deferred<{ posts: Array<Record<string, unknown>> }>()
-        const newer = deferred<{ posts: Array<Record<string, unknown>> }>()
-        api.syncCommand.mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise)
+        const older = deferred<Array<Record<string, unknown>>>()
+        const newer = deferred<Array<Record<string, unknown>>>()
+        api.getPostStatuses.mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise)
 
         const first = refreshLibrary([42])
         const second = refreshLibrary([42])
-        newer.resolve({
-            posts: [
-                {
-                    postId: 42,
-                    membership: "favorited",
-                    availability: "available",
-                    downloaded: false,
-                    error: null,
-                },
-            ],
-        })
+        newer.resolve([
+            {
+                postId: 42,
+                membership: "favorited",
+                availability: "available",
+                downloaded: false,
+            },
+        ])
         await second
-        older.resolve({
-            posts: [
-                {
-                    postId: 42,
-                    membership: "unfavorited",
-                    availability: "available",
-                    downloaded: false,
-                    error: null,
-                },
-            ],
-        })
+        older.resolve([
+            {
+                postId: 42,
+                membership: "unfavorited",
+                availability: "available",
+                downloaded: false,
+            },
+        ])
         await first
 
         expect(libraryPosts.val.get(42)?.membership).toBe("favorited")

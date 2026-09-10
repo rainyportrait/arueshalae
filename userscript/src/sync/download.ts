@@ -1,7 +1,7 @@
 import { gmFetchArrayBuffer } from "../api/gm-fetch.ts"
+import { getPendingPostIds, setPostAvailability } from "../api/library.ts"
 import type { PostDetails } from "../api/post-details.ts"
 import { savePostToServer } from "../api/server.ts"
-import { syncCommand } from "../api/sync.ts"
 import { refreshLibrary } from "../state/library.ts"
 import { Rule34Reader } from "./rule34.ts"
 
@@ -11,7 +11,7 @@ export async function drainDownloads(
     reader: Rule34Reader,
     progress: (done: number, total: number) => void,
 ): Promise<void> {
-    const { ids } = await syncCommand<{ ids: number[] }>("downloads")
+    const ids = await getPendingPostIds()
     for (let index = 0; index < ids.length; index++) {
         // Report before downloading so the bar moves the moment work starts.
         progress(index + 1, ids.length)
@@ -24,7 +24,7 @@ export async function drainDownloads(
 }
 
 export async function downloadKnownPost(post: PostDetails): Promise<void> {
-    await syncCommand("availability", { postId: post.id, value: "available" })
+    await setPostAvailability(post.id, "available")
     await savePostToServer(post, gmFetchArrayBuffer, MEDIA_TIMEOUT_MS)
     await refreshLibrary([post.id])
 }
@@ -32,7 +32,7 @@ export async function downloadKnownPost(post: PostDetails): Promise<void> {
 async function downloadPost(reader: Rule34Reader, postId: number): Promise<void> {
     const post = await reader.postDetails(postId)
     if (post === null) {
-        await syncCommand("availability", { postId, value: "deleted" })
+        await setPostAvailability(postId, "deleted")
         return
     }
 

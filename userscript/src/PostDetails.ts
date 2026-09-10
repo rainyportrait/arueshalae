@@ -5,6 +5,7 @@ import { CenteredState } from "./CenteredState.ts"
 import { Link } from "./Link.ts"
 import { TagList, TagListSkeleton } from "./TagList.ts"
 import { Toggle } from "./Toggle.ts"
+import type { LibraryPost } from "./api/library.ts"
 import type { PostDetails as PostDetailsData } from "./api/post-details.ts"
 import type { Post } from "./api/post-list.ts"
 import { isAnimated } from "./api/tags.ts"
@@ -250,9 +251,17 @@ function LibraryDownloadStatus(postId: number) {
 
         return div(
             { class: "text-sm text-zinc-400" },
-            libraryPosts.val.get(postId)?.downloadState ?? "Local status unknown",
+            libraryDownloadLabel(libraryPosts.val.get(postId)),
         )
     }
+}
+
+function libraryDownloadLabel(post: LibraryPost | undefined): string {
+    if (post === undefined) return "Local status unknown"
+    if (post.downloaded) return "downloaded"
+    if (post.availability === "deleted") return "unavailable"
+    if (post.membership === "favorited") return "missing"
+    return "not favorited"
 }
 
 // Build the media element for a post without inserting it. The element

@@ -1,25 +1,37 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { PostDetails } from "../../src/api/post-details.ts"
-import { syncCommand } from "../../src/api/sync.ts"
+import { getSyncBaseline, reconcileFavorites } from "../../src/api/sync.ts"
 import type { Rule34Reader } from "../../src/sync/rule34.ts"
 import { synchronize } from "../../src/sync/synchronize.ts"
 import { deferred } from "../helpers/deferred.ts"
 
-vi.mock("../../src/api/sync.ts", () => ({ syncCommand: vi.fn() }))
+vi.mock("../../src/api/sync.ts", () => ({
+    getSyncBaseline: vi.fn(),
+    reconcileFavorites: vi.fn(),
+}))
 
-const command = vi.mocked(syncCommand)
+const getBaseline = vi.mocked(getSyncBaseline)
+const reconcile = vi.mocked(reconcileFavorites)
 
 describe("explicit synchronization", () => {
-    beforeEach(() => command.mockReset())
+    beforeEach(() => {
+        getBaseline.mockReset()
+        reconcile.mockReset()
+    })
 
     it("uses a complete first page as the initial baseline", async () => {
-        command.mockResolvedValueOnce({ ids: [], initialized: false, countOffset: 0, revision: 0 })
-        command.mockResolvedValueOnce({ ok: true })
+        getBaseline.mockResolvedValueOnce({
+            ids: [],
+            initialized: false,
+            countOffset: 0,
+            revision: 0,
+        })
+        reconcile.mockResolvedValueOnce()
         const reader = fakeReader([3, 2, 1])
 
         await expect(synchronize(reader, () => {})).resolves.toBe(3)
-        expect(command).toHaveBeenLastCalledWith("reconcile", {
+        expect(reconcile).toHaveBeenLastCalledWith({
             ids: [3, 2, 1],
             deleted: [],
             reportedCount: 3,
@@ -31,17 +43,17 @@ describe("explicit synchronization", () => {
         const baseline = Array.from({ length: 250 }, (_, index) => 500 - index)
         const disappeared = baseline[149] as number
         const remote = [900, ...baseline.filter((postId) => postId !== disappeared)]
-        command.mockResolvedValueOnce({
+        getBaseline.mockResolvedValueOnce({
             ids: baseline,
             initialized: true,
             countOffset: 0,
             revision: 7,
         })
-        command.mockResolvedValueOnce({ ok: true })
+        reconcile.mockResolvedValueOnce()
         const reader = fakeReader(remote, disappeared)
 
         await expect(synchronize(reader, () => {})).resolves.toBe(250)
-        expect(command).toHaveBeenLastCalledWith("reconcile", {
+        expect(reconcile).toHaveBeenLastCalledWith({
             ids: remote,
             deleted: [disappeared],
             reportedCount: 250,
@@ -50,18 +62,24 @@ describe("explicit synchronization", () => {
     })
 
     it("verifies a one-page observation before publishing it", async () => {
-        command.mockResolvedValueOnce({ ids: [], initialized: false, countOffset: 0, revision: 0 })
+        getBaseline.mockResolvedValueOnce({
+            ids: [],
+            initialized: false,
+            countOffset: 0,
+            revision: 0,
+        })
         const reader = fakeReader([3, 2, 1])
         reader.reportedCount.mockResolvedValueOnce(3).mockResolvedValueOnce(2)
 
         await expect(synchronize(reader, () => {})).rejects.toThrow(
             "Favorites changed during synchronization",
         )
-        expect(command).toHaveBeenCalledTimes(1)
+        expect(getBaseline).toHaveBeenCalledTimes(1)
+        expect(reconcile).not.toHaveBeenCalled()
     })
 
     it("verifies after classifying removals", async () => {
-        command.mockResolvedValueOnce({
+        getBaseline.mockResolvedValueOnce({
             ids: [3, 2, 1],
             initialized: true,
             countOffset: 0,
@@ -78,7 +96,7 @@ describe("explicit synchronization", () => {
         await run
 
         expect(reader.reportedCount).toHaveBeenCalledTimes(2)
-        expect(command).toHaveBeenLastCalledWith("reconcile", expect.anything())
+        expect(reconcile).toHaveBeenLastCalledWith(expect.anything())
     })
 })
 

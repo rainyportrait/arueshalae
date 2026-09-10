@@ -7,8 +7,8 @@ import {
     addFavorite,
     removeFavorite,
 } from "../api/favorites.ts"
+import { setFavoriteMembership } from "../api/library.ts"
 import type { PostDetails } from "../api/post-details.ts"
-import { setFavoriteMembership } from "../api/sync.ts"
 import { downloadKnownPost } from "../sync/download.ts"
 import { auth } from "./auth.ts"
 import { refreshLibrary } from "./library.ts"

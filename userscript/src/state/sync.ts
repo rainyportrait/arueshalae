@@ -1,6 +1,6 @@
 import van from "vanjs-core"
 
-import { syncCommand } from "../api/sync.ts"
+import { type SyncStatus, getSyncStatus } from "../api/sync.ts"
 import { drainDownloads } from "../sync/download.ts"
 import { Rule34Reader } from "../sync/rule34.ts"
 import { type SyncPhase, synchronize } from "../sync/synchronize.ts"
@@ -8,14 +8,6 @@ import { auth } from "./auth.ts"
 import { details } from "./details.ts"
 import { refreshLibrary } from "./library.ts"
 import { serverSettings } from "./settings.ts"
-
-export type SyncStatus = {
-    favorites: number
-    pending: number
-    initialized: boolean
-    countOffset: number
-    lastSyncAt: number | null
-}
 
 export type { SyncPhase }
 
@@ -68,7 +60,7 @@ export async function refreshSyncStatus(): Promise<void> {
         syncStatus.val = null
         return
     }
-    syncStatus.val = await syncCommand<SyncStatus>("status")
+    syncStatus.val = await getSyncStatus()
 }
 
 async function withBrowserLock(run: () => Promise<void>): Promise<void> {

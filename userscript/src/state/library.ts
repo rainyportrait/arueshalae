@@ -1,6 +1,6 @@
 import van from "vanjs-core"
 
-import { type LibraryPost, getPostStatuses, observePost } from "../api/library.ts"
+import { type LibraryPost, getPostStatuses } from "../api/library.ts"
 import { auth } from "./auth.ts"
 import { details } from "./details.ts"
 import { markDownloaded } from "./downloaded.ts"
@@ -46,8 +46,9 @@ export async function refreshLibrary(postIds: number[]): Promise<void> {
     if (changed) libraryPosts.val = next
 }
 
-// Load membership with the details page. Explicit favorite and sync actions
-// refresh the affected state themselves.
+// Load membership with the details page. Post observations happen at the
+// shared post-details cache boundary, which also covers gallery prefetches.
+// Explicit favorite and sync actions refresh the affected state themselves.
 van.derive(() => {
     const page = details.val
     if (
@@ -55,7 +56,6 @@ van.derive(() => {
         auth.val.status === "authenticated" &&
         page.status === "ready"
     ) {
-        void observePost(page.post).catch(() => {})
         void refreshLibrary([page.post.id]).catch(() => {})
     }
 })

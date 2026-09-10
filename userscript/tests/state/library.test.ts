@@ -5,10 +5,14 @@ import { deferred } from "../helpers/deferred.ts"
 
 const api = vi.hoisted(() => ({
     syncCommand: vi.fn(),
+    observePost: vi.fn(),
     fetchProfile: vi.fn(async () => ({ favorites: 0 })),
 }))
 
-vi.mock("../../src/api/sync.ts", () => ({ syncCommand: api.syncCommand }))
+vi.mock("../../src/api/sync.ts", () => ({
+    syncCommand: api.syncCommand,
+    observePost: api.observePost,
+}))
 vi.mock("../../src/api/auth.ts", async (importOriginal) => ({
     ...(await importOriginal<object>()),
     fetchProfile: api.fetchProfile,
@@ -18,6 +22,7 @@ describe("state/library", () => {
     beforeEach(() => {
         vi.resetModules()
         api.syncCommand.mockReset()
+        api.observePost.mockReset()
         resetDom("https://rule34.xxx/index.php?page=account&s=options")
     })
 

@@ -16,6 +16,7 @@ use sqlx::SqliteConnection;
 use crate::{
     database::Database,
     ids::PostId,
+    posts::{Tag, replace_tags},
     server::{AppError, AppResult, AppState},
 };
 
@@ -41,6 +42,10 @@ pub enum Command {
     },
     Memberships {
         ids: Vec<PostId>,
+    },
+    Observation {
+        post_id: PostId,
+        tags: Vec<Tag>,
     },
     Downloads,
     Availability {
@@ -95,6 +100,9 @@ async fn execute(database: &Database, command: &Command) -> AppResult<Value> {
             set_membership(&mut transaction, *post_id, value).await?
         }
         Command::Memberships { ids } => memberships(&mut transaction, ids).await?,
+        Command::Observation { post_id, tags } => {
+            observe_post(&mut transaction, *post_id, tags).await?
+        }
         Command::Downloads => pending_downloads(&mut transaction).await?,
         Command::Availability { post_id, value } => {
             set_availability(&mut transaction, *post_id, value).await?
@@ -103,6 +111,27 @@ async fn execute(database: &Database, command: &Command) -> AppResult<Value> {
 
     transaction.commit().await?;
     Ok(result)
+}
+
+async fn observe_post(
+    connection: &mut SqliteConnection,
+    post_id: PostId,
+    tags: &[Tag],
+) -> AppResult<Value> {
+    validate_ids(&[post_id])?;
+    let favorited = sqlx::query_scalar!(
+        r#"SELECT EXISTS(SELECT 1 FROM favorite_order WHERE post_id = ?) AS "exists!: bool""#,
+        post_id.0
+    )
+    .fetch_one(&mut *connection)
+    .await?;
+    if !favorited {
+        return Ok(json!({"observed": false}));
+    }
+
+    set_post_availability(connection, post_id, &Availability::Available).await?;
+    replace_tags(connection, post_id, tags).await?;
+    Ok(json!({"observed": true}))
 }
 
 async fn status(connection: &mut SqliteConnection) -> AppResult<Value> {

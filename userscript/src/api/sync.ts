@@ -1,4 +1,5 @@
-import { ServerError, fetchServerResponse } from "./server.ts"
+import type { PostDetails } from "./post-details.ts"
+import { ServerError, fetchServerResponse, serverTags } from "./server.ts"
 
 export async function syncCommand<T>(
     action: string,
@@ -22,6 +23,13 @@ export async function setFavoriteMembership(postId: number, favorited: boolean):
         postId,
         value: favorited ? "favorited" : "unfavorited",
     })
+}
+
+// Report the current metadata from a live Rule34 post page. The server applies
+// it only when the post is already known as a favorite, so this never creates
+// membership from an ordinary post visit.
+export async function observePost(post: PostDetails): Promise<void> {
+    await syncCommand("observation", { postId: post.id, tags: serverTags(post.tags) })
 }
 
 async function responseMessage(response: Response): Promise<string> {

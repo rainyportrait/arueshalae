@@ -9,7 +9,7 @@ import {
     mediaUrlFor,
     savePostToServer,
 } from "../../src/api/server.ts"
-import { setFavoriteMembership } from "../../src/api/sync.ts"
+import { observePost, setFavoriteMembership } from "../../src/api/sync.ts"
 import type { Tag } from "../../src/api/tags.ts"
 import { resetDom } from "../dom.ts"
 
@@ -71,6 +71,23 @@ describe("server client", () => {
 
         await expect(checkDownloads([])).resolves.toEqual(new Set())
         expect(calls).toHaveLength(0)
+    })
+
+    it("reports the current post-page tags as an observation", async () => {
+        mockFetch(calls, () => jsonResponse({ observed: true }))
+
+        await observePost(makePost())
+
+        expect(calls).toHaveLength(1)
+        expect(calls[0]?.url).toBe("http://127.0.0.1:34343/api/sync")
+        expect(JSON.parse(String(calls[0]?.init.body))).toEqual({
+            action: "observation",
+            postId: 123,
+            tags: [
+                { name: "tree_bark", kind: "artist" },
+                { name: "1boy", kind: "character" },
+            ],
+        })
     })
 
     it("survives an all-absent answer with an empty set", async () => {

@@ -74,6 +74,63 @@ async fn reconciliation_preserves_the_initial_offset_and_accepts_empty_orders() 
 }
 
 #[tokio::test]
+async fn observations_refresh_only_current_favorites() {
+    let (_directory, database) = test_database().await;
+    reconcile_ids(&database, &[10], 1).await;
+
+    let observed = execute(
+        &database,
+        &Command::Observation {
+            post_id: PostId(10),
+            tags: vec![Tag {
+                name: "current_tag".to_string(),
+                kind: crate::posts::TagKind::General,
+            }],
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(observed, json!({"observed": true}));
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT t.name FROM tags t JOIN post_tags pt USING (tag_id) WHERE pt.post_id = 10"
+        )
+        .fetch_all(&database.pool)
+        .await
+        .unwrap(),
+        vec!["current_tag"]
+    );
+    assert_eq!(
+        sqlx::query_scalar!("SELECT availability FROM posts WHERE post_id = 10")
+            .fetch_one(&database.pool)
+            .await
+            .unwrap(),
+        "available"
+    );
+
+    let ignored = execute(
+        &database,
+        &Command::Observation {
+            post_id: PostId(20),
+            tags: vec![Tag {
+                name: "ignored_tag".to_string(),
+                kind: crate::posts::TagKind::General,
+            }],
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(ignored, json!({"observed": false}));
+    assert_eq!(
+        sqlx::query_scalar!("SELECT COUNT(*) FROM posts WHERE post_id = 20")
+            .fetch_one(&database.pool)
+            .await
+            .unwrap(),
+        0
+    );
+}
+
+#[tokio::test]
 async fn stale_reconciliation_cannot_undo_membership_or_another_reconciliation() {
     let (_directory, database) = test_database().await;
     reconcile_ids(&database, &[30, 20, 10], 3).await;

@@ -33,6 +33,10 @@ Favorite-button actions update `favorite_order` immediately. A favorite moves to
 the front and opportunistically downloads its media; an unfavorite leaves any
 stored media intact.
 
+When the userscript has a favorited post's detail page in hand, it reports the
+current tags and availability. The server ignores observations for posts that
+are not current favorites; an ordinary post visit never creates membership.
+
 Favorite positions are ordering keys and may have gaps or negative values.
 Adding or removing a favorite leaves other rows in place. Full reconciliation
 replaces the order, while read-only commands use ordinary read transactions.

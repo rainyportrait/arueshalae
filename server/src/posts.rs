@@ -289,7 +289,7 @@ impl Database {
         if !has_media(&mut transaction, post_id).await? {
             media.publish(base_path).await?;
             insert_media(&mut transaction, post_id, media).await?;
-            insert_tags(&mut transaction, post_id, tags).await?;
+            replace_tags(&mut transaction, post_id, tags).await?;
         }
 
         transaction.commit().await?;
@@ -427,11 +427,15 @@ async fn insert_media(
     Ok(())
 }
 
-async fn insert_tags(
+pub(crate) async fn replace_tags(
     connection: &mut SqliteConnection,
     post_id: PostId,
     tags: &[Tag],
 ) -> Result<()> {
+    sqlx::query!("DELETE FROM post_tags WHERE post_id = ?", post_id.0)
+        .execute(&mut *connection)
+        .await?;
+
     for tag in tags {
         let kind = tag.kind.as_str();
         sqlx::query!(
@@ -472,13 +476,13 @@ pub struct PostData {
     pub tags: Vec<Tag>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Tag {
     pub name: String,
     pub kind: TagKind,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum TagKind {
     Copyright,

@@ -1,6 +1,6 @@
 import van from "vanjs-core"
 
-import { syncCommand } from "../api/sync.ts"
+import { observePost, syncCommand } from "../api/sync.ts"
 import { auth } from "./auth.ts"
 import { details } from "./details.ts"
 import { markDownloaded } from "./downloaded.ts"
@@ -66,6 +66,7 @@ van.derive(() => {
         auth.val.status === "authenticated" &&
         page.status === "ready"
     ) {
+        void observePost(page.post).catch(() => {})
         void refreshLibrary([page.post.id]).catch(() => {})
     }
 })

@@ -10,7 +10,7 @@ import { search } from "./state/list.ts"
 import { registerSearchField } from "./state/search-field.ts"
 import { serverSettings } from "./state/settings.ts"
 
-const { button, form } = van.tags
+const { button, form, span } = van.tags
 
 // A search query is the normalized tag list rejoined into a single
 // space-separated string. Normalization happens only when the search is sent,
@@ -26,21 +26,31 @@ export function SearchBar() {
     // its ghost-text overlay picks up the programmatic rewrite.
     const inputRef = { current: null as HTMLInputElement | null }
     const resyncRef = { current: null as (() => void) | null }
+    const favoritesScope = van.state(favoriteSearchId() !== null)
+
+    const scopeIcon = span({ "icon-name": "globe", "aria-hidden": "true" })
+    const scopeButton = button(
+        {
+            type: "button",
+            onclick: () => {
+                if (ownFavoriteId() !== null) favoritesScope.val = !favoritesScope.val
+            },
+        },
+        scopeIcon,
+    )
 
     // The field is created before the derive so the derive's immediate
     // first run already finds the ref set — otherwise a direct load of a
     // tagged list URL would only fill the field on the next navigation.
     const field = AutocompleteInput({
-        icon: "search",
-        placeholder: "Search using tags (e.g. blonde_hair)",
+        leading: scopeButton,
+        placeholder: "search rule34 using tags",
         ariaLabel: "Search using tags",
         onEnter: submit,
         inputRef,
         resyncRef,
         fetchSuggestions: (query) =>
-            favoriteSearchId() !== null
-                ? fetchFavoriteAutocomplete(query)
-                : fetchAutocomplete(query),
+            favoritesScope.rawVal ? fetchFavoriteAutocomplete(query) : fetchAutocomplete(query),
     })
 
     // The tag sidebar's + buttons reach this field through the module channel
@@ -48,13 +58,19 @@ export function SearchBar() {
     if (inputRef.current !== null && resyncRef.current !== null)
         registerSearchField(inputRef.current, resyncRef.current)
 
-    function favoriteSearchId(): number | null {
+    function ownFavoriteId(): number | null {
         if (!serverSettings.rawVal.enabled) return null
-        const r = route.rawVal
         const a = auth.rawVal
         if (a.status !== "authenticated") return null
-        if (r.type === "favorites" && r.id === a.userId) return r.id
-        if (r.type === "postdetails" && r.origin?.kind === "favorites" && r.origin.uid === a.userId)
+        return a.userId
+    }
+
+    function favoriteSearchId(): number | null {
+        const userId = ownFavoriteId()
+        if (userId === null) return null
+        const r = route.rawVal
+        if (r.type === "favorites" && r.id === userId) return r.id
+        if (r.type === "postdetails" && r.origin?.kind === "favorites" && r.origin.uid === userId)
             return r.origin.uid
         return null
     }
@@ -64,9 +80,27 @@ export function SearchBar() {
         auth.val
         serverSettings.val
         const own = favoriteSearchId() !== null
+        if (favoritesScope.rawVal !== own) favoritesScope.val = own
+    })
+
+    van.derive(() => {
+        const own = favoritesScope.val
+        scopeButton.className = clsx(
+            "absolute top-1/2 left-1.5 z-10 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md",
+            "transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40",
+            own ? "text-rose-500 hover:bg-rose-500/10" : "text-emerald-500 hover:bg-emerald-500/10",
+        )
+        scopeButton.title = own ? "Search your favorites" : "Search all of Rule34"
+        scopeButton.setAttribute(
+            "aria-label",
+            own
+                ? "Searching your favorites; switch to all of Rule34"
+                : "Searching all of Rule34; switch to your favorites",
+        )
+        scopeIcon.setAttribute("icon-name", own ? "heart" : "globe")
         inputRef.current?.setAttribute(
             "placeholder",
-            own ? "Search your favorites using tags" : "Search using tags (e.g. blonde_hair)",
+            own ? "search your favorites using tags" : "search rule34 using tags",
         )
         inputRef.current?.setAttribute(
             "aria-label",
@@ -104,7 +138,7 @@ export function SearchBar() {
             resyncRef.current?.()
             input.blur()
         }
-        const favoriteId = favoriteSearchId()
+        const favoriteId = favoritesScope.rawVal ? ownFavoriteId() : null
         if (favoriteId !== null) {
             const query = normalized === "" ? undefined : normalized
             const random = query?.split(" ").some((term) => term.startsWith("sort:random"))
@@ -127,17 +161,16 @@ export function SearchBar() {
             },
         },
         field,
-        // The field already carries a search icon, so the button stays a text
-        // label; it just tightens up on narrow screens.
         button(
             {
                 type: "submit",
                 class: clsx(
-                    "shrink-0 rounded-lg bg-rose-500 px-3 py-2 text-sm font-medium text-white sm:px-4",
+                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-rose-500 text-white",
                     "transition-colors hover:bg-rose-400",
                 ),
+                "aria-label": "Search",
             },
-            "Search",
+            span({ "icon-name": "search", "aria-hidden": "true" }),
         ),
     )
 }

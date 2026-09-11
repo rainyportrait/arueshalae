@@ -12,6 +12,7 @@ const version = process.argv[2] ?? "dev"
 // icon name here to include it in the generated stylesheet.
 const iconNames = [
     "search",
+    "globe",
     "user",
     "chevron-down",
     "chevron-left",

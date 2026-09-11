@@ -17,6 +17,9 @@ export interface AutocompleteInputProps {
     // Optional icon rendered inside the field on the left; the input's
     // left padding is adjusted to match.
     icon?: string
+    // Optional interactive control rendered in the same leading slot. This
+    // takes precedence over `icon` when both are supplied.
+    leading?: HTMLElement
     // Extra classes for the input element.
     inputClass?: string
     // Invoked after a suggestion is accepted. The active fragment has already
@@ -53,6 +56,7 @@ export function AutocompleteInput({
     placeholder,
     ariaLabel,
     icon,
+    leading,
     inputClass,
     onAccept,
     onEnter,
@@ -81,7 +85,7 @@ export function AutocompleteInput({
         "aria-label": ariaLabel,
         class: clsx(
             "w-full rounded-lg border border-zinc-800 bg-zinc-900 py-2 pr-3",
-            icon ? "pl-9" : "pl-3",
+            icon || leading ? "pl-9" : "pl-3",
             // The visible text is drawn by the ghost overlay; the input only
             // contributes the caret (and the placeholder, which the overlay
             // leaves uncovered while the value is empty).
@@ -302,7 +306,7 @@ export function AutocompleteInput({
             class: clsx(
                 "pointer-events-none absolute inset-0 overflow-hidden rounded-lg",
                 "border border-transparent py-2 pr-3",
-                icon ? "pl-9" : "pl-3",
+                icon || leading ? "pl-9" : "pl-3",
                 // Mirror the input's text metrics, including its lowercase
                 // transform, or typed capitals would render misaligned.
                 "text-sm text-zinc-100 lowercase",
@@ -356,15 +360,16 @@ export function AutocompleteInput({
 
     return div(
         { class: "relative min-w-0 flex-1" },
-        icon
-            ? span({
-                  "icon-name": icon,
-                  class: clsx(
-                      "pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-base text-zinc-500",
-                  ),
-                  "aria-hidden": "true",
-              })
-            : null,
+        leading ??
+            (icon
+                ? span({
+                      "icon-name": icon,
+                      class: clsx(
+                          "pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-base text-zinc-500",
+                      ),
+                      "aria-hidden": "true",
+                  })
+                : null),
         inputEl,
         ghost,
         dropdown,

@@ -96,12 +96,13 @@ export function SearchBar() {
         const input = inputRef.current
         const raw = input?.value ?? ""
         const normalized = normalizeQuery(raw)
-        // Reflect the normalization in the UI (not just the request) and move
-        // the caret to the end.
+        // Reflect the normalization in the UI (not just the request), then
+        // release focus so mobile keyboards close and global shortcuts work.
         if (input) {
             input.value = normalized
             input.setSelectionRange(normalized.length, normalized.length)
             resyncRef.current?.()
+            input.blur()
         }
         const favoriteId = favoriteSearchId()
         if (favoriteId !== null) {

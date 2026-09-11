@@ -48,7 +48,7 @@ export function Favorites() {
                 {
                     class: "flex items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200",
                 },
-                `${source.hidden} ${source.hidden === 1 ? "result is" : "results are"} hidden because their media could not be retrieved.`,
+                `${source.hidden} ${source.hidden === 1 ? "matching post is" : "matching posts are"} hidden because their media has not been downloaded.`,
                 van.tags.button(
                     {
                         class: "shrink-0 font-medium underline underline-offset-2 hover:text-amber-100",

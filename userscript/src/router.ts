@@ -140,7 +140,10 @@ export function routeToUrl(route: Route): string {
             if (route.tags) url += `&tags=${encodeURIComponent(route.tags)}`
             const origin = route.origin
             if (origin) {
-                if (origin.kind === "favorites") url += `&from=favorites&uid=${origin.uid}`
+                if (origin.kind === "favorites") {
+                    url += `&from=favorites&uid=${origin.uid}`
+                    if (origin.seed) url += `&seed=${origin.seed}`
+                }
                 url += `&pid=${origin.pid}`
             }
             return url

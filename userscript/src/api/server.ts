@@ -96,8 +96,8 @@ export async function getPruneCount(): Promise<number> {
     return (await fetchServerJson<{ posts: number }>("api/prune")).posts
 }
 
-export async function pruneUnfavoritedPosts(): Promise<number> {
-    return (await fetchServerJson<{ posts: number }>("api/prune", { method: "POST" })).posts
+export async function pruneUnfavoritedPosts(): Promise<{ posts: number; postIds: number[] }> {
+    return fetchServerJson("api/prune", { method: "POST" })
 }
 
 // Downloaded media is independent of current membership. This includes retained
@@ -112,7 +112,6 @@ export async function checkDownloads(postIds: number[]): Promise<Set<number>> {
 
 export type FavoriteSearchPost = {
     postId: number
-    downloaded: boolean
     tags: string[]
 }
 
@@ -120,7 +119,7 @@ export async function searchFavoritePosts(
     term: string,
     offset: number,
     seed?: number,
-): Promise<{ posts: FavoriteSearchPost[]; total: number }> {
+): Promise<{ posts: FavoriteSearchPost[]; total: number; hidden: number }> {
     const query = new URLSearchParams({ term, offset: String(offset), limit: "50" })
     if (seed !== undefined) query.set("seed", String(seed))
     return fetchServerJson(`api/posts/search?${query}`)

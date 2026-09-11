@@ -51,7 +51,10 @@ pub async fn prune(
         return Err(error.into());
     }
 
-    json_ok!({"posts": candidates.len()})
+    json_ok!({
+        "posts": candidates.len(),
+        "postIds": candidates.iter().map(|candidate| candidate.post_id).collect::<Vec<_>>(),
+    })
 }
 
 async fn candidate_count(connection: &mut SqliteConnection) -> Result<i64> {
@@ -238,6 +241,7 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(response.0["posts"], 1);
+        assert_eq!(response.0["postIds"], serde_json::json!([2]));
         assert_eq!(
             sqlx::query_scalar::<_, i64>("SELECT post_id FROM posts ORDER BY post_id")
                 .fetch_all(&database.pool)

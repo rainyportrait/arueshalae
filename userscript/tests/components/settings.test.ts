@@ -78,7 +78,7 @@ describe("Settings prune confirmation", () => {
             countOffset: 0,
             lastSyncAt: null,
         })
-        api.pruneUnfavoritedPosts.mockResolvedValue(2)
+        api.pruneUnfavoritedPosts.mockResolvedValue({ posts: 2, postIds: [7, 8] })
         resetDom("https://rule34.xxx/index.php?page=account&s=options")
     })
 
@@ -104,9 +104,12 @@ describe("Settings prune confirmation", () => {
         const button = pruneButton(root)
 
         // Hold the prune open so the "Pruning…" state is observable.
-        let resolvePrune: (count: number) => void = () => {}
+        let resolvePrune: (result: { posts: number; postIds: number[] }) => void = () => {}
         api.pruneUnfavoritedPosts.mockImplementation(
-            () => new Promise<number>((resolve) => (resolvePrune = resolve)),
+            () =>
+                new Promise<{ posts: number; postIds: number[] }>(
+                    (resolve) => (resolvePrune = resolve),
+                ),
         )
 
         click(button)
@@ -119,7 +122,7 @@ describe("Settings prune confirmation", () => {
         expect(button.textContent).toBe("Pruning…")
         expect(api.pruneUnfavoritedPosts).toHaveBeenCalledTimes(1)
 
-        resolvePrune(2)
+        resolvePrune({ posts: 2, postIds: [7, 8] })
         await flushVan()
         await flushVan()
         expect(button.textContent).toBe("Check again")

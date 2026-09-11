@@ -38,6 +38,7 @@ describe("router", () => {
                 seed: 1234,
             },
         })
+        expect(parseRoute(routeToUrl(parseRoute(favoriteUrl)))).toEqual(parseRoute(favoriteUrl))
     })
 
     it("encodes user input and rejects malformed identifiers", () => {

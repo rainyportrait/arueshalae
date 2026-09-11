@@ -9,7 +9,7 @@ import { setCardSpan } from "./masonry.ts"
 import { thumbnailUrl } from "./media-source.ts"
 import { postHref, route } from "./router.ts"
 import { auth } from "./state/auth.ts"
-import { downloaded, queueDownloadCheck } from "./state/downloaded.ts"
+import { libraryPosts, queueLibraryCheck } from "./state/library.ts"
 import { serverSettings } from "./state/settings.ts"
 
 const { img, span } = van.tags
@@ -56,7 +56,11 @@ function LibraryBadge({ post }: { post: Post }): ChildDom {
                 (r.type === "postdetails" &&
                     r.origin?.kind === "favorites" &&
                     r.origin.uid === a.userId))
-        if (ownFavorites || !serverSettings.val.enabled || !downloaded.val.has(post.id))
+        if (
+            ownFavorites ||
+            !serverSettings.val.enabled ||
+            !libraryPosts.val.get(post.id)?.downloaded
+        )
             return document.createComment("")
         return span(
             {
@@ -107,7 +111,7 @@ export function PostCard(post: Post) {
         },
         img({
             src: () => {
-                queueDownloadCheck(post.id)
+                queueLibraryCheck(post.id)
                 return thumbnailUrl(post)
             },
             alt: `Post ${post.id}`,

@@ -86,8 +86,9 @@ describe("server client", () => {
 
     it("requests a seeded page of favorite search results", async () => {
         const payload = {
-            posts: [{ postId: 7, downloaded: true, tags: ["cat"] }],
+            posts: [{ postId: 7, tags: ["cat"] }],
             total: 51,
+            hidden: 2,
         }
         mockFetch(calls, () => jsonResponse(payload))
 
@@ -217,10 +218,14 @@ describe("server client", () => {
     })
 
     it("previews and executes pruning", async () => {
-        mockFetch(calls, (_url, init) => jsonResponse({ posts: init.method === "POST" ? 4 : 5 }))
+        mockFetch(calls, (_url, init) =>
+            jsonResponse(
+                init.method === "POST" ? { posts: 4, postIds: [2, 3, 4, 5] } : { posts: 5 },
+            ),
+        )
 
         await expect(getPruneCount()).resolves.toBe(5)
-        await expect(pruneUnfavoritedPosts()).resolves.toBe(4)
+        await expect(pruneUnfavoritedPosts()).resolves.toEqual({ posts: 4, postIds: [2, 3, 4, 5] })
 
         expect(calls.map((call) => [call.url, call.init.method])).toEqual([
             ["http://127.0.0.1:34343/api/prune", undefined],

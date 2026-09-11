@@ -1,6 +1,6 @@
 import type { PostMedia } from "./api/post-details.ts"
 import type { Post } from "./api/post-list.ts"
-import { downloaded } from "./state/downloaded.ts"
+import { libraryPosts } from "./state/library.ts"
 import { serverSettings } from "./state/settings.ts"
 
 type ImageMedia = Extract<PostMedia, { kind: "image" }>
@@ -17,7 +17,7 @@ function preferLocal(postId: number, on: boolean | undefined): boolean {
         settings.enabled &&
         (on ?? settings.preferDownloaded !== false) &&
         settings.url.trim() !== "" &&
-        downloaded.val.has(postId)
+        libraryPosts.val.get(postId)?.downloaded === true
     )
 }
 

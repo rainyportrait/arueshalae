@@ -2,6 +2,7 @@ import van from "vanjs-core"
 
 import { getPruneCount, pruneUnfavoritedPosts } from "./api/server.ts"
 import clsx from "./clsx.ts"
+import { forgetLibraryPosts } from "./state/library.ts"
 import { serverSettings } from "./state/settings.ts"
 
 const { button, div, p, span } = van.tags
@@ -89,9 +90,10 @@ export function PruneTool() {
         pruneStatus.val = "pruning"
         pruneMessage.val = null
         try {
-            const count = await pruneUnfavoritedPosts()
+            const result = await pruneUnfavoritedPosts()
+            forgetLibraryPosts(result.postIds)
             pruneCount.val = 0
-            pruneMessage.val = `Pruned ${count.toLocaleString()} ${count === 1 ? "post" : "posts"}.`
+            pruneMessage.val = `Pruned ${result.posts.toLocaleString()} ${result.posts === 1 ? "post" : "posts"}.`
         } catch (err) {
             pruneMessage.val = err instanceof Error ? err.message : String(err)
         } finally {

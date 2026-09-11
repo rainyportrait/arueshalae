@@ -249,7 +249,6 @@ fn default_search_limit() -> i64 {
 #[serde(rename_all = "camelCase")]
 struct SearchPost {
     post_id: PostId,
-    downloaded: bool,
     tags: Vec<String>,
 }
 
@@ -257,6 +256,7 @@ struct SearchPost {
 pub struct SearchResponse {
     posts: Vec<SearchPost>,
     total: i64,
+    hidden: i64,
 }
 
 pub async fn search(
@@ -483,10 +483,10 @@ impl Database {
         seed: i64,
     ) -> Result<SearchResponse> {
         let mut query_builder = sqlx::QueryBuilder::new(
-            r#"SELECT p.post_id, pm.post_id IS NOT NULL
+            r#"SELECT p.post_id
             FROM posts p
             JOIN favorite_order f ON f.post_id = p.post_id
-            LEFT JOIN post_media pm ON pm.post_id = p.post_id
+            JOIN post_media pm ON pm.post_id = p.post_id
             WHERE p.status = 'favorited'"#,
         );
         for term in &search.include {
@@ -549,24 +549,34 @@ impl Database {
             .push_bind(limit)
             .push(" OFFSET ")
             .push_bind(offset);
-        let rows: Vec<(i64, bool)> = query_builder.build_query_as().fetch_all(&self.pool).await?;
-        let total = self.search_count(search).await?;
+        let rows: Vec<i64> = query_builder
+            .build_query_scalar()
+            .fetch_all(&self.pool)
+            .await?;
+        let total = self.search_count(search, true).await?;
+        let hidden = self.search_count(search, false).await? - total;
         let mut posts = Vec::with_capacity(rows.len());
-        for (post_id, downloaded) in rows {
+        for post_id in rows {
             let tags = sqlx::query_scalar!("SELECT t.name FROM post_tags pt JOIN tags t USING (tag_id) WHERE pt.post_id = ? ORDER BY t.kind, t.name", post_id).fetch_all(&self.pool).await?;
             posts.push(SearchPost {
                 post_id: PostId(post_id),
-                downloaded,
                 tags,
             });
         }
-        Ok(SearchResponse { posts, total })
+        Ok(SearchResponse {
+            posts,
+            total,
+            hidden,
+        })
     }
 
-    async fn search_count(&self, search: &Search<'_>) -> Result<i64> {
+    async fn search_count(&self, search: &Search<'_>, downloaded_only: bool) -> Result<i64> {
         let mut qb = sqlx::QueryBuilder::new(
             "SELECT COUNT(*) FROM posts p JOIN favorite_order f ON f.post_id=p.post_id WHERE p.status='favorited'",
         );
+        if downloaded_only {
+            qb.push(" AND EXISTS (SELECT 1 FROM post_media m WHERE m.post_id=p.post_id)");
+        }
         for term in &search.include {
             qb.push(" AND EXISTS (SELECT 1 FROM post_tags pt JOIN tags t USING(tag_id) WHERE pt.post_id=p.post_id AND t.name=").push_bind(term).push(")");
         }
@@ -859,21 +869,25 @@ mod tests {
         let (_directory, database) = test_database().await;
         seed_search_posts(&database).await;
 
-        assert_eq!(
-            search_ids(&database, "cat -dog").await,
-            vec![PostId(2), PostId(4)]
-        );
+        let cats = database
+            .search(&Search::new("cat").unwrap(), 0, 50, 0)
+            .await
+            .unwrap();
+        assert_eq!(cats.total, 2);
+        assert_eq!(cats.hidden, 1);
+
+        assert_eq!(search_ids(&database, "cat -dog").await, vec![PostId(2)]);
         assert_eq!(
             search_ids(&database, "cat cat").await,
-            vec![PostId(1), PostId(2), PostId(4)]
+            vec![PostId(1), PostId(2)]
         );
         assert_eq!(
             search_ids(&database, "-dog").await,
-            vec![PostId(2), PostId(4), PostId(5)]
+            vec![PostId(2), PostId(5)]
         );
         assert_eq!(
             search_ids(&database, "").await,
-            vec![PostId(1), PostId(2), PostId(3), PostId(4), PostId(5)]
+            vec![PostId(1), PostId(2), PostId(3), PostId(5)]
         );
     }
 
@@ -888,11 +902,11 @@ mod tests {
 
         assert_eq!(
             search_ids(&database, "score:>=20 score:<50 sort:score").await,
-            vec![PostId(4), PostId(3), PostId(2)]
+            vec![PostId(3), PostId(2)]
         );
         assert_eq!(
             search_ids(&database, "score:>=20 score:<50 sort:id:asc").await,
-            vec![PostId(2), PostId(3), PostId(4)]
+            vec![PostId(2), PostId(3)]
         );
     }
 

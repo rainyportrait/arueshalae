@@ -3,6 +3,12 @@
 Rule34 is the only source of truth. The userscript performs every Rule34 request;
 the server only stores the latest complete observation and downloaded media.
 
+Rule34 may change while synchronization or a media download is in flight. Small,
+temporary inconsistencies are acceptable when the next explicit Sync repairs them.
+Concurrency handling should focus on cases that cannot self-heal, would be expensive
+to repair, or have a small and direct fix; it should not grow into background
+coordination machinery merely to make a snapshotless upstream appear atomic.
+
 Synchronization is an explicit user action. The first Sync reads every favorites
 page and establishes an ordered baseline and the difference between Rule34's
 reported count and the number of observed IDs.

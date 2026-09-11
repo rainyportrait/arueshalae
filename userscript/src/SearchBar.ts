@@ -8,6 +8,7 @@ import { navigate, route } from "./router.ts"
 import { auth } from "./state/auth.ts"
 import { search } from "./state/list.ts"
 import { registerSearchField } from "./state/search-field.ts"
+import { serverSettings } from "./state/settings.ts"
 
 const { button, form } = van.tags
 
@@ -37,7 +38,9 @@ export function SearchBar() {
         inputRef,
         resyncRef,
         fetchSuggestions: (query) =>
-            ownFavorites() ? fetchFavoriteAutocomplete(query) : fetchAutocomplete(query),
+            favoriteSearchId() !== null
+                ? fetchFavoriteAutocomplete(query)
+                : fetchAutocomplete(query),
     })
 
     // The tag sidebar's + buttons reach this field through the module channel
@@ -45,16 +48,22 @@ export function SearchBar() {
     if (inputRef.current !== null && resyncRef.current !== null)
         registerSearchField(inputRef.current, resyncRef.current)
 
-    function ownFavorites(): boolean {
+    function favoriteSearchId(): number | null {
+        if (!serverSettings.rawVal.enabled) return null
         const r = route.rawVal
         const a = auth.rawVal
-        return r.type === "favorites" && a.status === "authenticated" && r.id === a.userId
+        if (a.status !== "authenticated") return null
+        if (r.type === "favorites" && r.id === a.userId) return r.id
+        if (r.type === "postdetails" && r.origin?.kind === "favorites" && r.origin.uid === a.userId)
+            return r.origin.uid
+        return null
     }
 
     van.derive(() => {
         route.val
         auth.val
-        const own = ownFavorites()
+        serverSettings.val
+        const own = favoriteSearchId() !== null
         inputRef.current?.setAttribute(
             "placeholder",
             own ? "Search your favorites using tags" : "Search using tags (e.g. blonde_hair)",
@@ -94,13 +103,12 @@ export function SearchBar() {
             input.setSelectionRange(normalized.length, normalized.length)
             resyncRef.current?.()
         }
-        const r = route.rawVal
-        const a = auth.rawVal
-        if (r.type === "favorites" && a.status === "authenticated" && r.id === a.userId) {
+        const favoriteId = favoriteSearchId()
+        if (favoriteId !== null) {
             const query = normalized === "" ? undefined : normalized
             const random = query?.split(" ").some((term) => term.startsWith("sort:random"))
             const seed = random ? Math.floor(Math.random() * 2_147_483_646) + 1 : undefined
-            navigate({ type: "favorites", id: r.id, pid: 0, tags: query, seed })
+            navigate({ type: "favorites", id: favoriteId, pid: 0, tags: query, seed })
             return
         }
         search(normalized === "" ? undefined : normalized)

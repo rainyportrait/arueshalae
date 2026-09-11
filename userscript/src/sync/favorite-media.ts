@@ -7,7 +7,6 @@ import { Rule34Reader } from "./rule34.ts"
 const MEDIA_TIMEOUT_MS = 5 * 60 * 1000
 
 export async function storeFavoriteMedia(post: PostDetails): Promise<void> {
-    await setPostStatus(post.id, "favorited")
     await observePost(post)
     await savePostToServer(post, gmFetchArrayBuffer, MEDIA_TIMEOUT_MS)
 }

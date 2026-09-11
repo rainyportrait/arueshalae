@@ -126,7 +126,7 @@ describe("details page download of a missing favorite", () => {
         await settlePost(post, "favorited", false)
 
         await vi.waitFor(() => expect(api.savePostToServer).toHaveBeenCalledTimes(1))
-        expect(api.setPostStatus).toHaveBeenCalledWith(7, "favorited")
+        expect(api.observePost).toHaveBeenCalledWith(post)
         expect(api.savePostToServer).toHaveBeenCalledWith(
             post,
             expect.anything(),
@@ -142,7 +142,7 @@ describe("details page download of a missing favorite", () => {
         await expect(ensureFavoriteMedia(reader as never, 12)).resolves.toBe("downloaded")
 
         expect(api.observePost).toHaveBeenCalledWith(post)
-        expect(api.setPostStatus).toHaveBeenCalledWith(12, "favorited")
+        expect(api.setPostStatus).not.toHaveBeenCalled()
         expect(api.savePostToServer).toHaveBeenCalledWith(
             post,
             expect.anything(),

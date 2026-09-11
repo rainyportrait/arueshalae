@@ -7,13 +7,15 @@ type ImageMedia = Extract<PostMedia, { kind: "image" }>
 type VideoMedia = Extract<PostMedia, { kind: "video" }>
 type LocalMediaKind = "image" | "mini" | "video"
 
-function preferLocal(postId: number): boolean {
+// Whether the local copy of the post's media should be served for this
+// purpose. `on` is the purpose-specific preference; a missing one inherits
+// the legacy `preferDownloaded` switch stored by older builds, which
+// defaulted to enabled when missing too.
+function preferLocal(postId: number, on: boolean | undefined): boolean {
     const settings = serverSettings.val
-    // Treat the missing field in settings saved by older versions as the new
-    // default. The next settings write persists it explicitly.
     return (
         settings.enabled &&
-        settings.preferDownloaded !== false &&
+        (on ?? settings.preferDownloaded !== false) &&
         settings.url.trim() !== "" &&
         downloaded.val.has(postId)
     )
@@ -26,18 +28,24 @@ function localMediaUrl(postId: number, kind: LocalMediaKind): string {
 }
 
 export function thumbnailUrl(post: Post): string {
-    return preferLocal(post.id) ? localMediaUrl(post.id, "mini") : post.thumbnail
+    return preferLocal(post.id, serverSettings.val.serverThumbnails)
+        ? localMediaUrl(post.id, "mini")
+        : post.thumbnail
 }
 
 export function imageUrl(postId: number, media: ImageMedia, original: boolean): string {
-    if (preferLocal(postId)) return localMediaUrl(postId, "image")
+    if (preferLocal(postId, serverSettings.val.serverMedia)) return localMediaUrl(postId, "image")
     return original && media.originalImage ? media.originalImage : media.src
 }
 
 export function videoUrl(postId: number, media: VideoMedia): string {
-    return preferLocal(postId) ? localMediaUrl(postId, "video") : media.src
+    return preferLocal(postId, serverSettings.val.serverMedia)
+        ? localMediaUrl(postId, "video")
+        : media.src
 }
 
 export function videoPosterUrl(postId: number, media: VideoMedia): string {
-    return preferLocal(postId) ? localMediaUrl(postId, "image") : media.poster
+    return preferLocal(postId, serverSettings.val.serverMedia)
+        ? localMediaUrl(postId, "image")
+        : media.poster
 }

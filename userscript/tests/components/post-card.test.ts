@@ -124,7 +124,7 @@ describe("PostCard library badge", () => {
             "http://127.0.0.1:34343/api/posts/1/media?type=mini",
         )
 
-        m.serverSettings.val = { ...m.serverSettings.val, preferDownloaded: false }
+        m.serverSettings.val = { ...m.serverSettings.val, serverThumbnails: false }
         await flushVan()
         expect(image?.getAttribute("src")).toBe("//cdn.example/1.jpg")
     })

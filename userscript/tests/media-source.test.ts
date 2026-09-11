@@ -59,7 +59,8 @@ describe("media source selection", () => {
         serverSettings.val = {
             enabled: true,
             url: "http://127.0.0.1:34343/",
-            preferDownloaded: true,
+            serverThumbnails: true,
+            serverMedia: true,
         }
         downloaded.val = new Set([42])
         return { ...urls, downloaded, serverSettings }
@@ -76,9 +77,27 @@ describe("media source selection", () => {
         )
     })
 
+    it("applies the thumbnail and media preferences independently", async () => {
+        const urls = await load()
+        urls.serverSettings.val = {
+            ...urls.serverSettings.val,
+            serverThumbnails: true,
+            serverMedia: false,
+        }
+
+        expect(urls.thumbnailUrl(post)).toBe("http://127.0.0.1:34343/api/posts/42/media?type=mini")
+        expect(urls.imageUrl(42, image, false)).toBe(image.src)
+        expect(urls.videoPosterUrl(42, video)).toBe(video.poster)
+        expect(urls.videoUrl(42, video)).toBe(video.src)
+    })
+
     it("keeps Rule34 image quality independent when local media is not preferred", async () => {
         const urls = await load()
-        urls.serverSettings.val = { ...urls.serverSettings.val, preferDownloaded: false }
+        urls.serverSettings.val = {
+            ...urls.serverSettings.val,
+            serverThumbnails: false,
+            serverMedia: false,
+        }
 
         expect(urls.thumbnailUrl(post)).toBe(post.thumbnail)
         expect(urls.imageUrl(42, image, false)).toBe(image.src)

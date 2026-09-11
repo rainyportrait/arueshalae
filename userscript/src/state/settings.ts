@@ -78,8 +78,12 @@ export const showHiddenPosts = van.state(false)
 export interface ServerSettings {
     enabled: boolean
     url: string
-    // Optional only for compatibility with settings persisted by older builds.
+    // Optional only for compatibility with settings persisted by older
+    // builds: they stored one `preferDownloaded` switch covering both of the
+    // two server-media preferences below, which a missing field inherits.
     preferDownloaded?: boolean
+    serverThumbnails?: boolean
+    serverMedia?: boolean
     useCachedPostDetails?: boolean
 }
 

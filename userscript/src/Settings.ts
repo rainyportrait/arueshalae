@@ -10,6 +10,13 @@ import { preferOriginal, serverSettings, tagBlacklist } from "./state/settings.t
 
 const { button, div, h1, h2, input, p, section, span } = van.tags
 
+// How long the "Are you sure?" confirmation stays armed before it expires on
+// its own, so a stale confirmation can't fire the prune much later.
+const PRUNE_CONFIRM_TIMEOUT_MS = 4_000
+// Clicks this close to arming are ignored: a fast accidental double click
+// must not run the destructive prune.
+const PRUNE_CONFIRM_GUARD_MS = 500
+
 // A dismissible tag chip in the blacklist. The whole chip is the label; the
 // small round button removes the tag.
 function TagPill({ tag }: { tag: string }) {
@@ -82,6 +89,41 @@ export function Settings() {
     const pruneCount = van.state<number | null>(null)
     const pruneStatus = van.state<"idle" | "loading" | "pruning">("idle")
     const pruneMessage = van.state<string | null>(null)
+    // Prune confirmation: the first click arms the "Are you sure?" state,
+    // the second click runs the prune once the double-click guard has passed.
+    const pruneArmed = van.state(false)
+    let armedAt = 0
+    let armExpiry: number | null = null
+
+    function disarmPrune(): void {
+        pruneArmed.val = false
+        if (armExpiry !== null) {
+            window.clearTimeout(armExpiry)
+            armExpiry = null
+        }
+    }
+
+    function armPrune(): void {
+        pruneArmed.val = true
+        armedAt = Date.now()
+        armExpiry = window.setTimeout(disarmPrune, PRUNE_CONFIRM_TIMEOUT_MS)
+    }
+
+    function handlePruneClick(): void {
+        if (pruneStatus.val !== "idle") return
+        const count = pruneCount.val
+        if (count === null || count === 0) {
+            void refreshPruneCount()
+            return
+        }
+        if (!pruneArmed.val) {
+            armPrune()
+            return
+        }
+        if (Date.now() - armedAt < PRUNE_CONFIRM_GUARD_MS) return
+        disarmPrune()
+        void prune()
+    }
 
     async function testConnection(): Promise<void> {
         if (testing.val) return
@@ -330,19 +372,16 @@ export function Settings() {
                                         "hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-50",
                                     ),
                                     disabled: () => pruneStatus.val !== "idle",
-                                    onclick: () =>
-                                        void (pruneCount.val === null || pruneCount.val === 0
-                                            ? refreshPruneCount()
-                                            : prune()),
+                                    onclick: handlePruneClick,
                                 },
                                 () => {
                                     if (pruneStatus.val === "loading") return "Checking…"
                                     if (pruneStatus.val === "pruning") return "Pruning…"
                                     const count = pruneCount.val
                                     if (count === 0) return "Check again"
-                                    return count === null
-                                        ? "Check prune"
-                                        : `Prune ${count.toLocaleString()} ${count === 1 ? "post" : "posts"}`
+                                    if (count === null) return "Check prune"
+                                    if (pruneArmed.val) return "Are you sure?"
+                                    return `Prune ${count.toLocaleString()} ${count === 1 ? "post" : "posts"}`
                                 },
                             ),
                         ),

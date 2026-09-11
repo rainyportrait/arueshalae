@@ -61,10 +61,20 @@ van.derive(() => {
 })
 
 // Membership belongs to the selected account and server, so no cached entry
-// survives a context change.
+// survives a context change. The first evaluation is module initialization,
+// not a context change — skipping it keeps the initial status refresh (the
+// trigger derive fires it during module load on a direct details-page load,
+// before this derive's first evaluation has run) from being invalidated
+// before its response settles. The states must be read before the early
+// return, or the derive would never subscribe to them.
+let resetFirstEvaluation = true
 van.derive(() => {
     auth.val
     serverSettings.val
+    if (resetFirstEvaluation) {
+        resetFirstEvaluation = false
+        return
+    }
     latestRequestByPost.clear()
     libraryPosts.val = new Map()
 })

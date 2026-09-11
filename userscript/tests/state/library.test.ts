@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
+import type { PostDetails } from "../../src/api/post-details.ts"
 import { flushVan, resetDom } from "../dom.ts"
 import { deferred } from "../helpers/deferred.ts"
 
@@ -60,4 +61,51 @@ describe("state/library", () => {
 
         expect(libraryPosts.val.get(42)?.status).toBe("favorited")
     })
+
+    it("publishes the initial refresh of a direct details-page load", async () => {
+        // On a direct load (or refresh) of a post page, the details state
+        // settles from the live document *before* this module is imported, so
+        // the trigger's first evaluation fires the status refresh during
+        // module import. The context-reset derive's first evaluation must not
+        // be mistaken for a context change: it used to clear the request
+        // sequence then, silently discarding the initial response.
+        const { auth } = await import("../../src/state/auth.ts")
+        const { serverSettings } = await import("../../src/state/settings.ts")
+        const { details } = await import("../../src/state/details.ts")
+        auth.val = { status: "authenticated", userId: 7 }
+        serverSettings.val = { ...serverSettings.val, enabled: true }
+        await flushVan()
+        api.getPostStatuses.mockResolvedValue([
+            { postId: 42, status: "favorited", downloaded: true },
+        ])
+        details.val = { status: "ready", post: makePost(42), origin: undefined }
+
+        const { libraryPosts } = await import("../../src/state/library.ts")
+        await flushVan()
+        await flushVan()
+
+        expect(libraryPosts.val.get(42)?.status).toBe("favorited")
+    })
 })
+
+function makePost(id: number): PostDetails {
+    return {
+        id,
+        title: "",
+        media: {
+            kind: "image",
+            src: `//cdn.example/${id}.jpg`,
+            originalImage: `//cdn.example/${id}.jpg`,
+            width: 100,
+            height: 100,
+        },
+        posted: "",
+        poster: "",
+        posterHref: "",
+        source: "",
+        sourceHref: "",
+        rating: "",
+        score: 0,
+        tags: [],
+    }
+}

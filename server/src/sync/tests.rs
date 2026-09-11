@@ -409,7 +409,10 @@ async fn migration_preserves_an_existing_sync_database() {
         include_str!("../migrations/202508291609-init.sql"),
         include_str!("../migrations/20260906-sync.sql"),
     ] {
-        sqlx::query(migration).execute(&pool).await.unwrap();
+        sqlx::query(sqlx::AssertSqlSafe(migration))
+            .execute(&pool)
+            .await
+            .unwrap();
     }
     sqlx::query(
         r#"INSERT INTO posts (post_id) VALUES (10), (20);

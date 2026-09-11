@@ -40,11 +40,13 @@ impl Database {
             let version = index + 1;
             let mut transaction = self.pool.begin().await?;
 
-            sqlx::query(migration).execute(&mut *transaction).await?;
+            sqlx::query(*migration).execute(&mut *transaction).await?;
 
-            sqlx::query(format!("PRAGMA user_version = {version}").as_str())
-                .execute(&mut *transaction)
-                .await?;
+            sqlx::query(sqlx::AssertSqlSafe(format!(
+                "PRAGMA user_version = {version}"
+            )))
+            .execute(&mut *transaction)
+            .await?;
 
             transaction.commit().await?;
         }

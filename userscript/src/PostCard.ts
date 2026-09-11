@@ -8,7 +8,6 @@ import clsx from "./clsx.ts"
 import { setCardSpan } from "./masonry.ts"
 import { thumbnailUrl } from "./media-source.ts"
 import { postHref, route } from "./router.ts"
-import { auth } from "./state/auth.ts"
 import { libraryPosts, queueLibraryCheck } from "./state/library.ts"
 import { serverSettings } from "./state/settings.ts"
 
@@ -42,25 +41,13 @@ function cardHref(post: Post): string {
 // settled /api/posts/downloaded (or a server toggle, or a navigation) swaps
 // just this node
 // — never the card or its img, a swap of which would reload the thumbnail.
-// It reads route/auth only inside its own binding, so navigation re-runs the
-// badge, not the grid. Hidden on the logged-in user's own favorites page and
-// while its old grid remains visible during a details navigation, where the
-// server would badge nearly every card (see state/downloaded.ts).
-function LibraryBadge({ post }: { post: Post }): ChildDom {
+// Whether a surface suppresses the badge belongs to that surface, not to the
+// destination route: the route changes before a loading destination replaces
+// the old screen. Keeping the callback in this live binding also lets its
+// reactive inputs update only the badge, not the grid.
+function LibraryBadge({ post, hide }: { post: Post; hide: () => boolean }): ChildDom {
     return () => {
-        const r = route.val
-        const a = auth.val
-        const ownFavorites =
-            a.status === "authenticated" &&
-            ((r.type === "favorites" && r.id === a.userId) ||
-                (r.type === "postdetails" &&
-                    r.origin?.kind === "favorites" &&
-                    r.origin.uid === a.userId))
-        if (
-            ownFavorites ||
-            !serverSettings.val.enabled ||
-            !libraryPosts.val.get(post.id)?.downloaded
-        )
+        if (hide() || !serverSettings.val.enabled || !libraryPosts.val.get(post.id)?.downloaded)
             return document.createComment("")
         return span(
             {
@@ -89,7 +76,11 @@ function LibraryBadge({ post }: { post: Post }): ChildDom {
     }
 }
 
-export function PostCard(post: Post) {
+interface PostCardOptions {
+    hideLibraryBadge?: () => boolean
+}
+
+export function PostCard(post: Post, { hideLibraryBadge = () => false }: PostCardOptions = {}) {
     return Link(
         {
             href: () => cardHref(post),
@@ -129,6 +120,6 @@ export function PostCard(post: Post) {
                 if (image.getAttribute("src") !== post.thumbnail) image.src = post.thumbnail
             },
         }),
-        LibraryBadge({ post }),
+        LibraryBadge({ post, hide: hideLibraryBadge }),
     )
 }

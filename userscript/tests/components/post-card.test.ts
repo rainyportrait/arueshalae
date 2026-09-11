@@ -47,8 +47,9 @@ async function importAll() {
 async function mountCard(
     m: Awaited<ReturnType<typeof importAll>>,
     id: number,
+    hideLibraryBadge?: () => boolean,
 ): Promise<HTMLElement> {
-    const card = m.PostCard(post(id))
+    const card = m.PostCard(post(id), { hideLibraryBadge })
     document.body.append(card)
     await flushVan()
     return card
@@ -171,14 +172,12 @@ describe("PostCard library badge", () => {
         expect(m.downloaded.val.has(1)).toBe(true)
     })
 
-    it("hides the badge on the logged-in user's own favorites page", async () => {
+    it("lets the rendering surface hide the badge", async () => {
         const m = await importAll()
         await enableServer(m, true)
         m.downloaded.val = new Set([1])
-        m.route.val = { type: "favorites", id: 7, pid: 0 }
-        m.auth.val = { status: "authenticated", userId: 7 }
 
-        const card = await mountCard(m, 1)
+        const card = await mountCard(m, 1, () => true)
 
         expect(badge(card)).toBeNull()
     })
@@ -206,20 +205,14 @@ describe("PostCard library badge", () => {
         expect(badge(card)).not.toBeNull()
     })
 
-    it("keeps the badge hidden while opening a post from own favorites", async () => {
+    it("keeps a surface-hidden badge suppressed across any navigation", async () => {
         const m = await importAll()
         await enableServer(m, true)
         m.downloaded.val = new Set([1])
         m.route.val = { type: "favorites", id: 7, pid: 0 }
-        m.auth.val = { status: "authenticated", userId: 7 }
 
-        const card = await mountCard(m, 1)
-        m.route.val = {
-            type: "postdetails",
-            id: 1,
-            tags: undefined,
-            origin: { kind: "favorites", uid: 7, pid: 0 },
-        }
+        const card = await mountCard(m, 1, () => true)
+        m.route.val = { type: "account", id: 7 }
         await flushVan()
 
         expect(badge(card)).toBeNull()

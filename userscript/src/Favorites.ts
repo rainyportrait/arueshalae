@@ -3,6 +3,7 @@ import van from "vanjs-core"
 import { PostGrid } from "./PostGrid.ts"
 import type { Favorites } from "./api/favorites.ts"
 import type { Route } from "./router.ts"
+import { auth } from "./state/auth.ts"
 import {
     FAVORITES_PAGE_SIZE,
     favorites,
@@ -40,6 +41,11 @@ export function Favorites() {
             },
             errorTitle: "Couldn't load favorites",
             onRetry: reloadFavorites,
+            // This grid remains mounted until any destination screen is
+            // ready. Its presentation therefore follows the favorites page
+            // it belongs to, independently of the route being loaded.
+            hideLibraryBadges: () =>
+                auth.val.status === "authenticated" && auth.val.userId === source?.id,
         })
         if (!source?.hidden) return grid
         return div(

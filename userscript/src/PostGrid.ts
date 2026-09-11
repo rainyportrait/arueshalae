@@ -42,6 +42,7 @@ export interface PostGridProps {
     empty: { icon: string; title: string; message: string }
     errorTitle: string
     onRetry: () => void
+    hideLibraryBadges?: () => boolean
 }
 
 // The masonry post grid with its loading, error and empty states plus
@@ -56,6 +57,7 @@ export function PostGrid({
     empty,
     errorTitle,
     onRetry,
+    hideLibraryBadges,
 }: PostGridProps): HTMLDivElement {
     if (state.status === "error") {
         return CenteredState({
@@ -74,7 +76,7 @@ export function PostGrid({
         { class: "flex flex-col" },
         div(
             { class: "masonry" },
-            state.posts.map((post) => PostCard(post)),
+            state.posts.map((post) => PostCard(post, { hideLibraryBadge: hideLibraryBadges })),
         ),
         Pagination({ currentPage, totalPages, routeForPage }),
     )

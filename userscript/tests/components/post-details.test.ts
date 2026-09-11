@@ -118,6 +118,37 @@ describe("PostDetails gallery", () => {
         ])
     })
 
+    it("places the focused filmstrip below in portrait and beside in landscape", async () => {
+        const origin = { kind: "list" as const, tags: "test", pid: 0 }
+        const { details: detailsState } = await import("../../src/state/details.ts")
+        const { gallery, galleryFocus } = await import("../../src/state/gallery.ts")
+        detailsState.val = { status: "ready", post: details(1), origin }
+        gallery.val = {
+            status: "ready",
+            origin,
+            pages: [{ pid: 0, posts: [post(1), post(2)] }],
+            lastPagePID: 0,
+        }
+        galleryFocus.val = true
+        const { PostDetails } = await import("../../src/PostDetails.ts")
+
+        document.body.append(PostDetails())
+        await flushVan()
+
+        const thumb = document.querySelector<HTMLImageElement>('a[title="Post #1"] img')
+        const scroller = thumb?.closest("div.flex.gap-1\\.5")
+        const strip = scroller?.parentElement
+        const focusLayout = strip?.parentElement
+        expect(focusLayout?.className).toContain("portrait:flex-col")
+        expect(focusLayout?.className).toContain("landscape:flex-row")
+        expect(strip?.className).toContain("portrait:w-full")
+        expect(strip?.className).toContain("landscape:w-24")
+        expect(scroller?.className).toContain("portrait:overflow-x-auto")
+        expect(scroller?.className).toContain("landscape:overflow-y-auto")
+        expect(thumb?.className).toContain("portrait:h-12")
+        expect(thumb?.className).toContain("landscape:h-14")
+    })
+
     it("shows a post the feed shift put into two pages only once", async () => {
         const origin = { kind: "list" as const, tags: "test", pid: 0 }
         const { details: detailsState } = await import("../../src/state/details.ts")

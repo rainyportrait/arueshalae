@@ -405,8 +405,8 @@ function FocusButton() {
 
 // The gallery filmstrip: the collection's loaded posts as thumbnails, with a
 // position counter. The strip grows as boundary steps load more pages.
-// In focus mode it runs vertically down the right side of the screen and
-// scrolls instead of growing beyond the viewport.
+// In focus mode it follows the viewport orientation: horizontally along the
+// bottom in portrait, vertically down the right side in landscape.
 //
 // The returned node is built ONCE and kept across gallery steps (the caller
 // memoizes it): every part that varies is a live binding inside, so stepping
@@ -415,12 +415,13 @@ function FocusButton() {
 function Filmstrip({
     origin,
     activeId,
-    vertical = false,
+    focus = false,
 }: {
     origin: PostOrigin
     activeId: () => number
-    vertical?: boolean
+    focus?: boolean
 }) {
+    const vertical = () => focus && window.innerWidth > window.innerHeight
     // The active post's index over the currently loaded pages (-1 if absent).
     const activeIndex = () => {
         const g = gallery.val
@@ -471,16 +472,16 @@ function Filmstrip({
         // the strip never shows a thumb twice.
         return div(
             { class: "contents" },
-            FilmstripPageButton({ dir: -1, vertical }),
+            FilmstripPageButton({ dir: -1, focus }),
             loadedPosts(g).map(({ post, pid }) =>
                 Thumb({
                     post,
                     origin: { ...origin, pid },
                     activeId,
-                    vertical,
+                    focus,
                 }),
             ),
-            FilmstripPageButton({ dir: 1, vertical }),
+            FilmstripPageButton({ dir: 1, focus }),
         )
     }
     // The "Gallery" heading, shared by both orientations.
@@ -493,44 +494,56 @@ function Filmstrip({
     // The vertical header stacks the label + focus button on one row with the
     // counter below, to fit the narrow strip; horizontal puts everything on
     // one row with the counter grouped next to the focus button.
-    const header = vertical
-        ? div(
-              { class: "flex flex-col gap-1 px-0.5" },
-              div({ class: "flex items-center justify-between" }, headerLabel, FocusButton()),
-              Counter,
-          )
-        : div(
-              { class: "flex items-center justify-between px-0.5" },
-              headerLabel,
-              div({ class: "flex items-center gap-2" }, Counter, FocusButton()),
-          )
+    const header = div(
+        {
+            class: clsx(
+                "flex px-0.5",
+                focus
+                    ? "items-center justify-between portrait:flex-row landscape:flex-col landscape:items-stretch landscape:gap-1"
+                    : "items-center justify-between",
+            ),
+        },
+        div(
+            {
+                class: clsx("flex items-center justify-between", focus && "landscape:w-full"),
+            },
+            headerLabel,
+            focus ? FocusButton() : document.createComment(""),
+        ),
+        div(
+            { class: "flex items-center gap-2" },
+            Counter,
+            focus ? document.createComment("") : FocusButton(),
+        ),
+    )
     // The scroll container, kept across gallery steps by the caller — so the
     // wheel listener below is attached exactly once per strip.
     const scroller = div(
         {
             class: clsx(
-                vertical
-                    ? "flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto"
-                    : "flex gap-1.5 overflow-x-auto pb-1",
+                "flex gap-1.5",
+                focus
+                    ? "portrait:flex-row portrait:overflow-x-auto portrait:pb-1 landscape:min-h-0 landscape:flex-1 landscape:flex-col landscape:overflow-y-auto"
+                    : "overflow-x-auto pb-1",
             ),
         },
         Thumbs,
     )
-    if (!vertical)
-        scroller.addEventListener(
-            "wheel",
-            (event) => {
-                // Native horizontal scrolls (trackpad swipe, shift+wheel)
-                // already move the strip, and a strip that fits its width has
-                // nothing to scroll — in both cases the page keeps its
-                // normal wheel behaviour.
-                if (Math.abs(event.deltaX) >= Math.abs(event.deltaY)) return
-                if (scroller.scrollWidth <= scroller.clientWidth) return
-                event.preventDefault()
-                scroller.scrollLeft += event.deltaY
-            },
-            { passive: false },
-        )
+    scroller.addEventListener(
+        "wheel",
+        (event) => {
+            if (vertical()) return
+            // Native horizontal scrolls (trackpad swipe, shift+wheel)
+            // already move the strip, and a strip that fits its width has
+            // nothing to scroll — in both cases the page keeps its
+            // normal wheel behaviour.
+            if (Math.abs(event.deltaX) >= Math.abs(event.deltaY)) return
+            if (scroller.scrollWidth <= scroller.clientWidth) return
+            event.preventDefault()
+            scroller.scrollLeft += event.deltaY
+        },
+        { passive: false },
+    )
     // Gallery updates also re-run this binding so an initially loading strip
     // can scroll once its active thumb appears. Remember the last post that
     // was actually scrolled, though: growing either end of the filmstrip must
@@ -545,15 +558,20 @@ function Filmstrip({
             if (active === null) return
             active.scrollIntoView({
                 behavior: "smooth",
-                block: vertical ? "center" : "nearest",
-                inline: vertical ? "nearest" : "center",
+                block: vertical() ? "center" : "nearest",
+                inline: vertical() ? "nearest" : "center",
             })
             lastScrolledId = requestedId
         })
         return document.createComment("")
     }
     return div(
-        { class: clsx("flex shrink-0 flex-col gap-1.5", vertical && "w-24") },
+        {
+            class: clsx(
+                "flex shrink-0 flex-col gap-1.5",
+                focus && "portrait:w-full landscape:w-24",
+            ),
+        },
         header,
         scroller,
         ScrollActive,
@@ -563,7 +581,7 @@ function Filmstrip({
 // A page-growth control at each end of the filmstrip. It fetches and reveals
 // the adjacent page without changing the selected post; unavailable sides use
 // a zero-footprint placeholder so the live binding can become active later.
-function FilmstripPageButton({ dir, vertical }: { dir: 1 | -1; vertical: boolean }) {
+function FilmstripPageButton({ dir, focus }: { dir: 1 | -1; focus: boolean }) {
     return () => {
         void gallery.val
         if (!canLoadAdjacentPage(dir)) return document.createComment("")
@@ -574,7 +592,9 @@ function FilmstripPageButton({ dir, vertical }: { dir: 1 | -1; vertical: boolean
                 class: clsx(
                     "flex shrink-0 items-center justify-center rounded-md border border-zinc-700",
                     "bg-zinc-900/70 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100",
-                    vertical ? "h-10 w-full" : "h-12 w-10",
+                    focus
+                        ? "portrait:h-12 portrait:w-10 landscape:h-10 landscape:w-full"
+                        : "h-12 w-10",
                 ),
                 title: label,
                 "aria-label": label,
@@ -592,12 +612,12 @@ function Thumb({
     post,
     origin,
     activeId,
-    vertical,
+    focus,
 }: {
     post: Post
     origin: PostOrigin
     activeId: () => number
-    vertical: boolean
+    focus: boolean
 }) {
     const isActive = () => post.id === activeId()
     return Link(
@@ -629,10 +649,8 @@ function Thumb({
             alt: `Post ${post.id}`,
             loading: "lazy",
             class: clsx(
-                // The vertical thumb fills the strip's width so the anchor's
-                // border hugs the image exactly.
                 "object-cover",
-                vertical ? "h-14 w-full" : "h-12 w-16",
+                focus ? "portrait:h-12 portrait:w-16 landscape:h-14 landscape:w-full" : "h-12 w-16",
             ),
             onerror: (e: Event) => {
                 const image = e.currentTarget as HTMLImageElement
@@ -882,7 +900,7 @@ function buildShell(): Node {
         if (strip?.key !== key)
             strip = {
                 key,
-                node: Filmstrip({ origin: state.origin, activeId, vertical: galleryFocus.val }),
+                node: Filmstrip({ origin: state.origin, activeId, focus: galleryFocus.val }),
             }
         return strip.node
     }
@@ -906,8 +924,8 @@ function buildShell(): Node {
                 // In focus mode the column fills the viewport exactly
                 // (h-dvh, not h-screen): main drops its padding and the
                 // navbar is hidden, so nothing offsets it. The media takes
-                // the remaining width next to the vertical filmstrip on the
-                // right, all without page scroll. On mobile Safari 100vh is
+                // the remaining space beside or above the orientation-aware
+                // filmstrip, all without page scroll. On mobile Safari 100vh is
                 // the *large* viewport (Safari chrome collapsed), so it
                 // overflows the visible area while the bottom URL bar is
                 // showing; 100dvh tracks the visible height and updates as
@@ -922,9 +940,11 @@ function buildShell(): Node {
                         // grew to the media's natural size. Below lg the
                         // height is the definite 100dvh and the row fills
                         // the width regardless; at lg the shell is flex-row
-                        // and flex-1 is what stretches the column to fill
-                        // the width next to the vertical strip.
-                        galleryFocus.val ? "flex h-dvh gap-3 lg:flex-1" : "flex-1",
+                        // and flex-1 is what stretches the column to fill the
+                        // available width.
+                        galleryFocus.val
+                            ? "flex h-dvh gap-3 lg:flex-1 portrait:flex-col landscape:flex-row"
+                            : "flex-1",
                     ),
             },
             mediaSlot,

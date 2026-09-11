@@ -18,6 +18,7 @@ import {
     mediaUrlFor,
     pruneUnfavoritedPosts,
     savePostToServer,
+    searchFavoritePosts,
 } from "../../src/api/server.ts"
 import { getSyncBaseline, getSyncStatus, reconcileFavorites } from "../../src/api/sync.ts"
 import type { Tag } from "../../src/api/tags.ts"
@@ -81,6 +82,20 @@ describe("server client", () => {
 
         await expect(checkDownloads([])).resolves.toEqual(new Set())
         expect(calls).toHaveLength(0)
+    })
+
+    it("requests a seeded page of favorite search results", async () => {
+        const payload = {
+            posts: [{ postId: 7, downloaded: true, tags: ["cat"] }],
+            total: 51,
+        }
+        mockFetch(calls, () => jsonResponse(payload))
+
+        await expect(searchFavoritePosts("cat sort:random", 50, 1234)).resolves.toEqual(payload)
+
+        expect(calls[0]?.url).toBe(
+            "http://127.0.0.1:34343/api/posts/search?term=cat+sort%3Arandom&offset=50&limit=50&seed=1234",
+        )
     })
 
     it("reads sync state and the ordered baseline from descriptive GET routes", async () => {

@@ -16,6 +16,8 @@ describe("router", () => {
             kind: "favorites",
             uid: 99,
             pid: 50,
+            tags: "cat score:>=10 sort:random",
+            seed: 1234,
         })
 
         expect(parseRoute(listUrl)).toEqual({
@@ -27,8 +29,14 @@ describe("router", () => {
         expect(parseRoute(favoriteUrl)).toEqual({
             type: "postdetails",
             id: 8,
-            tags: undefined,
-            origin: { kind: "favorites", uid: 99, pid: 50 },
+            tags: "cat score:>=10 sort:random",
+            origin: {
+                kind: "favorites",
+                uid: 99,
+                pid: 50,
+                tags: "cat score:>=10 sort:random",
+                seed: 1234,
+            },
         })
     })
 
@@ -36,6 +44,14 @@ describe("router", () => {
         expect(routeToUrl({ type: "postlist", tags: "a+b c", pid: 0 })).toBe(
             "/index.php?page=post&s=list&tags=a%2Bb%20c",
         )
+        const favorites = {
+            type: "favorites" as const,
+            id: 42,
+            tags: "cat score:>=10 sort:random",
+            seed: 1234,
+            pid: 50,
+        }
+        expect(parseRoute(routeToUrl(favorites))).toEqual(favorites)
         expect(parseRoute("?page=post&s=view&id=-2")).toEqual({ type: "unknown" })
         expect(parseRoute("?page=favorites&s=view&id=not-a-number")).toEqual({ type: "unknown" })
     })

@@ -1,7 +1,7 @@
 import { fetchFavorites } from "../api/favorites.ts"
 import { type Post, fetchPostList } from "../api/post-list.ts"
 import { type PostOrigin } from "../router.ts"
-import { FAVORITES_PAGE_SIZE } from "./favorites.ts"
+import { FAVORITES_PAGE_SIZE, fetchSearchedFavorites } from "./favorites.ts"
 import { PAGE_SIZE } from "./list.ts"
 
 export type GalleryPage = { pid: number; posts: Post[] }
@@ -32,7 +32,9 @@ let collection: Collection | null = null
 // The identity of an origin: list posts are keyed by their search tags,
 // favorites by the user id.
 export function originKey(origin: PostOrigin): string {
-    return origin.kind === "list" ? `list:${origin.tags ?? ""}` : `favorites:${origin.uid}`
+    return origin.kind === "list"
+        ? `list:${origin.tags ?? ""}`
+        : `favorites:${origin.uid}:${origin.tags ?? ""}:${origin.seed ?? ""}`
 }
 
 export function pageSize(origin: PostOrigin): number {
@@ -94,10 +96,15 @@ function fetchPage(
               posts: r.posts,
               lastPagePID: r.lastPagePID,
           }))
-        : fetchFavorites(origin.uid, pid).then((r) => ({
-              posts: r.posts,
-              lastPagePID: r.lastPagePID,
-          }))
+        : origin.tags
+          ? fetchSearchedFavorites(origin.uid, origin.tags, pid, origin.seed).then((r) => ({
+                posts: r.posts,
+                lastPagePID: r.lastPagePID,
+            }))
+          : fetchFavorites(origin.uid, pid).then((r) => ({
+                posts: r.posts,
+                lastPagePID: r.lastPagePID,
+            }))
 }
 
 // Load (or reuse) one page of the collection, deduplicated per pid. Mutates

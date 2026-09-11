@@ -1,6 +1,6 @@
 import { extractUserProfile } from "../api/auth.ts"
 import { extractFavorites } from "../api/favorites.ts"
-import { fetchBackground } from "../api/network.ts"
+import { fetchBackground, fetchInteractive } from "../api/network.ts"
 import { type PostDetails, extractPostDetails } from "../api/post-details.ts"
 import { isChallengeBody, solveCaptcha } from "../captcha.ts"
 
@@ -12,7 +12,10 @@ const RETRYABLE_STATUSES = new Set([429, 502, 503, 504])
 // Read-only rule34 access used by synchronization. Keeping it here makes the
 // server boundary explicit: none of these requests can originate in Rust.
 export class Rule34Reader {
-    constructor(private readonly userId: number) {}
+    constructor(
+        private readonly userId: number,
+        private readonly background = true,
+    ) {}
 
     async reportedCount(): Promise<number> {
         const profile = extractUserProfile(
@@ -54,7 +57,7 @@ export class Rule34Reader {
 
     private async request(url: string): Promise<Response> {
         for (let attempt = 0; ; attempt++) {
-            const response = await fetchBackground(url)
+            const response = await (this.background ? fetchBackground(url) : fetchInteractive(url))
             if (isChallengeBody(await response.clone().text())) {
                 if (attempt + 1 >= MAX_ATTEMPTS) {
                     throw new Error("Rule34 challenge could not be cleared")

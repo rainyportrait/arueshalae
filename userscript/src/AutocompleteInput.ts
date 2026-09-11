@@ -35,6 +35,7 @@ export interface AutocompleteInputProps {
     // caller rewrote the input's value programmatically (which fires no
     // native events). Must be called after any external value mutation.
     resyncRef?: { current: (() => void) | null }
+    fetchSuggestions?: (query: string) => Promise<AutocompleteSuggestion[]>
 }
 
 // A tag-autocomplete text input: debounced suggestions as you type, keyboard
@@ -57,6 +58,7 @@ export function AutocompleteInput({
     onEnter,
     inputRef,
     resyncRef,
+    fetchSuggestions = fetchAutocomplete,
 }: AutocompleteInputProps): HTMLDivElement {
     const suggestions = van.state<AutocompleteSuggestion[]>([])
     const highlighted = van.state<number>(-1)
@@ -168,7 +170,7 @@ export function AutocompleteInput({
         }
         debounceTimer = setTimeout(() => {
             debounceTimer = undefined
-            fetchAutocomplete(query)
+            fetchSuggestions(query)
                 .then((items) => {
                     if (seq !== fetchSeq) return
                     // Never suggest tags the user has blacklisted (exact

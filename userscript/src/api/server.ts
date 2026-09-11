@@ -110,6 +110,22 @@ export async function checkDownloads(postIds: number[]): Promise<Set<number>> {
     return new Set(downloaded)
 }
 
+export type FavoriteSearchPost = {
+    postId: number
+    downloaded: boolean
+    tags: string[]
+}
+
+export async function searchFavoritePosts(
+    term: string,
+    offset: number,
+    seed?: number,
+): Promise<{ posts: FavoriteSearchPost[]; total: number }> {
+    const query = new URLSearchParams({ term, offset: String(offset), limit: "50" })
+    if (seed !== undefined) query.set("seed", String(seed))
+    return fetchServerJson(`api/posts/search?${query}`)
+}
+
 type CachedPostDetailsResponse = {
     id: number
     status: "favorited" | "unfavorited" | "deleted" | "unknown"

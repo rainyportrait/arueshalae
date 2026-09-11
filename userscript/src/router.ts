@@ -10,7 +10,7 @@ import { scrollRestore } from "./state/scroll.ts"
 // (profile page, direct link).
 export type PostOrigin =
     | { kind: "list"; tags: string | undefined; pid: number }
-    | { kind: "favorites"; uid: number; pid: number }
+    | { kind: "favorites"; uid: number; pid: number; tags?: string; seed?: number }
 
 // A route is a parsed view of the current URL. The rule34.xxx URL scheme
 // discriminates on the (page, s) query pair; we map that onto a discriminated
@@ -22,7 +22,7 @@ export type Route =
     // resolves both. We keep whichever the URL carried.
     | { type: "account"; id: number }
     | { type: "account"; uname: string }
-    | { type: "favorites"; id: number; pid: number }
+    | { type: "favorites"; id: number; pid: number; tags?: string; seed?: number }
     | { type: "settings" }
     | { type: "login" }
     | { type: "unknown" }
@@ -39,7 +39,13 @@ function parsePostOrigin(
         const uid = positiveInt(params.get("uid"))
         return uid === null
             ? undefined
-            : { kind: "favorites", uid, pid: pidParam(params.get("pid")) }
+            : {
+                  kind: "favorites",
+                  uid,
+                  pid: pidParam(params.get("pid")),
+                  tags: params.get("tags") ?? undefined,
+                  seed: positiveInt(params.get("seed")) ?? undefined,
+              }
     }
     if (params.has("pid")) return { kind: "list", tags, pid: pidParam(params.get("pid")) }
     return undefined
@@ -49,7 +55,11 @@ function parsePostOrigin(
 // query on search results) plus the origin parameters.
 export function postHref(link: string, origin: PostOrigin): string {
     let url = link
-    if (origin.kind === "favorites") url += `&from=favorites&uid=${origin.uid}`
+    if (origin.kind === "favorites") {
+        url += `&from=favorites&uid=${origin.uid}`
+        if (origin.tags) url += `&tags=${encodeURIComponent(origin.tags)}`
+        if (origin.seed) url += `&seed=${origin.seed}`
+    }
     url += `&pid=${origin.pid}`
     return url
 }
@@ -92,9 +102,16 @@ export function parseRoute(url: string): Route {
     }
     if (page === "favorites" && s === "view") {
         const id = positiveInt(params.get("id"))
+        const favoriteTags = params.get("tags") || undefined
         return id === null
             ? { type: "unknown" }
-            : { type: "favorites", id, pid: pidParam(params.get("pid")) }
+            : {
+                  type: "favorites",
+                  id,
+                  pid: pidParam(params.get("pid")),
+                  tags: favoriteTags,
+                  seed: positiveInt(params.get("seed")) ?? undefined,
+              }
     }
     if (page === "account" && s === "options") {
         return { type: "settings" }
@@ -134,6 +151,8 @@ export function routeToUrl(route: Route): string {
                 : `${BASE}?page=account&s=profile&id=${route.id}`
         case "favorites": {
             let url = `${BASE}?page=favorites&s=view&id=${route.id}`
+            if (route.tags) url += `&tags=${encodeURIComponent(route.tags)}`
+            if (route.seed) url += `&seed=${route.seed}`
             if (route.pid > 0) url += `&pid=${route.pid}`
             return url
         }

@@ -1,4 +1,5 @@
 import { fetchCleared } from "./network.ts"
+import { fetchServerJson } from "./server.ts"
 import { KNOWN_TYPES, type TagType } from "./tags.ts"
 
 export type AutocompleteSuggestion = {
@@ -37,4 +38,8 @@ export async function fetchAutocomplete(query: string): Promise<AutocompleteSugg
             value: item.value,
             type: (KNOWN_TYPES.has(item.type) ? item.type : "general") as TagType,
         }))
+}
+
+export async function fetchFavoriteAutocomplete(query: string): Promise<AutocompleteSuggestion[]> {
+    return fetchServerJson<AutocompleteSuggestion[]>(`api/tags?term=${encodeURIComponent(query)}`)
 }

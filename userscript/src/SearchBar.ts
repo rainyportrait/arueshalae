@@ -1,9 +1,11 @@
 import van from "vanjs-core"
 
 import { AutocompleteInput } from "./AutocompleteInput.ts"
+import { fetchAutocomplete, fetchFavoriteAutocomplete } from "./api/autocomplete.ts"
 import { normalizeTags } from "./api/tags.ts"
 import clsx from "./clsx.ts"
-import { route } from "./router.ts"
+import { navigate, route } from "./router.ts"
+import { auth } from "./state/auth.ts"
 import { search } from "./state/list.ts"
 import { registerSearchField } from "./state/search-field.ts"
 
@@ -34,12 +36,34 @@ export function SearchBar() {
         onEnter: submit,
         inputRef,
         resyncRef,
+        fetchSuggestions: (query) =>
+            ownFavorites() ? fetchFavoriteAutocomplete(query) : fetchAutocomplete(query),
     })
 
     // The tag sidebar's + buttons reach this field through the module channel
     // (state/search-field.ts): they append a tag without submitting.
     if (inputRef.current !== null && resyncRef.current !== null)
         registerSearchField(inputRef.current, resyncRef.current)
+
+    function ownFavorites(): boolean {
+        const r = route.rawVal
+        const a = auth.rawVal
+        return r.type === "favorites" && a.status === "authenticated" && r.id === a.userId
+    }
+
+    van.derive(() => {
+        route.val
+        auth.val
+        const own = ownFavorites()
+        inputRef.current?.setAttribute(
+            "placeholder",
+            own ? "Search your favorites using tags" : "Search using tags (e.g. blonde_hair)",
+        )
+        inputRef.current?.setAttribute(
+            "aria-label",
+            own ? "Search your favorites using tags" : "Search using tags",
+        )
+    })
 
     // Keep the field in step with the query carried by the route: direct
     // loads of a tagged list URL, back/forward, and post links (a
@@ -50,7 +74,7 @@ export function SearchBar() {
     // unsubmitted text is in the field.
     van.derive(() => {
         const r = route.val
-        if (r.type !== "postlist" && r.type !== "postdetails") return
+        if (r.type !== "postlist" && r.type !== "postdetails" && r.type !== "favorites") return
         const input = inputRef.current
         if (!input) return
         const q = r.tags ?? ""
@@ -69,6 +93,15 @@ export function SearchBar() {
             input.value = normalized
             input.setSelectionRange(normalized.length, normalized.length)
             resyncRef.current?.()
+        }
+        const r = route.rawVal
+        const a = auth.rawVal
+        if (r.type === "favorites" && a.status === "authenticated" && r.id === a.userId) {
+            const query = normalized === "" ? undefined : normalized
+            const random = query?.split(" ").some((term) => term.startsWith("sort:random"))
+            const seed = random ? Math.floor(Math.random() * 2_147_483_646) + 1 : undefined
+            navigate({ type: "favorites", id: r.id, pid: 0, tags: query, seed })
+            return
         }
         search(normalized === "" ? undefined : normalized)
     }

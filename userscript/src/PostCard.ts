@@ -26,7 +26,13 @@ function cardHref(post: Post): string {
     if (r.type === "postlist")
         return postHref(post.link, { kind: "list", tags: r.tags, pid: r.pid })
     if (r.type === "favorites")
-        return postHref(post.link, { kind: "favorites", uid: r.id, pid: r.pid })
+        return postHref(post.link, {
+            kind: "favorites",
+            uid: r.id,
+            pid: r.pid,
+            tags: r.tags,
+            seed: r.seed,
+        })
     return post.link
 }
 

@@ -141,3 +141,10 @@ export function fetchBackground(
         return fetch(url, { signal: AbortSignal.timeout(BACKGROUND_TIMEOUT_MS) })
     }, true)
 }
+
+// A raw interactive request for workflows which need to classify non-200
+// responses themselves (the Rule34 reader distinguishes deleted posts from
+// retryable failures). It still shares the global pacing queue.
+export function fetchInteractive(url: string): Promise<Response> {
+    return enqueueRequest(() => fetch(url))
+}

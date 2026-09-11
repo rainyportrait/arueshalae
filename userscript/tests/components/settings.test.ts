@@ -47,6 +47,12 @@ function click(element: Element): void {
     element.dispatchEvent(new Event("click"))
 }
 
+function serverUrlInput(root: HTMLElement): HTMLInputElement {
+    const input = root.querySelector<HTMLInputElement>('input[aria-label="Server URL"]')
+    if (input === null) throw new Error("server URL input not found")
+    return input
+}
+
 function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms))
 }
@@ -59,6 +65,62 @@ async function mount(): Promise<HTMLElement> {
     await flushVan()
     return root
 }
+
+describe("Settings server URL", () => {
+    beforeEach(() => {
+        vi.resetModules()
+        api.checkDownloads.mockReset().mockResolvedValue(new Set())
+        api.getDownloadCount.mockReset().mockResolvedValue(0)
+        api.getPruneCount.mockReset().mockResolvedValue(0)
+        api.getSyncStatus.mockReset().mockResolvedValue({
+            favorites: 0,
+            pending: 0,
+            initialized: false,
+            countOffset: 0,
+            lastSyncAt: null,
+        })
+        resetDom("https://rule34.xxx/index.php?page=account&s=options")
+    })
+
+    it("keeps edits local while typing and commits them on blur", async () => {
+        const m = await importAll()
+        const originalUrl = m.serverSettings.val.url
+        m.serverSettings.val = { ...m.serverSettings.val, enabled: true }
+        const root = m.Settings()
+        document.body.append(root)
+        await flushVan()
+
+        const input = serverUrlInput(root)
+        input.value = "http://localhost:4567///"
+        input.dispatchEvent(new Event("input", { bubbles: true }))
+        await flushVan()
+
+        expect(serverUrlInput(root)).toBe(input)
+        expect(m.serverSettings.val.url).toBe(originalUrl)
+
+        input.dispatchEvent(new Event("blur"))
+        await flushVan()
+
+        expect(m.serverSettings.val.url).toBe("http://localhost:4567")
+    })
+
+    it("commits an edit when Enter is pressed", async () => {
+        const m = await importAll()
+        m.serverSettings.val = { ...m.serverSettings.val, enabled: true }
+        const root = m.Settings()
+        document.body.append(root)
+        await flushVan()
+
+        const input = serverUrlInput(root)
+        input.value = "http://localhost:5678/"
+        const enter = new Event("keydown", { bubbles: true })
+        Object.defineProperty(enter, "key", { value: "Enter" })
+        input.dispatchEvent(enter)
+        await flushVan()
+
+        expect(m.serverSettings.val.url).toBe("http://localhost:5678")
+    })
+})
 
 describe("Settings prune confirmation", () => {
     beforeEach(() => {

@@ -87,6 +87,13 @@ export function Settings() {
     const testing = van.state(false)
     const testResult = van.state<string | null>(null)
 
+    function commitServerUrl(el: HTMLInputElement): void {
+        const url = el.value.replace(/\/+$/, "")
+        if (url !== el.value) el.value = url
+        if (url !== serverSettings.rawVal.url)
+            serverSettings.val = { ...serverSettings.rawVal, url }
+    }
+
     async function testConnection(): Promise<void> {
         if (testing.val) return
         testing.val = true
@@ -240,9 +247,9 @@ export function Settings() {
                         { class: "flex flex-col" },
                         div(
                             { class: "flex items-center gap-2" },
-                            // Rendered once: writing state on input doesn't re-render the
-                            // field itself, so the caret is preserved while typing. The
-                            // trailing slash is stripped on blur.
+                            // Keep edits local to the input until the user commits them.
+                            // Updating serverSettings recreates this live subtree, so doing
+                            // it on every keystroke would blur the replacement input.
                             input({
                                 type: "url",
                                 value: serverSettings.val.url,
@@ -253,15 +260,12 @@ export function Settings() {
                                     "text-zinc-100 placeholder:text-zinc-600",
                                     "focus:border-zinc-500 focus:outline-none",
                                 ),
-                                oninput: (e: Event) => {
-                                    const value = (e.target as HTMLInputElement).value
-                                    serverSettings.val = { ...serverSettings.val, url: value }
+                                onkeydown: (e: KeyboardEvent) => {
+                                    if (e.key !== "Enter") return
+                                    commitServerUrl(e.currentTarget as HTMLInputElement)
                                 },
-                                onblur: (e: Event) => {
-                                    const el = e.target as HTMLInputElement
-                                    const value = el.value.replace(/\/+$/, "")
-                                    if (value !== el.value) el.value = value
-                                    serverSettings.val = { ...serverSettings.val, url: value }
+                                onblur: (e: FocusEvent) => {
+                                    commitServerUrl(e.currentTarget as HTMLInputElement)
                                 },
                             }),
                             button(

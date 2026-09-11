@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { flushVan, resetDom } from "../dom.ts"
 
-// Mounting Settings with the server enabled pulls in SyncSettings (whose
+// Mounting Settings with the server enabled pulls in SyncTool (whose
 // import-time derive refreshes the sync status) and the page's own automatic
 // prune count check. Keep all of it off the network.
 const api = vi.hoisted(() => ({
@@ -31,15 +31,14 @@ async function importAll() {
     return { Settings, serverSettings }
 }
 
-// The prune block is the bordered footer of the server section: heading and
-// description in one div, the button in the next sibling.
+// The prune tool card: a labelled card in the settings duo, holding a single
+// button.
 function pruneButton(root: HTMLElement): HTMLButtonElement {
-    const heading = [...root.querySelectorAll("p")].find(
-        (p) => p.textContent === "Prune unfavorited posts",
+    const heading = [...root.querySelectorAll("div")].find(
+        (d) => d.textContent === "Prune unfavorited posts",
     )
-    if (heading === undefined) throw new Error("prune section not found")
-    const block = heading.parentElement?.parentElement
-    const button = block?.querySelector<HTMLButtonElement>("button") ?? null
+    if (heading === undefined) throw new Error("prune card not found")
+    const button = heading.parentElement?.querySelector<HTMLButtonElement>("button") ?? null
     if (button === null) throw new Error("prune button not found")
     return button
 }

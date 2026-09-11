@@ -1,21 +1,15 @@
 import van from "vanjs-core"
 
 import { AutocompleteInput } from "./AutocompleteInput.ts"
-import { SyncSettings } from "./SyncSettings.ts"
+import { PruneTool } from "./PruneTool.ts"
+import { SyncTool } from "./SyncTool.ts"
 import { Toggle } from "./Toggle.ts"
-import { getDownloadCount, getPruneCount, pruneUnfavoritedPosts } from "./api/server.ts"
+import { getDownloadCount } from "./api/server.ts"
 import { normalizeTags } from "./api/tags.ts"
 import clsx from "./clsx.ts"
 import { preferOriginal, serverSettings, tagBlacklist } from "./state/settings.ts"
 
-const { button, div, h1, h2, input, p, section, span } = van.tags
-
-// How long the "Are you sure?" confirmation stays armed before it expires on
-// its own, so a stale confirmation can't fire the prune much later.
-const PRUNE_CONFIRM_TIMEOUT_MS = 4_000
-// Clicks this close to arming are ignored: a fast accidental double click
-// must not run the destructive prune.
-const PRUNE_CONFIRM_GUARD_MS = 500
+const { button, div, h1, h2, input, p, path, section, span, svg } = van.tags
 
 // A dismissible tag chip in the blacklist. The whole chip is the label; the
 // small round button removes the tag.
@@ -75,55 +69,23 @@ export function Settings() {
         }
     }
 
-    // Server connection state. The enable toggle works on a derive over the
-    // persisted object; the test result is local UI state that never persists.
+    // Server connection state. The enable toggle and the media preferences
+    // work on derives over the persisted object; the test result is local UI
+    // state that never persists.
     const serverEnabled = van.derive<boolean>(() => serverSettings.val.enabled)
-    const preferDownloaded = van.derive<boolean>(
-        () => serverSettings.val.preferDownloaded !== false,
-    )
+    const serverThumbnails = van.derive<boolean>(() => {
+        const s = serverSettings.val
+        return s.serverThumbnails ?? s.preferDownloaded !== false
+    })
+    const serverMedia = van.derive<boolean>(() => {
+        const s = serverSettings.val
+        return s.serverMedia ?? s.preferDownloaded !== false
+    })
     const useCachedPostDetails = van.derive<boolean>(
         () => serverSettings.val.useCachedPostDetails !== false,
     )
     const testing = van.state(false)
     const testResult = van.state<string | null>(null)
-    const pruneCount = van.state<number | null>(null)
-    const pruneStatus = van.state<"idle" | "loading" | "pruning">("idle")
-    const pruneMessage = van.state<string | null>(null)
-    // Prune confirmation: the first click arms the "Are you sure?" state,
-    // the second click runs the prune once the double-click guard has passed.
-    const pruneArmed = van.state(false)
-    let armedAt = 0
-    let armExpiry: number | null = null
-
-    function disarmPrune(): void {
-        pruneArmed.val = false
-        if (armExpiry !== null) {
-            window.clearTimeout(armExpiry)
-            armExpiry = null
-        }
-    }
-
-    function armPrune(): void {
-        pruneArmed.val = true
-        armedAt = Date.now()
-        armExpiry = window.setTimeout(disarmPrune, PRUNE_CONFIRM_TIMEOUT_MS)
-    }
-
-    function handlePruneClick(): void {
-        if (pruneStatus.val !== "idle") return
-        const count = pruneCount.val
-        if (count === null || count === 0) {
-            void refreshPruneCount()
-            return
-        }
-        if (!pruneArmed.val) {
-            armPrune()
-            return
-        }
-        if (Date.now() - armedAt < PRUNE_CONFIRM_GUARD_MS) return
-        disarmPrune()
-        void prune()
-    }
 
     async function testConnection(): Promise<void> {
         if (testing.val) return
@@ -131,44 +93,12 @@ export function Settings() {
         testResult.val = null
         try {
             const count = await getDownloadCount()
-            testResult.val = `Connected — ${count} posts`
+            testResult.val = `Connected · ${count.toLocaleString()} posts`
         } catch (err) {
             testResult.val = err instanceof Error ? err.message : String(err)
         } finally {
             testing.val = false
         }
-    }
-
-    async function refreshPruneCount(): Promise<void> {
-        if (pruneStatus.val !== "idle") return
-        pruneStatus.val = "loading"
-        pruneMessage.val = null
-        try {
-            pruneCount.val = await getPruneCount()
-        } catch (err) {
-            pruneMessage.val = err instanceof Error ? err.message : String(err)
-        } finally {
-            pruneStatus.val = "idle"
-        }
-    }
-
-    async function prune(): Promise<void> {
-        if (pruneStatus.val !== "idle" || !pruneCount.val) return
-        pruneStatus.val = "pruning"
-        pruneMessage.val = null
-        try {
-            const count = await pruneUnfavoritedPosts()
-            pruneCount.val = 0
-            pruneMessage.val = `Pruned ${count.toLocaleString()} ${count === 1 ? "post" : "posts"}.`
-        } catch (err) {
-            pruneMessage.val = err instanceof Error ? err.message : String(err)
-        } finally {
-            pruneStatus.val = "idle"
-        }
-    }
-
-    if (serverSettings.val.enabled && serverSettings.val.url.trim() !== "") {
-        void refreshPruneCount()
     }
 
     return div(
@@ -245,6 +175,38 @@ export function Settings() {
                 state: preferOriginal,
                 onToggle: (value) => (preferOriginal.val = value),
             }),
+            // Live: the server-dependent options only make sense while server
+            // support is enabled, so the whole group follows the toggle.
+            // Always returns a node.
+            () => {
+                if (!serverEnabled.val) return document.createComment("")
+                return div(
+                    { class: "flex flex-col gap-4" },
+                    div(
+                        { class: "text-xs font-semibold tracking-wider text-zinc-500 uppercase" },
+                        "via the Arueshalae server",
+                    ),
+                    Toggle({
+                        label: "Serve higher quality thumbnails",
+                        description:
+                            "Browsing previews come from your server instead of Rule34's compressed thumbnails.",
+                        state: serverThumbnails,
+                        onToggle: (value) =>
+                            (serverSettings.val = {
+                                ...serverSettings.val,
+                                serverThumbnails: value,
+                            }),
+                    }),
+                    Toggle({
+                        label: "Load media from the server",
+                        description:
+                            "Images and videos load from your server, which is usually faster than Rule34.",
+                        state: serverMedia,
+                        onToggle: (value) =>
+                            (serverSettings.val = { ...serverSettings.val, serverMedia: value }),
+                    }),
+                )
+            },
         ),
 
         section(
@@ -275,72 +237,83 @@ export function Settings() {
                 return div(
                     { class: "flex flex-col gap-4" },
                     div(
-                        { class: "flex items-center gap-2" },
-                        // Rendered once: writing state on input doesn't re-render the
-                        // field itself, so the caret is preserved while typing. The
-                        // trailing slash is stripped on blur.
-                        input({
-                            type: "url",
-                            value: serverSettings.val.url,
-                            placeholder: "http://127.0.0.1:34343",
-                            "aria-label": "Server URL",
-                            class: clsx(
-                                "w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm",
-                                "text-zinc-100 placeholder:text-zinc-600",
-                                "focus:border-zinc-500 focus:outline-none",
-                            ),
-                            oninput: (e: Event) => {
-                                const value = (e.target as HTMLInputElement).value
-                                serverSettings.val = { ...serverSettings.val, url: value }
-                            },
-                            onblur: (e: Event) => {
-                                const el = e.target as HTMLInputElement
-                                const value = el.value.replace(/\/+$/, "")
-                                if (value !== el.value) el.value = value
-                                serverSettings.val = { ...serverSettings.val, url: value }
-                            },
-                        }),
-                        button(
-                            {
-                                type: "button",
+                        { class: "flex flex-col" },
+                        div(
+                            { class: "flex items-center gap-2" },
+                            // Rendered once: writing state on input doesn't re-render the
+                            // field itself, so the caret is preserved while typing. The
+                            // trailing slash is stripped on blur.
+                            input({
+                                type: "url",
+                                value: serverSettings.val.url,
+                                placeholder: "http://127.0.0.1:34343",
+                                "aria-label": "Server URL",
                                 class: clsx(
-                                    "shrink-0 rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2",
-                                    "text-sm font-medium text-zinc-100 transition-colors hover:bg-zinc-700",
+                                    "w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm",
+                                    "text-zinc-100 placeholder:text-zinc-600",
+                                    "focus:border-zinc-500 focus:outline-none",
                                 ),
-                                onclick: () => void testConnection(),
-                            },
-                            () => (testing.val ? "Testing…" : "Test connection"),
-                        ),
-                    ),
-                    // Live: connection test status. Always returns a node.
-                    () => {
-                        if (testing.val)
-                            return p({ class: "text-sm text-zinc-500" }, "Testing connection…")
-                        const result = testResult.val
-                        if (result === null) return document.createComment("")
-                        return p(
-                            {
-                                class: clsx(
-                                    "text-sm",
-                                    result.startsWith("Connected")
-                                        ? "text-emerald-400"
-                                        : "text-rose-400",
-                                ),
-                            },
-                            result,
-                        )
-                    },
-                    Toggle({
-                        label: "Prefer downloaded media",
-                        description:
-                            "Serve images, videos, and thumbnails from your Arueshalae server when available.",
-                        state: preferDownloaded,
-                        onToggle: (value) =>
-                            (serverSettings.val = {
-                                ...serverSettings.val,
-                                preferDownloaded: value,
+                                oninput: (e: Event) => {
+                                    const value = (e.target as HTMLInputElement).value
+                                    serverSettings.val = { ...serverSettings.val, url: value }
+                                },
+                                onblur: (e: Event) => {
+                                    const el = e.target as HTMLInputElement
+                                    const value = el.value.replace(/\/+$/, "")
+                                    if (value !== el.value) el.value = value
+                                    serverSettings.val = { ...serverSettings.val, url: value }
+                                },
                             }),
-                    }),
+                            button(
+                                {
+                                    type: "button",
+                                    class: clsx(
+                                        "shrink-0 rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2",
+                                        "text-sm font-medium text-zinc-100 transition-colors hover:bg-zinc-700",
+                                    ),
+                                    onclick: () => void testConnection(),
+                                },
+                                () => (testing.val ? "Testing…" : "Test connection"),
+                            ),
+                        ),
+                        // Live: the connection result, right-aligned under the
+                        // test row. Always returns a node.
+                        () => {
+                            if (testing.val)
+                                return p(
+                                    { class: "mt-1.5 text-right text-xs text-zinc-500" },
+                                    "Testing connection…",
+                                )
+                            const result = testResult.val
+                            if (result === null) return document.createComment("")
+                            const ok = result.startsWith("Connected")
+                            return p(
+                                {
+                                    class: clsx(
+                                        "mt-1.5 flex items-center justify-end gap-1 text-xs",
+                                        ok ? "text-emerald-400" : "text-rose-400",
+                                    ),
+                                },
+                                ok
+                                    ? [
+                                          svg(
+                                              {
+                                                  viewBox: "0 0 24 24",
+                                                  fill: "none",
+                                                  stroke: "currentColor",
+                                                  "stroke-width": 2.5,
+                                                  "stroke-linecap": "round",
+                                                  "stroke-linejoin": "round",
+                                                  class: "h-3 w-3 shrink-0",
+                                              },
+                                              path({ d: "M20 6 9 17l-5-5" }),
+                                          ),
+                                          result,
+                                      ]
+                                    : [result],
+                            )
+                        },
+                    ),
                     Toggle({
                         label: "Use cached post details",
                         description:
@@ -352,62 +325,13 @@ export function Settings() {
                                 useCachedPostDetails: value,
                             }),
                     }),
-                    SyncSettings(),
+                    // The two maintenance tools as equal cards: the grid
+                    // stretches them to the same height and each pins its
+                    // action block to the bottom.
                     div(
-                        { class: "flex flex-col gap-3 border-t border-zinc-800 pt-4" },
-                        div(
-                            p({ class: "font-medium text-zinc-200" }, "Prune unfavorited posts"),
-                            p(
-                                { class: "text-sm text-zinc-500" },
-                                "Remove database entries and local media only for posts confirmed unfavorited. Posts deleted from Rule34 are kept.",
-                            ),
-                        ),
-                        div(
-                            { class: "flex flex-wrap gap-2" },
-                            button(
-                                {
-                                    type: "button",
-                                    class: clsx(
-                                        "grow rounded-lg bg-rose-500 px-4 py-2 text-sm font-medium text-white",
-                                        "hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-50",
-                                    ),
-                                    disabled: () => pruneStatus.val !== "idle",
-                                    onclick: handlePruneClick,
-                                },
-                                () => {
-                                    if (pruneStatus.val === "loading") return "Checking…"
-                                    if (pruneStatus.val === "pruning") return "Pruning…"
-                                    const count = pruneCount.val
-                                    if (count === 0) return "Check again"
-                                    if (count === null) return "Check prune"
-                                    if (pruneArmed.val) return "Are you sure?"
-                                    return `Prune ${count.toLocaleString()} ${count === 1 ? "post" : "posts"}`
-                                },
-                            ),
-                        ),
-                        () => {
-                            const message = pruneMessage.val
-                            if (message !== null)
-                                return p(
-                                    {
-                                        class: clsx(
-                                            "text-sm",
-                                            message.startsWith("Pruned")
-                                                ? "text-emerald-400"
-                                                : "text-rose-400",
-                                        ),
-                                    },
-                                    message,
-                                )
-                            const count = pruneCount.val
-                            if (count === null) return document.createComment("")
-                            return p(
-                                { class: "text-sm text-zinc-500" },
-                                count === 0
-                                    ? "No confirmed unfavorited posts to prune."
-                                    : `${count.toLocaleString()} ${count === 1 ? "post is" : "posts are"} eligible for pruning.`,
-                            )
-                        },
+                        { class: "grid grid-cols-1 gap-4 sm:grid-cols-2" },
+                        SyncTool(),
+                        PruneTool(),
                     ),
                 )
             },

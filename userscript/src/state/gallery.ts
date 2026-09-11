@@ -174,6 +174,40 @@ export function reloadGallery(): void {
     if (r.type === "postdetails" && r.origin !== undefined) loadOrigin(r.origin)
 }
 
+// Whether the filmstrip can grow by one page at either end of the loaded
+// collection. This is deliberately separate from canStep(): loading a page
+// here changes only the strip, never the active post or route.
+export function canLoadAdjacentPage(dir: 1 | -1): boolean {
+    const col = getCollection()
+    if (col === null || col.pages.length === 0) return false
+    const edge = dir === 1 ? col.pages.at(-1) : col.pages[0]
+    if (edge === undefined) return false
+    const pid = edge.pid + dir * pageSize(col.origin)
+    return pid >= 0 && (dir === -1 || pid <= col.lastPagePID)
+}
+
+// Grow the filmstrip without navigating away from the current post. The
+// collection layer deduplicates this with automatic prefetches and boundary
+// steps, so clicking while the same page is already loading is harmless.
+export function loadAdjacentPage(dir: 1 | -1): void {
+    const col = getCollection()
+    if (col === null || !canLoadAdjacentPage(dir)) return
+    const edge = dir === 1 ? col.pages.at(-1) : col.pages[0]
+    if (edge === undefined) return
+    void loadPage(col, edge.pid + dir * pageSize(col.origin))
+}
+
+async function loadPage(col: Collection, pid: number): Promise<void> {
+    try {
+        await ensurePage(col, pid)
+    } catch {
+        // Filmstrip growth is optional. Keep the control available so a
+        // later click or near-edge visit can retry a transient failure.
+        return
+    }
+    if (isCurrent(col)) publish()
+}
+
 // Step to the adjacent post in the collection. Each step is a replace
 // navigation (the URL changes but no history entry is added, so the browser
 // back button exits the gallery); at a page boundary the adjacent page is
@@ -284,6 +318,27 @@ export function canStep(delta: 1 | -1): boolean {
     }
     return ctx.index > 0 || (ctx.first !== undefined && ctx.first.pid - ctx.size >= 0)
 }
+
+// When the active post reaches either of the last two positions on its page,
+// fetch the neighboring page early. This grows the filmstrip before the user
+// actually crosses the boundary, and mirrors the behavior for earlier pages.
+van.derive(() => {
+    const r = route.val
+    if (r.type !== "postdetails" || r.origin === undefined) return
+    const origin = r.origin
+    const g = gallery.val
+    if (g.status !== "ready") return
+    const col = getCollection()
+    if (col === null || originKey(col.origin) !== originKey(origin)) return
+    const page = col.pages.find((candidate) => candidate.pid === origin.pid)
+    if (page === undefined) return
+    const index = page.posts.findIndex((post) => post.id === r.id)
+    if (index === -1) return
+    const size = pageSize(origin)
+    if (index <= 1 && page.pid - size >= 0) void loadPage(col, page.pid - size)
+    if (index >= page.posts.length - 2 && page.pid + size <= col.lastPagePID)
+        void loadPage(col, page.pid + size)
+})
 
 // Prefetch the details of the two adjacent loaded posts, so arrow-stepping
 // renders instantly (the details cache makes repeat fetches free).

@@ -154,6 +154,43 @@ describe("PostDetails gallery", () => {
         expect(counter?.textContent).toBe("3 / 4")
     })
 
+    it("loads another filmstrip page without navigating to a post", async () => {
+        api.fetchPostList.mockImplementation((_tags: string | undefined, pid: number) =>
+            Promise.resolve({
+                posts:
+                    pid === 0 ? [post(1), post(2), post(3), post(4), post(5)] : [post(6), post(7)],
+                lastPagePID: 42,
+                tags: [],
+            }),
+        )
+        const origin = { kind: "list" as const, tags: "test", pid: 0 }
+        const collectionModule = await import("../../src/state/gallery-collection.ts")
+        const col = collectionModule.collectionFor(origin)
+        await collectionModule.ensurePage(col, 0)
+        const { details: detailsState } = await import("../../src/state/details.ts")
+        const { gallery } = await import("../../src/state/gallery.ts")
+        detailsState.val = { status: "ready", post: details(3), origin }
+        gallery.val = { status: "ready", ...collectionModule.snapshot(col) }
+        const { PostDetails } = await import("../../src/PostDetails.ts")
+        const scrollIntoView = vi.spyOn(Element.prototype, "scrollIntoView")
+        document.body.append(PostDetails())
+        await flushVan()
+        scrollIntoView.mockClear()
+
+        const before = window.location.href
+        document.querySelector<HTMLButtonElement>('button[aria-label="Load next page"]')?.click()
+        await flushVan()
+
+        expect(window.location.href).toBe(before)
+        expect(col.pages.map((page) => page.pid)).toEqual([0, 42])
+        expect(document.querySelector('a[title="Post #6"]')).not.toBeNull()
+        expect(scrollIntoView).not.toHaveBeenCalled()
+
+        detailsState.val = { status: "ready", post: details(4), origin }
+        await flushVan()
+        expect(scrollIntoView).toHaveBeenCalledOnce()
+    })
+
     it("shows the counter and enables the arrows once the search finds the active post", async () => {
         // The active post is not on the origin page: the gallery's post
         // search loads the following page, which contains it. The route stays

@@ -22,7 +22,15 @@ import {
     retryUnfavoriteMembership,
 } from "./state/favorite-action.ts"
 import { loadedPosts, originKey } from "./state/gallery-collection.ts"
-import { canStep, gallery, galleryFocus, reloadGallery, step } from "./state/gallery.ts"
+import {
+    canLoadAdjacentPage,
+    canStep,
+    gallery,
+    galleryFocus,
+    loadAdjacentPage,
+    reloadGallery,
+    step,
+} from "./state/gallery.ts"
 import { libraryPosts } from "./state/library.ts"
 import { preferOriginal, serverSettings } from "./state/settings.ts"
 
@@ -463,6 +471,7 @@ function Filmstrip({
         // the strip never shows a thumb twice.
         return div(
             { class: "contents" },
+            FilmstripPageButton({ dir: -1, vertical }),
             loadedPosts(g).map(({ post, pid }) =>
                 Thumb({
                     post,
@@ -471,23 +480,8 @@ function Filmstrip({
                     vertical,
                 }),
             ),
+            FilmstripPageButton({ dir: 1, vertical }),
         )
-    }
-    // Scroll the active thumb into view whenever the active post or the
-    // loaded pages change (a live node must return one node, so this is a
-    // comment carrying the side effect).
-    const ScrollActive = () => {
-        activeId()
-        void gallery.val
-        queueMicrotask(() => {
-            const active = document.querySelector<HTMLAnchorElement>('[data-gallery-active="true"]')
-            active?.scrollIntoView({
-                behavior: "smooth",
-                block: vertical ? "center" : "nearest",
-                inline: vertical ? "nearest" : "center",
-            })
-        })
-        return document.createComment("")
     }
     // The "Gallery" heading, shared by both orientations.
     const headerLabel = span(
@@ -537,12 +531,58 @@ function Filmstrip({
             },
             { passive: false },
         )
+    // Gallery updates also re-run this binding so an initially loading strip
+    // can scroll once its active thumb appears. Remember the last post that
+    // was actually scrolled, though: growing either end of the filmstrip must
+    // preserve the user's manual scroll position.
+    let lastScrolledId: number | undefined
+    const ScrollActive = () => {
+        const requestedId = activeId()
+        void gallery.val
+        queueMicrotask(() => {
+            if (requestedId === lastScrolledId || activeId() !== requestedId) return
+            const active = scroller.querySelector<HTMLAnchorElement>('[data-gallery-active="true"]')
+            if (active === null) return
+            active.scrollIntoView({
+                behavior: "smooth",
+                block: vertical ? "center" : "nearest",
+                inline: vertical ? "nearest" : "center",
+            })
+            lastScrolledId = requestedId
+        })
+        return document.createComment("")
+    }
     return div(
         { class: clsx("flex shrink-0 flex-col gap-1.5", vertical && "w-24") },
         header,
         scroller,
         ScrollActive,
     )
+}
+
+// A page-growth control at each end of the filmstrip. It fetches and reveals
+// the adjacent page without changing the selected post; unavailable sides use
+// a zero-footprint placeholder so the live binding can become active later.
+function FilmstripPageButton({ dir, vertical }: { dir: 1 | -1; vertical: boolean }) {
+    return () => {
+        void gallery.val
+        if (!canLoadAdjacentPage(dir)) return document.createComment("")
+        const label = dir === 1 ? "Load next page" : "Load previous page"
+        return button(
+            {
+                type: "button",
+                class: clsx(
+                    "flex shrink-0 items-center justify-center rounded-md border border-zinc-700",
+                    "bg-zinc-900/70 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100",
+                    vertical ? "h-10 w-full" : "h-12 w-10",
+                ),
+                title: label,
+                "aria-label": label,
+                onclick: () => loadAdjacentPage(dir),
+            },
+            span({ "icon-name": dir === 1 ? "chevron-right" : "chevron-left" }),
+        )
+    }
 }
 
 // One filmstrip thumbnail. Built once per loaded post; the active highlight

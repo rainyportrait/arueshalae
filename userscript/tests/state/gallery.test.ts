@@ -279,6 +279,45 @@ describe("finding the active post after the origin page loads", () => {
         expect(col?.pages.map((page) => page.pid)).toEqual([0, 42, 84])
     })
 
+    it.each([3, 4])("prefetches the next page from near-end post %i", async (activeId) => {
+        api.fetchPostList.mockImplementation((_tags: string | undefined, pid: number) =>
+            Promise.resolve({
+                posts:
+                    pid === 0
+                        ? [post(1), post(2), post(3), post(4)]
+                        : [post(5), post(6), post(7), post(8)],
+                lastPagePID: 42,
+                tags: [],
+            }),
+        )
+        const { collectionModule, route, origin } = await loadModules()
+        route.val = { type: "postdetails", id: activeId, tags: "test", origin }
+        await flushVan()
+
+        expect(collectionModule.getCollection()?.pages.map((page) => page.pid)).toEqual([0, 42])
+        expect(route.val).toEqual({ type: "postdetails", id: activeId, tags: "test", origin })
+    })
+
+    it.each([5, 6])("prefetches the previous page from near-start post %i", async (activeId) => {
+        api.fetchPostList.mockImplementation((_tags: string | undefined, pid: number) =>
+            Promise.resolve({
+                posts:
+                    pid === 0
+                        ? [post(1), post(2), post(3), post(4)]
+                        : [post(5), post(6), post(7), post(8)],
+                lastPagePID: 42,
+                tags: [],
+            }),
+        )
+        const { collectionModule, route } = await loadModules()
+        const origin = { kind: "list" as const, tags: "test", pid: 42 }
+        route.val = { type: "postdetails", id: activeId, tags: "test", origin }
+        await flushVan()
+
+        expect(collectionModule.getCollection()?.pages.map((page) => page.pid)).toEqual([0, 42])
+        expect(route.val).toEqual({ type: "postdetails", id: activeId, tags: "test", origin })
+    })
+
     it("stops searching after the page limit", async () => {
         api.fetchPostList.mockImplementation((_tags: string | undefined, pid: number) =>
             Promise.resolve({ posts: [post(1)], lastPagePID: pid, tags: [] }),
@@ -314,13 +353,13 @@ describe("finding the active post after the origin page loads", () => {
     it("searches without a loading flash when the origin page is cached", async () => {
         api.fetchPostList.mockImplementation((_tags: string | undefined, pid: number) =>
             Promise.resolve({
-                posts: pid === 0 ? [post(1), post(2)] : [post(3)],
+                posts: pid === 0 ? [post(1), post(2), post(3), post(6), post(7)] : [post(4)],
                 lastPagePID: 42,
                 tags: [],
             }),
         )
         const { route, galleryModule, origin } = await loadModules()
-        route.val = { type: "postdetails", id: 1, tags: "test", origin }
+        route.val = { type: "postdetails", id: 3, tags: "test", origin }
         await flushVan()
         // The post was on the origin page: no follow-up fetches.
         expect(api.fetchPostList.mock.calls.map((call) => call[1])).toEqual([0])
@@ -333,7 +372,7 @@ describe("finding the active post after the origin page loads", () => {
         // after the flush the loading state would already be gone again.
         const statuses: string[] = []
         van.derive(() => statuses.push(galleryModule.gallery.val.status))
-        route.val = { type: "postdetails", id: 3, tags: "test", origin }
+        route.val = { type: "postdetails", id: 4, tags: "test", origin }
         await flushVan()
 
         expect(statuses).not.toContain("loading")

@@ -7,7 +7,7 @@ import { Toggle } from "./Toggle.ts"
 import { getDownloadCount } from "./api/server.ts"
 import { normalizeTags } from "./api/tags.ts"
 import clsx from "./clsx.ts"
-import { preferOriginal, serverSettings, tagBlacklist } from "./state/settings.ts"
+import { fullscreenFocus, preferOriginal, serverSettings, tagBlacklist } from "./state/settings.ts"
 
 const { button, div, h1, h2, input, p, path, section, span, svg } = van.tags
 
@@ -114,6 +114,26 @@ export function Settings() {
             { class: "flex flex-col gap-1" },
             h1({ class: "text-3xl font-semibold tracking-tight text-zinc-100" }, "Settings"),
             p({ class: "text-sm text-zinc-500" }, "Saved to this browser; no login required."),
+        ),
+
+        section(
+            {
+                class: clsx(
+                    "flex flex-col gap-4 rounded-xl border border-zinc-800 bg-zinc-900/40 p-5",
+                ),
+            },
+            div(
+                { class: "flex flex-col gap-1" },
+                h2({ class: "text-lg font-semibold text-zinc-100" }, "Gallery"),
+                p({ class: "text-sm text-zinc-500" }, "How gallery focus mode behaves."),
+            ),
+            Toggle({
+                label: "Use fullscreen in focus mode",
+                description:
+                    "Ask the browser to enter fullscreen with focus mode, and leave fullscreen when focus mode closes.",
+                state: fullscreenFocus,
+                onToggle: (value) => (fullscreenFocus.val = value),
+            }),
         ),
 
         section(

@@ -17,6 +17,7 @@ import {
 } from "./gallery-collection.ts"
 import { type Loadable, errorMessage } from "./load.ts"
 import { cachedPostDetails } from "./post-details-cache.ts"
+import { fullscreenFocus } from "./settings.ts"
 
 export type { Gallery, GalleryPage } from "./gallery-collection.ts"
 
@@ -29,6 +30,49 @@ export const gallery = van.state<GalleryState>({ status: "loading" })
 // route with an origin); the derive below force-turns it off the moment the
 // route leaves one, so it never survives leaving the gallery.
 export const galleryFocus = van.state(false)
+
+let focusOwnsFullscreen = false
+
+// Keep the browser fullscreen transition in the same user gesture as the
+// button/key that toggled focus mode. Rejections are expected when fullscreen
+// is unavailable or denied; focus mode itself still works.
+export function setGalleryFocus(enabled: boolean): void {
+    galleryFocus.val = enabled
+    if (!enabled) {
+        if (focusOwnsFullscreen && document.fullscreenElement !== null) {
+            focusOwnsFullscreen = false
+            void document.exitFullscreen().catch(() => {
+                /* non-fatal: the browser may already be leaving fullscreen */
+            })
+        }
+        return
+    }
+
+    if (
+        !fullscreenFocus.rawVal ||
+        document.fullscreenElement !== null ||
+        document.documentElement.requestFullscreen === undefined
+    )
+        return
+    void document.documentElement.requestFullscreen().then(
+        () => {
+            focusOwnsFullscreen = true
+            if (!galleryFocus.rawVal) setGalleryFocus(false)
+        },
+        () => {
+            /* non-fatal: focus mode works without browser fullscreen */
+        },
+    )
+}
+
+// Browser UI (notably Escape) can leave fullscreen before the page sees the
+// key. Mirror that transition back to focus mode when this feature initiated
+// fullscreen, but ignore fullscreen sessions owned by the site or user.
+document.addEventListener("fullscreenchange", () => {
+    if (!focusOwnsFullscreen || document.fullscreenElement !== null) return
+    focusOwnsFullscreen = false
+    galleryFocus.val = false
+})
 
 type PostDetailsRoute = Extract<Route, { type: "postdetails" }>
 type GalleryPostDetailsRoute = PostDetailsRoute & { origin: PostOrigin }
@@ -98,7 +142,7 @@ van.derive(() => {
 // re-triggers this derive.
 van.derive(() => {
     const r = route.val
-    if (r.type !== "postdetails" || r.origin === undefined) galleryFocus.val = false
+    if (r.type !== "postdetails" || r.origin === undefined) setGalleryFocus(false)
 })
 
 function loadOrigin(origin: PostOrigin): void {
@@ -380,8 +424,8 @@ document.addEventListener("keydown", (event) => {
         event.preventDefault()
         step(-1)
     } else if (event.key === "f" || event.key === "F") {
-        galleryFocus.val = !galleryFocus.val
+        setGalleryFocus(!galleryFocus.val)
     } else if (event.key === "Escape" && galleryFocus.val) {
-        galleryFocus.val = false
+        setGalleryFocus(false)
     }
 })

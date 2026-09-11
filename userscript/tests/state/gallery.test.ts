@@ -213,6 +213,72 @@ describe("gallery pagination", () => {
     })
 })
 
+describe("gallery focus fullscreen", () => {
+    beforeEach(() => {
+        vi.resetModules()
+        resetDom()
+    })
+
+    it("enters and exits fullscreen only when the setting is enabled", async () => {
+        let fullscreenElement: Element | null = null
+        const requestFullscreen = vi.fn(async () => {
+            fullscreenElement = document.documentElement
+        })
+        const exitFullscreen = vi.fn(async () => {
+            fullscreenElement = null
+        })
+        Object.defineProperties(document, {
+            fullscreenElement: { configurable: true, get: () => fullscreenElement },
+            exitFullscreen: { configurable: true, value: exitFullscreen },
+        })
+        Object.defineProperty(document.documentElement, "requestFullscreen", {
+            configurable: true,
+            value: requestFullscreen,
+        })
+
+        const { fullscreenFocus } = await import("../../src/state/settings.ts")
+        const { galleryFocus, setGalleryFocus } = await import("../../src/state/gallery.ts")
+
+        setGalleryFocus(true)
+        expect(galleryFocus.val).toBe(true)
+        expect(requestFullscreen).not.toHaveBeenCalled()
+
+        setGalleryFocus(false)
+        fullscreenFocus.val = true
+        setGalleryFocus(true)
+        await Promise.resolve()
+        expect(requestFullscreen).toHaveBeenCalledOnce()
+
+        setGalleryFocus(false)
+        expect(exitFullscreen).toHaveBeenCalledOnce()
+    })
+
+    it("leaves focus mode when the browser exits its fullscreen session", async () => {
+        let fullscreenElement: Element | null = null
+        Object.defineProperties(document, {
+            fullscreenElement: { configurable: true, get: () => fullscreenElement },
+            exitFullscreen: { configurable: true, value: vi.fn(async () => {}) },
+        })
+        Object.defineProperty(document.documentElement, "requestFullscreen", {
+            configurable: true,
+            value: vi.fn(async () => {
+                fullscreenElement = document.documentElement
+            }),
+        })
+
+        const { fullscreenFocus } = await import("../../src/state/settings.ts")
+        const { galleryFocus, setGalleryFocus } = await import("../../src/state/gallery.ts")
+        fullscreenFocus.val = true
+        setGalleryFocus(true)
+        await Promise.resolve()
+
+        fullscreenElement = null
+        document.dispatchEvent(new Event("fullscreenchange"))
+
+        expect(galleryFocus.val).toBe(false)
+    })
+})
+
 describe("finding the active post after the origin page loads", () => {
     beforeEach(() => {
         vi.resetModules()

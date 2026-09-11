@@ -63,6 +63,13 @@ export const tagBlacklist = persisted<string[]>(`${PREFIX}tag-blacklist`, [])
 
 export const preferOriginal = persisted<boolean>(`${PREFIX}prefer-original`, false)
 
+// --- Gallery --------------------------------------------------------------
+// Whether entering gallery focus mode should also ask the browser to enter
+// fullscreen. Off by default because fullscreen is a stronger UI transition
+// than hiding Arueshalae's own navigation.
+
+export const fullscreenFocus = persisted<boolean>(`${PREFIX}fullscreen-focus`, false)
+
 // --- Hidden posts toggle --------------------------------------------------
 // Whether blacklisted posts are currently shown in the post list. Session-only
 // (not persisted): it is a viewing preference for the current list, not a

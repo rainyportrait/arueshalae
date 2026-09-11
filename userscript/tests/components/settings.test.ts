@@ -27,8 +27,8 @@ vi.mock("../../src/api/sync.ts", async (importOriginal) => ({
 
 async function importAll() {
     const { Settings } = await import("../../src/Settings.ts")
-    const { serverSettings } = await import("../../src/state/settings.ts")
-    return { Settings, serverSettings }
+    const { fullscreenFocus, serverSettings } = await import("../../src/state/settings.ts")
+    return { Settings, fullscreenFocus, serverSettings }
 }
 
 // The prune tool card: a labelled card in the settings duo, holding a single
@@ -119,6 +119,32 @@ describe("Settings server URL", () => {
         await flushVan()
 
         expect(m.serverSettings.val.url).toBe("http://localhost:5678")
+    })
+})
+
+describe("Settings gallery focus", () => {
+    beforeEach(() => {
+        vi.resetModules()
+        resetDom("https://rule34.xxx/index.php?page=account&s=options")
+    })
+
+    it("offers fullscreen as an opt-in persisted setting", async () => {
+        const m = await importAll()
+        const root = m.Settings()
+        document.body.append(root)
+        await flushVan()
+
+        const toggle = [...root.querySelectorAll<HTMLButtonElement>('[role="switch"]')].find(
+            (button) => button.parentElement?.textContent?.includes("Use fullscreen in focus mode"),
+        )
+        expect(m.fullscreenFocus.val).toBe(false)
+        expect(toggle?.getAttribute("aria-checked")).toBe("false")
+
+        toggle?.click()
+        await flushVan()
+
+        expect(m.fullscreenFocus.val).toBe(true)
+        expect(localStorage.getItem("arue-fullscreen-focus")).toBe("true")
     })
 })
 

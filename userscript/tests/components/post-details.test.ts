@@ -147,6 +147,15 @@ describe("PostDetails gallery", () => {
         expect(scroller?.className).toContain("landscape:overflow-y-auto")
         expect(thumb?.className).toContain("portrait:h-12")
         expect(thumb?.className).toContain("landscape:h-14")
+
+        const focusButtons = [
+            ...strip!.querySelectorAll<HTMLButtonElement>('button[title*="focus mode"]'),
+        ]
+        expect(focusButtons).toHaveLength(2)
+        expect(focusButtons[0].parentElement?.className).toContain("landscape:block")
+        expect(focusButtons[0].parentElement?.className).toContain("hidden")
+        expect(focusButtons[1].parentElement?.className).toContain("portrait:block")
+        expect(focusButtons[1].parentElement?.className).toContain("landscape:hidden")
     })
 
     it("shows a post the feed shift put into two pages only once", async () => {

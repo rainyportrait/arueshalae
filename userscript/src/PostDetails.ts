@@ -29,6 +29,7 @@ import {
     galleryFocus,
     loadAdjacentPage,
     reloadGallery,
+    setGalleryFocus,
     step,
 } from "./state/gallery.ts"
 import { libraryPosts } from "./state/library.ts"
@@ -392,7 +393,7 @@ function FocusButton() {
             title: () =>
                 galleryFocus.val ? "Exit focus mode (Esc)" : "Focus mode: hide navigation (F)",
             onclick: () => {
-                galleryFocus.val = !galleryFocus.val
+                setGalleryFocus(!galleryFocus.val)
             },
         },
         () =>
@@ -491,9 +492,9 @@ function Filmstrip({
         },
         "Gallery",
     )
-    // The vertical header stacks the label + focus button on one row with the
-    // counter below, to fit the narrow strip; horizontal puts everything on
-    // one row with the counter grouped next to the focus button.
+    // The landscape header stacks the Gallery label + focus button above the
+    // counter to fit the narrow side strip. In portrait, the focus button
+    // stays beside the counter at the other end of the bottom strip.
     const header = div(
         {
             class: clsx(
@@ -508,12 +509,16 @@ function Filmstrip({
                 class: clsx("flex items-center justify-between", focus && "landscape:w-full"),
             },
             headerLabel,
-            focus ? FocusButton() : document.createComment(""),
+            focus
+                ? div({ class: "hidden landscape:block" }, FocusButton())
+                : document.createComment(""),
         ),
         div(
             { class: "flex items-center gap-2" },
             Counter,
-            focus ? document.createComment("") : FocusButton(),
+            focus
+                ? div({ class: "portrait:block landscape:hidden" }, FocusButton())
+                : FocusButton(),
         ),
     )
     // The scroll container, kept across gallery steps by the caller — so the

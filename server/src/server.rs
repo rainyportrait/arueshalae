@@ -16,6 +16,13 @@ use tokio_util::sync::CancellationToken;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing::error;
 
+#[cfg(embedded_userscript)]
+const USERSCRIPT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/arueshalae.user.js"));
+
+#[cfg(not(embedded_userscript))]
+const USERSCRIPT_UNAVAILABLE: &str =
+    "The userscript is only provided by the server in release mode.\n";
+
 use crate::{
     database::Database,
     posts::{
@@ -46,6 +53,7 @@ pub struct SearchQuery {
 
 pub fn create_router(database: &Database, base_path: &Utf8Path) -> Router {
     Router::new()
+        .route("/arueshalae.user.js", get(serve_userscript))
         .route("/api/sync/status", get(crate::sync::get_status))
         .route("/api/sync/baseline", get(crate::sync::get_baseline))
         .route(
@@ -90,6 +98,64 @@ pub fn create_router(database: &Database, base_path: &Utf8Path) -> Router {
             database: database.clone(),
             base_path: base_path.to_path_buf(),
         })
+}
+
+#[cfg(embedded_userscript)]
+async fn serve_userscript() -> impl IntoResponse {
+    (
+        [(
+            header::CONTENT_TYPE,
+            "application/javascript; charset=utf-8",
+        )],
+        USERSCRIPT,
+    )
+}
+
+#[cfg(not(embedded_userscript))]
+async fn serve_userscript() -> impl IntoResponse {
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        [(header::CONTENT_TYPE, "text/plain; charset=utf-8")],
+        USERSCRIPT_UNAVAILABLE,
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::{body::to_bytes, response::IntoResponse};
+
+    use super::*;
+
+    #[tokio::test]
+    async fn userscript_response_matches_build_mode() {
+        let response = serve_userscript().await.into_response();
+
+        #[cfg(embedded_userscript)]
+        {
+            assert_eq!(response.status(), StatusCode::OK);
+            assert_eq!(
+                response.headers()[header::CONTENT_TYPE],
+                "application/javascript; charset=utf-8"
+            );
+            assert_eq!(
+                to_bytes(response.into_body(), usize::MAX).await.unwrap(),
+                USERSCRIPT
+            );
+        }
+
+        #[cfg(not(embedded_userscript))]
+        {
+            assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+            assert_eq!(
+                response.headers()[header::CONTENT_TYPE],
+                "text/plain; charset=utf-8"
+            );
+            assert_eq!(
+                to_bytes(response.into_body(), usize::MAX).await.unwrap(),
+                USERSCRIPT_UNAVAILABLE
+            );
+        }
+    }
 }
 
 /// Bind the listener, then spawn the serve loop. Binding happens here (rather

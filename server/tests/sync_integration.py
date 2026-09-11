@@ -168,14 +168,15 @@ with tempfile.TemporaryDirectory(prefix="arue-sync-test-") as folder:
             assert post_json(
                 "/api/posts/900/observation",
                 tags=[{"name": "ignored", "kind": "general"}],
+                score=0,
             ) == {"observed": False}
             assert post_json(
-                "/api/posts/901/availability", availability="deleted"
+                "/api/posts/901/status", status="deleted"
             ) == {"ok": True}
             db = sqlite3.connect(folder / ".data.db")
             assert db.execute("SELECT COUNT(*) FROM posts WHERE post_id=900").fetchone() == (0,)
             assert db.execute(
-                "SELECT availability FROM posts WHERE post_id=901"
+                "SELECT status FROM posts WHERE post_id=901"
             ).fetchone() == ("deleted",)
             assert db.execute("PRAGMA foreign_key_check").fetchall() == []
             assert db.execute(
@@ -209,7 +210,7 @@ with tempfile.TemporaryDirectory(prefix="arue-sync-test-") as folder:
                 statuses = get_json("/api/posts/status?ids=123,456,789")["posts"]
                 assert len(statuses) == 3
                 assert set(statuses[0]) == {
-                    "postId", "membership", "availability", "downloaded"
+                    "postId", "status", "downloaded"
                 }
             finally:
                 db.rollback()

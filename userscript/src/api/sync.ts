@@ -10,6 +10,7 @@ export type SyncStatus = {
 
 export type SyncBaseline = {
     ids: number[]
+    retainedIds: number[]
     initialized: boolean
     countOffset: number
     revision: number
@@ -18,6 +19,7 @@ export type SyncBaseline = {
 export type ReconcileRequest = {
     ids: number[]
     deleted: number[]
+    unfavorited: number[]
     reportedCount: number
     revision: number
 }

@@ -1,5 +1,5 @@
 import { gmFetchArrayBuffer } from "../api/gm-fetch.ts"
-import { getPendingPostIds, setPostAvailability } from "../api/library.ts"
+import { getPendingPostIds, setPostStatus } from "../api/library.ts"
 import type { PostDetails } from "../api/post-details.ts"
 import { savePostToServer } from "../api/server.ts"
 import { refreshLibrary } from "../state/library.ts"
@@ -24,7 +24,7 @@ export async function drainDownloads(
 }
 
 export async function downloadKnownPost(post: PostDetails): Promise<void> {
-    await setPostAvailability(post.id, "available")
+    await setPostStatus(post.id, "favorited")
     await savePostToServer(post, gmFetchArrayBuffer, MEDIA_TIMEOUT_MS)
     await refreshLibrary([post.id])
 }
@@ -32,7 +32,7 @@ export async function downloadKnownPost(post: PostDetails): Promise<void> {
 async function downloadPost(reader: Rule34Reader, postId: number): Promise<void> {
     const post = await reader.postDetails(postId)
     if (post === null) {
-        await setPostAvailability(postId, "deleted")
+        await setPostStatus(postId, "deleted")
         return
     }
 

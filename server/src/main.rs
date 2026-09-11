@@ -2,6 +2,7 @@ mod database;
 mod ids;
 mod media_processor;
 mod posts;
+mod prune;
 mod server;
 mod sync;
 mod tags;

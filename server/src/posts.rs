@@ -331,7 +331,7 @@ impl Database {
     async fn cached_post_details(&self, post_id: PostId) -> Result<Option<CachedPostDetails>> {
         let Some(post) = sqlx::query_as!(
             CachedPostRow,
-            r#"SELECT p.availability, p.score, pm.mime
+            r#"SELECT p.status, p.score, pm.mime
             FROM posts p
             JOIN post_media pm USING (post_id)
             WHERE p.post_id = ?"#,
@@ -357,7 +357,7 @@ impl Database {
 
         Ok(Some(CachedPostDetails {
             id: post_id,
-            availability: post.availability,
+            status: post.status,
             score: post.score,
             media_kind: if post.mime.starts_with("video/") {
                 CachedMediaKind::Video
@@ -373,8 +373,7 @@ impl Database {
             r#"SELECT p.post_id
             FROM posts p
             JOIN post_media pm ON pm.post_id = p.post_id
-            LEFT JOIN favorite_order f ON f.post_id = p.post_id
-            WHERE (f.post_id IS NOT NULL OR p.availability = 'deleted')"#,
+            WHERE p.status IN ('favorited', 'deleted')"#,
         );
         for term in &search.include {
             query_builder.push(
@@ -422,9 +421,8 @@ async fn upload_is_allowed(connection: &mut SqliteConnection, post_id: PostId) -
         r#"SELECT EXISTS(
             SELECT 1
             FROM posts p
-            LEFT JOIN favorite_order f USING (post_id)
             WHERE post_id = ?
-              AND (f.post_id IS NOT NULL OR p.availability = 'deleted')
+              AND p.status IN ('favorited', 'deleted')
         ) AS "exists!: bool""#,
         post_id.0
     )
@@ -505,7 +503,7 @@ struct PostMedia {
 }
 
 struct CachedPostRow {
-    availability: String,
+    status: String,
     score: i64,
     mime: String,
 }
@@ -514,7 +512,7 @@ struct CachedPostRow {
 #[serde(rename_all = "camelCase")]
 pub struct CachedPostDetails {
     id: PostId,
-    availability: String,
+    status: String,
     score: i64,
     media_kind: CachedMediaKind,
     tags: Vec<CachedPostTag>,
@@ -639,9 +637,9 @@ mod tests {
 
     async fn seed_search_posts(database: &Database) {
         sqlx::query(
-            r#"INSERT INTO posts (post_id, availability) VALUES
-                (1, 'available'), (2, 'available'), (3, 'available'),
-                (4, 'available'), (5, 'available');
+            r#"INSERT INTO posts (post_id, status) VALUES
+                (1, 'favorited'), (2, 'favorited'), (3, 'favorited'),
+                (4, 'favorited'), (5, 'favorited');
             INSERT INTO post_media (post_id, storage_name, extension, mime, original) VALUES
                 (1, '1.png', 'png', 'image/png', 1),
                 (2, '2.png', 'png', 'image/png', 1),
@@ -686,8 +684,8 @@ mod tests {
     async fn cached_details_include_downloaded_media_tags_and_score() {
         let (_directory, database) = test_database().await;
         sqlx::query(
-            r#"INSERT INTO posts (post_id, availability, score)
-                VALUES (7, 'deleted', -12), (8, 'available', 4);
+            r#"INSERT INTO posts (post_id, status, score)
+                VALUES (7, 'deleted', -12), (8, 'favorited', 4);
             INSERT INTO post_media (post_id, storage_name, extension, mime, original)
                 VALUES (7, '7.webm', 'webm', 'video/webm', 1);
             INSERT INTO tags (tag_id, name, kind)
@@ -708,7 +706,7 @@ mod tests {
             serde_json::to_value(details).unwrap(),
             serde_json::json!({
                 "id": 7,
-                "availability": "deleted",
+                "status": "deleted",
                 "score": -12,
                 "mediaKind": "video",
                 "tags": [

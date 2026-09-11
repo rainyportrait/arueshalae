@@ -23,6 +23,7 @@ describe("explicit synchronization", () => {
     it("uses a complete first page as the initial baseline", async () => {
         getBaseline.mockResolvedValueOnce({
             ids: [],
+            retainedIds: [],
             initialized: false,
             countOffset: 0,
             revision: 0,
@@ -34,6 +35,7 @@ describe("explicit synchronization", () => {
         expect(reconcile).toHaveBeenLastCalledWith({
             ids: [3, 2, 1],
             deleted: [],
+            unfavorited: [],
             reportedCount: 3,
             revision: 0,
         })
@@ -45,6 +47,7 @@ describe("explicit synchronization", () => {
         const remote = [900, ...baseline.filter((postId) => postId !== disappeared)]
         getBaseline.mockResolvedValueOnce({
             ids: baseline,
+            retainedIds: [],
             initialized: true,
             countOffset: 0,
             revision: 7,
@@ -56,6 +59,7 @@ describe("explicit synchronization", () => {
         expect(reconcile).toHaveBeenLastCalledWith({
             ids: remote,
             deleted: [disappeared],
+            unfavorited: [],
             reportedCount: 250,
             revision: 7,
         })
@@ -64,6 +68,7 @@ describe("explicit synchronization", () => {
     it("verifies a one-page observation before publishing it", async () => {
         getBaseline.mockResolvedValueOnce({
             ids: [],
+            retainedIds: [],
             initialized: false,
             countOffset: 0,
             revision: 0,
@@ -81,6 +86,7 @@ describe("explicit synchronization", () => {
     it("verifies after classifying removals", async () => {
         getBaseline.mockResolvedValueOnce({
             ids: [3, 2, 1],
+            retainedIds: [],
             initialized: true,
             countOffset: 0,
             revision: 0,
@@ -97,6 +103,29 @@ describe("explicit synchronization", () => {
 
         expect(reader.reportedCount).toHaveBeenCalledTimes(2)
         expect(reconcile).toHaveBeenLastCalledWith(expect.anything())
+    })
+
+    it("classifies retained posts whose removal provenance is unresolved", async () => {
+        getBaseline.mockResolvedValueOnce({
+            ids: [3, 2, 1],
+            retainedIds: [10, 11],
+            initialized: true,
+            countOffset: 0,
+            revision: 4,
+        })
+        const reader = fakeReader([3, 2, 1], 10)
+
+        await synchronize(reader, () => {})
+
+        expect(reader.postDetails).toHaveBeenCalledWith(10)
+        expect(reader.postDetails).toHaveBeenCalledWith(11)
+        expect(reconcile).toHaveBeenLastCalledWith({
+            ids: [3, 2, 1],
+            deleted: [10],
+            unfavorited: [11],
+            reportedCount: 3,
+            revision: 4,
+        })
     })
 })
 

@@ -11,7 +11,7 @@ export type PostMedia =
 
 export type PostDetails = {
     id: number
-    availability?: "available" | "deleted" | "unknown"
+    status?: "favorited" | "unfavorited" | "deleted" | "unknown"
     title?: string
     media: PostMedia
     posted?: string

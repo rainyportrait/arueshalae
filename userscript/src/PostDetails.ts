@@ -131,7 +131,7 @@ function AddFavoriteButton({
         const base =
             favorite.val === "idle" &&
             serverSettings.val.enabled &&
-            libraryPosts.val.get(post.id)?.membership === "favorited"
+            libraryPosts.val.get(post.id)?.status === "favorited"
                 ? "already"
                 : favorite.val
         // A save in flight (started by this or an earlier mount of the post)
@@ -259,8 +259,8 @@ function LibraryDownloadStatus(postId: number) {
 function libraryDownloadLabel(post: LibraryPost | undefined): string {
     if (post === undefined) return "Local status unknown"
     if (post.downloaded) return "downloaded"
-    if (post.availability === "deleted") return "unavailable"
-    if (post.membership === "favorited") return "missing"
+    if (post.status === "deleted") return "unavailable"
+    if (post.status === "favorited") return "missing"
     return "not favorited"
 }
 

@@ -10,6 +10,7 @@ enum Command {
     Reconcile {
         ids: Vec<PostId>,
         deleted: Vec<PostId>,
+        unfavorited: Vec<PostId>,
         reported_count: i64,
         revision: i64,
     },
@@ -40,6 +41,7 @@ async fn execute(database: &Database, command: &Command) -> AppResult<Value> {
         Command::Reconcile {
             ids,
             deleted,
+            unfavorited,
             reported_count,
             revision,
         } => {
@@ -48,6 +50,7 @@ async fn execute(database: &Database, command: &Command) -> AppResult<Value> {
                 Ok(Json(ReconcileRequest {
                     ids: ids.clone(),
                     deleted: deleted.clone(),
+                    unfavorited: unfavorited.clone(),
                     reported_count: *reported_count,
                     revision: *revision,
                 })),
@@ -107,11 +110,20 @@ async fn test_database() -> (tempfile::TempDir, Database) {
 
 async fn reconcile_ids(database: &Database, ids: &[i64], reported_count: i64) {
     let baseline = execute(database, &Command::Baseline).await.unwrap();
+    let current = ids.iter().copied().collect::<HashSet<_>>();
+    let unfavorited = baseline["ids"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|id| PostId(id.as_i64().unwrap()))
+        .filter(|id| !current.contains(&id.0))
+        .collect();
     execute(
         database,
         &Command::Reconcile {
             ids: ids.iter().copied().map(PostId).collect(),
             deleted: Vec::new(),
+            unfavorited,
             reported_count,
             revision: baseline["revision"].as_i64().unwrap(),
         },
@@ -160,8 +172,8 @@ fn request_payloads_require_their_own_fields() {
         .is_err()
     );
     assert!(
-        serde_json::from_value::<AvailabilityRequest>(json!({
-            "availability": "unknown"
+        serde_json::from_value::<StatusRequest>(json!({
+            "status": "unknown"
         }))
         .is_err()
     );
@@ -212,11 +224,11 @@ async fn observations_refresh_only_current_favorites() {
         vec!["current_tag"]
     );
     assert_eq!(
-        sqlx::query_scalar!("SELECT availability FROM posts WHERE post_id = 10")
+        sqlx::query_scalar!("SELECT status FROM posts WHERE post_id = 10")
             .fetch_one(&database.pool)
             .await
             .unwrap(),
-        "available"
+        "favorited"
     );
     assert_eq!(
         sqlx::query_scalar!("SELECT score FROM posts WHERE post_id = 10")
@@ -256,6 +268,7 @@ async fn stale_reconciliation_cannot_undo_membership_or_another_reconciliation()
     let stale = Command::Reconcile {
         ids: vec![PostId(30), PostId(20), PostId(10)],
         deleted: Vec::new(),
+        unfavorited: Vec::new(),
         reported_count: 3,
         revision: 1,
     };
@@ -310,6 +323,7 @@ async fn invalid_reconciliation_leaves_state_unchanged() {
             &Command::Reconcile {
                 ids,
                 deleted,
+                unfavorited: vec![],
                 reported_count,
                 revision: 1,
             },
@@ -412,7 +426,8 @@ async fn migration_preserves_an_existing_sync_database() {
     assert_eq!(
         execute(&database, &Command::Baseline).await.unwrap(),
         json!({
-            "ids": [20, 10], "initialized": true, "countOffset": 7, "revision": 0,
+            "ids": [20, 10], "retainedIds": [], "initialized": false,
+            "countOffset": 7, "revision": 0,
         })
     );
     assert_eq!(
@@ -453,7 +468,7 @@ async fn migration_preserves_an_existing_sync_database() {
 }
 
 #[tokio::test]
-async fn reconciliation_records_deletions_and_refavoriting_restores_availability() {
+async fn reconciliation_records_deletions_and_refavoriting_restores_status() {
     let (_directory, database) = test_database().await;
     reconcile_ids(&database, &[30, 20, 10], 3).await;
     execute(
@@ -461,6 +476,7 @@ async fn reconciliation_records_deletions_and_refavoriting_restores_availability
         &Command::Reconcile {
             ids: vec![PostId(30), PostId(10)],
             deleted: vec![PostId(20)],
+            unfavorited: vec![],
             reported_count: 2,
             revision: 1,
         },
@@ -475,8 +491,7 @@ async fn reconciliation_records_deletions_and_refavoriting_restores_availability
     )
     .await
     .unwrap();
-    assert_eq!(membership["posts"][0]["availability"], "deleted");
-    assert_eq!(membership["posts"][0]["membership"], "unfavorited");
+    assert_eq!(membership["posts"][0]["status"], "deleted");
 
     execute(
         &database,
@@ -496,9 +511,49 @@ async fn reconciliation_records_deletions_and_refavoriting_restores_availability
     )
     .await
     .unwrap();
-    assert_eq!(membership["posts"][0]["availability"], "unknown");
+    assert_eq!(membership["posts"][0]["status"], "favorited");
     assert_eq!(
         execute(&database, &Command::Downloads).await.unwrap()["postIds"],
         json!([20, 30, 10])
+    );
+}
+
+#[tokio::test]
+async fn reconciliation_classifies_retained_posts_with_unknown_removal_provenance() {
+    let (_directory, database) = test_database().await;
+    sqlx::query("INSERT INTO posts (post_id) VALUES (90), (91)")
+        .execute(&database.pool)
+        .await
+        .unwrap();
+
+    let baseline = execute(&database, &Command::Baseline).await.unwrap();
+    assert_eq!(baseline["retainedIds"], json!([90, 91]));
+    execute(
+        &database,
+        &Command::Reconcile {
+            ids: vec![PostId(10)],
+            deleted: vec![PostId(90)],
+            unfavorited: vec![PostId(91)],
+            reported_count: 1,
+            revision: 0,
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        sqlx::query_as::<_, (i64, String)>("SELECT post_id, status FROM posts ORDER BY post_id")
+            .fetch_all(&database.pool)
+            .await
+            .unwrap(),
+        vec![
+            (10, "favorited".into()),
+            (90, "deleted".into()),
+            (91, "unfavorited".into()),
+        ]
+    );
+    assert_eq!(
+        execute(&database, &Command::Baseline).await.unwrap()["retainedIds"],
+        json!([])
     );
 }

@@ -5,7 +5,7 @@ import {
     getPostStatuses,
     observePost,
     setFavoriteMembership,
-    setPostAvailability,
+    setPostStatus,
 } from "../../src/api/library.ts"
 import type { PostDetails } from "../../src/api/post-details.ts"
 import {
@@ -14,7 +14,9 @@ import {
     checkDownloads,
     fetchCachedPostDetails,
     getDownloadCount,
+    getPruneCount,
     mediaUrlFor,
+    pruneUnfavoritedPosts,
     savePostToServer,
 } from "../../src/api/server.ts"
 import { getSyncBaseline, getSyncStatus, reconcileFavorites } from "../../src/api/sync.ts"
@@ -85,7 +87,13 @@ describe("server client", () => {
         mockFetch(calls, (url) =>
             jsonResponse(
                 url.toString().endsWith("/baseline")
-                    ? { ids: [3, 2], initialized: true, countOffset: 0, revision: 4 }
+                    ? {
+                          ids: [3, 2],
+                          retainedIds: [],
+                          initialized: true,
+                          countOffset: 0,
+                          revision: 4,
+                      }
                     : {
                           favorites: 2,
                           pending: 1,
@@ -106,7 +114,13 @@ describe("server client", () => {
 
     it("publishes reconciliation to its typed route", async () => {
         mockFetch(calls, () => jsonResponse({ ok: true }))
-        const body = { ids: [3, 2], deleted: [1], reportedCount: 2, revision: 4 }
+        const body = {
+            ids: [3, 2],
+            deleted: [1],
+            unfavorited: [],
+            reportedCount: 2,
+            revision: 4,
+        }
 
         await reconcileFavorites(body)
 
@@ -187,11 +201,23 @@ describe("server client", () => {
         expect(calls[0]?.url).toBe("http://127.0.0.1:34343/api/posts/count")
     })
 
+    it("previews and executes pruning", async () => {
+        mockFetch(calls, (_url, init) => jsonResponse({ posts: init.method === "POST" ? 4 : 5 }))
+
+        await expect(getPruneCount()).resolves.toBe(5)
+        await expect(pruneUnfavoritedPosts()).resolves.toBe(4)
+
+        expect(calls.map((call) => [call.url, call.init.method])).toEqual([
+            ["http://127.0.0.1:34343/api/prune", undefined],
+            ["http://127.0.0.1:34343/api/prune", "POST"],
+        ])
+    })
+
     it("adapts cached details into the partial post-details shape", async () => {
         mockFetch(calls, () =>
             jsonResponse({
                 id: 42,
-                availability: "deleted",
+                status: "deleted",
                 score: -3,
                 mediaKind: "video",
                 tags: [{ name: "animated_webm", kind: "metadata" }],
@@ -200,7 +226,7 @@ describe("server client", () => {
 
         await expect(fetchCachedPostDetails(42)).resolves.toEqual({
             id: 42,
-            availability: "deleted",
+            status: "deleted",
             score: -3,
             media: {
                 kind: "video",
@@ -250,13 +276,13 @@ describe("server client", () => {
         await expect(setFavoriteMembership(123, false)).rejects.toBeInstanceOf(ServerError)
     })
 
-    it("reports availability separately from post observation", async () => {
+    it("reports deleted status separately from post observation", async () => {
         mockFetch(calls, () => jsonResponse({ ok: true }))
 
-        await setPostAvailability(123, "deleted")
+        await setPostStatus(123, "deleted")
 
-        expect(calls[0]?.url).toBe("http://127.0.0.1:34343/api/posts/123/availability")
-        expect(JSON.parse(String(calls[0]?.init.body))).toEqual({ availability: "deleted" })
+        expect(calls[0]?.url).toBe("http://127.0.0.1:34343/api/posts/123/status")
+        expect(JSON.parse(String(calls[0]?.init.body))).toEqual({ status: "deleted" })
     })
 })
 

@@ -261,8 +261,7 @@ describe("PostDetails favorite button, server state", () => {
                 postId,
                 {
                     postId,
-                    membership: "favorited",
-                    availability: "available",
+                    status: "favorited",
                     downloaded,
                 },
             ],

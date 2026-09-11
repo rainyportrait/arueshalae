@@ -37,11 +37,15 @@ export async function synchronize(reader: Rule34Reader, progress: Progress): Pro
         : await readAll(first.lastPosition, readPage)
 
     const current = new Set(ids)
-    const disappeared = baseline.ids.filter((postId) => !current.has(postId))
+    const disappeared = [...new Set([...baseline.ids, ...baseline.retainedIds])].filter(
+        (postId) => !current.has(postId),
+    )
     const deleted: number[] = []
+    const unfavorited: number[] = []
     for (const [index, postId] of disappeared.entries()) {
         progress({ phase: "checking-removals", done: index + 1, total: disappeared.length })
         if ((await reader.postDetails(postId)) === null) deleted.push(postId)
+        else unfavorited.push(postId)
     }
 
     // Validate as late as possible, after removal classification, so a change
@@ -55,7 +59,13 @@ export async function synchronize(reader: Rule34Reader, progress: Progress): Pro
         throw new Error("Favorites changed during synchronization; run Sync again")
     }
 
-    await reconcileFavorites({ ids, deleted, reportedCount, revision: baseline.revision })
+    await reconcileFavorites({
+        ids,
+        deleted,
+        unfavorited,
+        reportedCount,
+        revision: baseline.revision,
+    })
     return ids.length
 }
 

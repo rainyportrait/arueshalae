@@ -3,7 +3,7 @@ import van from "vanjs-core"
 import { AutocompleteInput } from "./AutocompleteInput.ts"
 import { SyncSettings } from "./SyncSettings.ts"
 import { Toggle } from "./Toggle.ts"
-import { getDownloadCount } from "./api/server.ts"
+import { getDownloadCount, getPruneCount, pruneUnfavoritedPosts } from "./api/server.ts"
 import { normalizeTags } from "./api/tags.ts"
 import clsx from "./clsx.ts"
 import { preferOriginal, serverSettings, tagBlacklist } from "./state/settings.ts"
@@ -79,6 +79,9 @@ export function Settings() {
     )
     const testing = van.state(false)
     const testResult = van.state<string | null>(null)
+    const pruneCount = van.state<number | null>(null)
+    const pruneStatus = van.state<"idle" | "loading" | "pruning">("idle")
+    const pruneMessage = van.state<string | null>(null)
 
     async function testConnection(): Promise<void> {
         if (testing.val) return
@@ -92,6 +95,38 @@ export function Settings() {
         } finally {
             testing.val = false
         }
+    }
+
+    async function refreshPruneCount(): Promise<void> {
+        if (pruneStatus.val !== "idle") return
+        pruneStatus.val = "loading"
+        pruneMessage.val = null
+        try {
+            pruneCount.val = await getPruneCount()
+        } catch (err) {
+            pruneMessage.val = err instanceof Error ? err.message : String(err)
+        } finally {
+            pruneStatus.val = "idle"
+        }
+    }
+
+    async function prune(): Promise<void> {
+        if (pruneStatus.val !== "idle" || !pruneCount.val) return
+        pruneStatus.val = "pruning"
+        pruneMessage.val = null
+        try {
+            const count = await pruneUnfavoritedPosts()
+            pruneCount.val = 0
+            pruneMessage.val = `Pruned ${count.toLocaleString()} ${count === 1 ? "post" : "posts"}.`
+        } catch (err) {
+            pruneMessage.val = err instanceof Error ? err.message : String(err)
+        } finally {
+            pruneStatus.val = "idle"
+        }
+    }
+
+    if (serverSettings.val.enabled && serverSettings.val.url.trim() !== "") {
+        void refreshPruneCount()
     }
 
     return div(
@@ -261,6 +296,65 @@ export function Settings() {
                 )
             },
             SyncSettings(),
+            div(
+                { class: "flex flex-col gap-3 border-t border-zinc-800 pt-4" },
+                div(
+                    p({ class: "font-medium text-zinc-200" }, "Prune unfavorited posts"),
+                    p(
+                        { class: "text-sm text-zinc-500" },
+                        "Remove database entries and local media only for posts confirmed unfavorited. Posts deleted from Rule34 are kept.",
+                    ),
+                ),
+                div(
+                    { class: "flex flex-wrap gap-2" },
+                    button(
+                        {
+                            type: "button",
+                            class: clsx(
+                                "grow rounded-lg bg-rose-500 px-4 py-2 text-sm font-medium text-white",
+                                "hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-50",
+                            ),
+                            disabled: () => pruneStatus.val !== "idle",
+                            onclick: () =>
+                                void (pruneCount.val === null || pruneCount.val === 0
+                                    ? refreshPruneCount()
+                                    : prune()),
+                        },
+                        () => {
+                            if (pruneStatus.val === "loading") return "Checking…"
+                            if (pruneStatus.val === "pruning") return "Pruning…"
+                            const count = pruneCount.val
+                            if (count === 0) return "Check again"
+                            return count === null
+                                ? "Check prune"
+                                : `Prune ${count.toLocaleString()} ${count === 1 ? "post" : "posts"}`
+                        },
+                    ),
+                ),
+                () => {
+                    const message = pruneMessage.val
+                    if (message !== null)
+                        return p(
+                            {
+                                class: clsx(
+                                    "text-sm",
+                                    message.startsWith("Pruned")
+                                        ? "text-emerald-400"
+                                        : "text-rose-400",
+                                ),
+                            },
+                            message,
+                        )
+                    const count = pruneCount.val
+                    if (count === null) return document.createComment("")
+                    return p(
+                        { class: "text-sm text-zinc-500" },
+                        count === 0
+                            ? "No confirmed unfavorited posts to prune."
+                            : `${count.toLocaleString()} ${count === 1 ? "post is" : "posts are"} eligible for pruning.`,
+                    )
+                },
+            ),
         ),
     )
 }

@@ -63,8 +63,8 @@ pub fn create_router(database: &Database, base_path: &Utf8Path) -> Router {
             post(crate::sync::observe_post_details),
         )
         .route(
-            "/api/posts/{post_id}/availability",
-            post(crate::sync::update_post_availability),
+            "/api/posts/{post_id}/status",
+            post(crate::sync::update_post_status),
         )
         .route("/api/posts/{post_id}", post(create_post))
         .layer(DefaultBodyLimit::max(1024 * 1024 * 1024))
@@ -73,6 +73,10 @@ pub fn create_router(database: &Database, base_path: &Utf8Path) -> Router {
         .route("/api/posts/count", get(get_download_count))
         .route("/api/posts/{post_id}/details", get(get_cached_post_details))
         .route("/api/posts/{post_id}/media", get(serve_media))
+        .route(
+            "/api/prune",
+            get(crate::prune::get_prune_preview).post(crate::prune::prune),
+        )
         .route("/api/tags", get(search_tags))
         .layer(
             CorsLayer::new()

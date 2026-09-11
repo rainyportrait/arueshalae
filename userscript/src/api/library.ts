@@ -3,8 +3,7 @@ import { fetchServerJson, jsonRequest, serverTags } from "./server.ts"
 
 export type LibraryPost = {
     postId: number
-    membership: "favorited" | "unfavorited"
-    availability: "available" | "deleted" | "unknown"
+    status: "favorited" | "unfavorited" | "deleted" | "unknown"
     downloaded: boolean
 }
 
@@ -39,9 +38,9 @@ export async function observePost(post: PostDetails): Promise<void> {
     )
 }
 
-export async function setPostAvailability(
+export async function setPostStatus(
     postId: number,
-    availability: "available" | "deleted",
+    status: "favorited" | "deleted",
 ): Promise<void> {
-    await fetchServerJson(`api/posts/${postId}/availability`, jsonRequest({ availability }))
+    await fetchServerJson(`api/posts/${postId}/status`, jsonRequest({ status }))
 }

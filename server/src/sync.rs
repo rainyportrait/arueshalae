@@ -25,6 +25,8 @@ pub struct ReconcileRequest {
     ids: Vec<PostId>,
     #[serde(default)]
     deleted: Vec<PostId>,
+    #[serde(default)]
+    unfavorited: Vec<PostId>,
     reported_count: i64,
     revision: i64,
 }
@@ -42,8 +44,8 @@ pub struct ObservationRequest {
 }
 
 #[derive(Deserialize)]
-pub struct AvailabilityRequest {
-    availability: Availability,
+pub struct StatusRequest {
+    status: PostStatus,
 }
 
 #[derive(Deserialize)]
@@ -69,8 +71,8 @@ pub enum Membership {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum Availability {
-    Available,
+pub enum PostStatus {
+    Favorited,
     Deleted,
 }
 
@@ -102,6 +104,7 @@ pub async fn reconcile_favorites(
         &mut transaction,
         &request.ids,
         &request.deleted,
+        &request.unfavorited,
         request.reported_count,
         request.revision,
     )
@@ -159,14 +162,14 @@ pub async fn observe_post_details(
     Ok(Json(response))
 }
 
-pub async fn update_post_availability(
+pub async fn update_post_status(
     State(AppState { database, .. }): State<AppState>,
     Path(post_id): Path<PostId>,
-    payload: Result<Json<AvailabilityRequest>, JsonRejection>,
+    payload: Result<Json<StatusRequest>, JsonRejection>,
 ) -> AppResult<Json<Value>> {
     let Json(request) = parse_json(payload)?;
     let mut transaction = database.pool.begin_with("BEGIN IMMEDIATE").await?;
-    let response = set_availability(&mut transaction, post_id, &request.availability).await?;
+    let response = set_status(&mut transaction, post_id, &request.status).await?;
     transaction.commit().await?;
     Ok(Json(response))
 }
@@ -192,7 +195,7 @@ async fn observe_post(
         return Ok(json!({"observed": false}));
     }
 
-    set_post_availability(connection, post_id, &Availability::Available).await?;
+    set_post_status(connection, post_id, &PostStatus::Favorited).await?;
     set_post_score(connection, post_id, score).await?;
     replace_tags(connection, post_id, tags).await?;
     Ok(json!({"observed": true}))
@@ -208,7 +211,7 @@ async fn status(connection: &mut SqliteConnection) -> AppResult<Value> {
             (SELECT COUNT(*) FROM posts p
              JOIN favorite_order f USING (post_id)
              LEFT JOIN post_media m USING (post_id)
-             WHERE p.availability != 'deleted' AND m.post_id IS NULL) AS pending"#
+             WHERE p.status = 'favorited' AND m.post_id IS NULL) AS pending"#
     )
     .fetch_one(&mut *connection)
     .await?;
@@ -228,12 +231,21 @@ async fn baseline(connection: &mut SqliteConnection) -> AppResult<Value> {
     )
     .fetch_all(&mut *connection)
     .await?;
+    let retained_ids = sqlx::query_scalar!(
+        r#"SELECT post_id AS "post_id: PostId" FROM posts p
+        WHERE p.status = 'unknown'
+          AND NOT EXISTS (SELECT 1 FROM favorite_order f WHERE f.post_id = p.post_id)
+        ORDER BY post_id"#,
+    )
+    .fetch_all(&mut *connection)
+    .await?;
     let state = sqlx::query!("SELECT initialized, count_offset, revision FROM sync_state")
         .fetch_one(connection)
         .await?;
 
     Ok(json!({
         "ids": ids,
+        "retainedIds": retained_ids,
         "initialized": state.initialized,
         "countOffset": state.count_offset,
         "revision": state.revision,
@@ -244,11 +256,13 @@ async fn reconcile(
     connection: &mut SqliteConnection,
     ids: &[PostId],
     deleted: &[PostId],
+    unfavorited: &[PostId],
     reported_count: i64,
     revision: i64,
 ) -> AppResult<Value> {
     validate_order(ids)?;
     validate_ids(deleted)?;
+    validate_ids(unfavorited)?;
     if reported_count < 0 {
         return Err(AppError::bad_request("invalid reported count"));
     }
@@ -256,6 +270,26 @@ async fn reconcile(
     if deleted.iter().any(|post_id| current.contains(post_id)) {
         return Err(AppError::bad_request(
             "a current favorite cannot be deleted",
+        ));
+    }
+    if unfavorited.iter().any(|post_id| current.contains(post_id)) {
+        return Err(AppError::bad_request(
+            "a current favorite cannot be unfavorited",
+        ));
+    }
+    let deleted_set = deleted.iter().copied().collect::<HashSet<_>>();
+    if unfavorited
+        .iter()
+        .any(|post_id| deleted_set.contains(post_id))
+    {
+        return Err(AppError::bad_request(
+            "a post cannot be deleted and unfavorited",
+        ));
+    }
+    let unfavorited_set = unfavorited.iter().copied().collect::<HashSet<_>>();
+    if deleted_set.len() != deleted.len() || unfavorited_set.len() != unfavorited.len() {
+        return Err(AppError::bad_request(
+            "removal classifications contain duplicates",
         ));
     }
 
@@ -268,13 +302,42 @@ async fn reconcile(
         ));
     }
 
+    let expected_classifications = sqlx::query_scalar!(
+        r#"SELECT post_id AS "post_id: PostId" FROM favorite_order
+        UNION
+        SELECT post_id AS "post_id: PostId" FROM posts WHERE status = 'unknown'"#,
+    )
+    .fetch_all(&mut *connection)
+    .await?
+    .into_iter()
+    .filter(|post_id| !current.contains(post_id))
+    .collect::<HashSet<_>>();
+    let classifications = deleted_set
+        .union(&unfavorited_set)
+        .copied()
+        .collect::<HashSet<_>>();
+    if classifications != expected_classifications {
+        return Err(AppError::bad_request(
+            "removal classifications do not match the baseline",
+        ));
+    }
+
     for post_id in ids {
         ensure_post(connection, *post_id).await?;
-        restore_favorite_availability(connection, *post_id).await?;
+        mark_current_favorite(connection, *post_id).await?;
     }
     for post_id in deleted {
         ensure_post(connection, *post_id).await?;
-        set_post_availability(connection, *post_id, &Availability::Deleted).await?;
+        set_post_status(connection, *post_id, &PostStatus::Deleted).await?;
+    }
+    for post_id in unfavorited {
+        ensure_post(connection, *post_id).await?;
+        sqlx::query!(
+            "UPDATE posts SET status = 'unfavorited', details_checked_at = unixepoch() WHERE post_id = ?",
+            post_id.0
+        )
+        .execute(&mut *connection)
+        .await?;
     }
     replace_order(connection, ids).await?;
 
@@ -314,6 +377,12 @@ async fn set_membership(
             sqlx::query!("DELETE FROM favorite_order WHERE post_id = ?", post_id.0)
                 .execute(&mut *connection)
                 .await?;
+            sqlx::query!(
+                "UPDATE posts SET status = 'unfavorited', details_checked_at = unixepoch() WHERE post_id = ?",
+                post_id.0
+            )
+            .execute(&mut *connection)
+            .await?;
         }
     }
     sqlx::query!("UPDATE sync_state SET revision = revision + 1")
@@ -339,7 +408,7 @@ async fn set_post_score(
 
 async fn prepend_favorite(connection: &mut SqliteConnection, post_id: PostId) -> AppResult<()> {
     ensure_post(connection, post_id).await?;
-    restore_favorite_availability(connection, post_id).await?;
+    mark_current_favorite(connection, post_id).await?;
 
     // Positions are ordering keys, not contiguous array indexes. Existing rows
     // keep their positions when another favorite is added or removed.
@@ -356,13 +425,13 @@ async fn prepend_favorite(connection: &mut SqliteConnection, post_id: PostId) ->
     Ok(())
 }
 
-async fn restore_favorite_availability(
+async fn mark_current_favorite(
     connection: &mut SqliteConnection,
     post_id: PostId,
 ) -> AppResult<()> {
     sqlx::query!(
-        r#"UPDATE posts SET availability = 'unknown'
-        WHERE post_id = ? AND availability = 'deleted'"#,
+        r#"UPDATE posts SET status = 'favorited'
+        WHERE post_id = ?"#,
         post_id.0
     )
     .execute(connection)
@@ -418,7 +487,7 @@ async fn pending_downloads(connection: &mut SqliteConnection) -> AppResult<Value
         FROM favorite_order f
         JOIN posts p USING (post_id)
         LEFT JOIN post_media m USING (post_id)
-        WHERE p.availability != 'deleted' AND m.post_id IS NULL
+        WHERE p.status = 'favorited' AND m.post_id IS NULL
         ORDER BY f.position"#
     )
     .fetch_all(connection)
@@ -426,29 +495,37 @@ async fn pending_downloads(connection: &mut SqliteConnection) -> AppResult<Value
     Ok(json!({"postIds": ids}))
 }
 
-async fn set_availability(
+async fn set_status(
     connection: &mut SqliteConnection,
     post_id: PostId,
-    availability: &Availability,
+    status: &PostStatus,
 ) -> AppResult<Value> {
     validate_ids(&[post_id])?;
     ensure_post(connection, post_id).await?;
-    set_post_availability(connection, post_id, availability).await?;
+    if matches!(status, PostStatus::Deleted) {
+        sqlx::query!("DELETE FROM favorite_order WHERE post_id = ?", post_id.0)
+            .execute(&mut *connection)
+            .await?;
+        sqlx::query!("UPDATE sync_state SET revision = revision + 1")
+            .execute(&mut *connection)
+            .await?;
+    }
+    set_post_status(connection, post_id, status).await?;
     Ok(json!({"ok": true}))
 }
 
-async fn set_post_availability(
+async fn set_post_status(
     connection: &mut SqliteConnection,
     post_id: PostId,
-    availability: &Availability,
+    status: &PostStatus,
 ) -> AppResult<()> {
-    let availability = match availability {
-        Availability::Available => "available",
-        Availability::Deleted => "deleted",
+    let status = match status {
+        PostStatus::Favorited => "favorited",
+        PostStatus::Deleted => "deleted",
     };
     sqlx::query!(
-        "UPDATE posts SET availability = ?, details_checked_at = unixepoch() WHERE post_id = ?",
-        availability,
+        "UPDATE posts SET status = ?, details_checked_at = unixepoch() WHERE post_id = ?",
+        status,
         post_id.0
     )
     .execute(connection)
@@ -461,8 +538,7 @@ async fn memberships(connection: &mut SqliteConnection, ids: &[PostId]) -> AppRe
     let mut posts = Vec::new();
     for post_id in ids {
         let row = sqlx::query!(
-            r#"SELECT p.availability,
-                      f.post_id IS NOT NULL AS "favorited!: bool",
+            r#"SELECT p.status,
                       m.post_id IS NOT NULL AS "downloaded!: bool"
             FROM posts p
             LEFT JOIN favorite_order f USING (post_id)
@@ -475,8 +551,7 @@ async fn memberships(connection: &mut SqliteConnection, ids: &[PostId]) -> AppRe
         let Some(row) = row else { continue };
         posts.push(json!({
             "postId": post_id,
-            "membership": if row.favorited { "favorited" } else { "unfavorited" },
-            "availability": row.availability,
+            "status": row.status,
             "downloaded": row.downloaded,
         }));
     }

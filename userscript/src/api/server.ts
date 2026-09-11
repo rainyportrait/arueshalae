@@ -92,6 +92,14 @@ export async function getDownloadCount(): Promise<number> {
     return ((await response.json()) as { count: number }).count
 }
 
+export async function getPruneCount(): Promise<number> {
+    return (await fetchServerJson<{ posts: number }>("api/prune")).posts
+}
+
+export async function pruneUnfavoritedPosts(): Promise<number> {
+    return (await fetchServerJson<{ posts: number }>("api/prune", { method: "POST" })).posts
+}
+
 // Downloaded media is independent of current membership. This includes retained
 // unfavorited and upstream-deleted copies.
 export async function checkDownloads(postIds: number[]): Promise<Set<number>> {
@@ -104,7 +112,7 @@ export async function checkDownloads(postIds: number[]): Promise<Set<number>> {
 
 type CachedPostDetailsResponse = {
     id: number
-    availability: "available" | "deleted" | "unknown"
+    status: "favorited" | "unfavorited" | "deleted" | "unknown"
     score: number
     mediaKind: "image" | "video"
     tags: { name: string; kind: Tag["type"] }[]
@@ -131,7 +139,7 @@ export async function fetchCachedPostDetails(postId: number): Promise<PostDetail
               }
     return {
         id: cached.id,
-        availability: cached.availability,
+        status: cached.status,
         media,
         score: cached.score,
         tags: cached.tags.map((tag) => ({

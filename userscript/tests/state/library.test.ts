@@ -44,8 +44,7 @@ describe("state/library", () => {
         newer.resolve([
             {
                 postId: 42,
-                membership: "favorited",
-                availability: "available",
+                status: "favorited",
                 downloaded: false,
             },
         ])
@@ -53,13 +52,12 @@ describe("state/library", () => {
         older.resolve([
             {
                 postId: 42,
-                membership: "unfavorited",
-                availability: "available",
+                status: "unfavorited",
                 downloaded: false,
             },
         ])
         await first
 
-        expect(libraryPosts.val.get(42)?.membership).toBe("favorited")
+        expect(libraryPosts.val.get(42)?.status).toBe("favorited")
     })
 })

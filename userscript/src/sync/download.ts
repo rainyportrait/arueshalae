@@ -1,14 +1,11 @@
 import van from "vanjs-core"
 
-import { gmFetchArrayBuffer } from "../api/gm-fetch.ts"
-import { getPendingPostIds, setPostStatus } from "../api/library.ts"
+import { getPendingPostIds } from "../api/library.ts"
 import type { PostDetails } from "../api/post-details.ts"
-import { savePostToServer } from "../api/server.ts"
 import { details } from "../state/details.ts"
 import { libraryPosts, refreshLibrary } from "../state/library.ts"
+import { ensureFavoriteMedia, storeFavoriteMedia } from "./favorite-media.ts"
 import { Rule34Reader } from "./rule34.ts"
-
-const MEDIA_TIMEOUT_MS = 5 * 60 * 1000
 
 export async function drainDownloads(
     reader: Rule34Reader,
@@ -19,7 +16,8 @@ export async function drainDownloads(
         // Report before downloading so the bar moves the moment work starts.
         progress(index + 1, ids.length)
         try {
-            await downloadPost(reader, ids[index])
+            const result = await ensureFavoriteMedia(reader, ids[index])
+            if (result === "downloaded") await refreshLibrary([ids[index]])
         } catch {
             // Missing media remains eligible for the next explicit Sync.
         }
@@ -37,8 +35,7 @@ export function downloadKnownPost(post: PostDetails): Promise<void> {
     if (existing !== undefined) return existing
 
     const task = (async () => {
-        await setPostStatus(post.id, "favorited")
-        await savePostToServer(post, gmFetchArrayBuffer, MEDIA_TIMEOUT_MS)
+        await storeFavoriteMedia(post)
         await refreshLibrary([post.id])
     })().finally(() => inFlightDownloads.delete(post.id))
 
@@ -58,13 +55,3 @@ van.derive(() => {
     if (entry?.status !== "favorited" || entry.downloaded) return
     void downloadKnownPost(page.post).catch(() => {})
 })
-
-async function downloadPost(reader: Rule34Reader, postId: number): Promise<void> {
-    const post = await reader.postDetails(postId)
-    if (post === null) {
-        await setPostStatus(postId, "deleted")
-        return
-    }
-
-    await downloadKnownPost(post)
-}

@@ -134,6 +134,33 @@ describe("details page download of a missing favorite", () => {
         )
     })
 
+    it("uses the shared lifecycle to observe and store a fetched favorite", async () => {
+        const { ensureFavoriteMedia } = await import("../../src/sync/favorite-media.ts")
+        const post = makePost(12)
+        const reader = { postDetails: vi.fn(async () => post) }
+
+        await expect(ensureFavoriteMedia(reader as never, 12)).resolves.toBe("downloaded")
+
+        expect(api.observePost).toHaveBeenCalledWith(post)
+        expect(api.setPostStatus).toHaveBeenCalledWith(12, "favorited")
+        expect(api.savePostToServer).toHaveBeenCalledWith(
+            post,
+            expect.anything(),
+            expect.any(Number),
+        )
+    })
+
+    it("classifies an upstream-deleted favorite without trying to upload it", async () => {
+        const { ensureFavoriteMedia } = await import("../../src/sync/favorite-media.ts")
+        const reader = { postDetails: vi.fn(async () => null) }
+
+        await expect(ensureFavoriteMedia(reader as never, 13)).resolves.toBe("deleted")
+
+        expect(api.setPostStatus).toHaveBeenCalledWith(13, "deleted")
+        expect(api.observePost).not.toHaveBeenCalled()
+        expect(api.savePostToServer).not.toHaveBeenCalled()
+    })
+
     it("does not re-download a favorite whose media is present", async () => {
         api.getPostStatuses.mockResolvedValue([
             { postId: 7, status: "favorited", downloaded: true },

@@ -79,6 +79,7 @@ function PageJump({ totalPages, routeForPage }: PageJumpProps) {
         type: "number",
         min: 1,
         max: totalPages,
+        "aria-label": `Page (1–${totalPages})`,
         title: `Page (1–${totalPages})`,
         class: "w-16 rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1 text-center text-sm tabular-nums focus:border-rose-500 focus:outline-none",
         onkeydown: (e: KeyboardEvent) => {
@@ -92,7 +93,7 @@ function PageJump({ totalPages, routeForPage }: PageJumpProps) {
         },
         form(
             {
-                class: "flex items-center gap-2",
+                class: "flex flex-col gap-2",
                 onsubmit: (e: SubmitEvent) => {
                     e.preventDefault()
                     const raw = Number(field.value)
@@ -102,13 +103,17 @@ function PageJump({ totalPages, routeForPage }: PageJumpProps) {
                     navigate(routeForPage(page))
                 },
             },
-            field,
-            button(
-                {
-                    type: "submit",
-                    class: "rounded-lg bg-rose-500 px-2.5 py-1 text-sm font-medium text-white transition-colors hover:bg-rose-400",
-                },
-                "Go",
+            span({ class: "text-center text-sm text-zinc-400" }, `Page 1–${totalPages}`),
+            div(
+                { class: "flex items-center gap-2" },
+                field,
+                button(
+                    {
+                        type: "submit",
+                        class: "rounded-lg bg-rose-500 px-2.5 py-1 text-sm font-medium text-white transition-colors hover:bg-rose-400",
+                    },
+                    "Go",
+                ),
             ),
         ),
     )

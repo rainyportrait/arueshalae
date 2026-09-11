@@ -74,6 +74,16 @@ describe("Pagination arrow-key paging", () => {
         expect(event.defaultPrevented).toBe(false)
     })
 
+    it("shows the valid range in the page-jump popover", async () => {
+        const { el } = await mountPagination(2, 125)
+
+        el.querySelector<HTMLButtonElement>('button[title="Go to page"]')?.click()
+
+        const popover = el.querySelector<HTMLElement>('[aria-haspopup="dialog"]')?.parentElement
+        expect(popover?.textContent).toContain("Page 1–125")
+        expect(popover?.querySelector('input[type="number"]')?.getAttribute("max")).toBe("125")
+    })
+
     it("ignores the arrows while typing in a form field", async () => {
         const { route } = await mountPagination(2, 5)
         const input = document.createElement("input")

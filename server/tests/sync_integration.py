@@ -232,16 +232,16 @@ with tempfile.TemporaryDirectory(prefix="arue-sync-test-") as folder:
 
             def search(term):
                 result = req("/api/posts/search?term=" + urllib.parse.quote(term))
-                return json.loads(result)["postIds"]
+                return [post["postId"] for post in json.loads(result)["posts"]]
 
             assert search("cat") == [790, 789]
             assert search("cat cat") == [790, 789]
             assert search("cat -dog") == [790]
             assert set(search("-dog")) == {790, 456, 123}
             assert set(search("")) == {790, 789, 456, 123}
-            suggestions = json.loads(req("/api/tags?term="))["tags"]
-            assert suggestions[0]["name"] == "cat"
-            assert suggestions[0]["uses"] == 2
+            suggestions = json.loads(req("/api/tags?term="))
+            assert suggestions[0]["value"] == "cat"
+            assert suggestions[0]["label"] == "cat (2)"
 
             rejected_request(404, "/api/posts/999/media")
             original = folder / "0000012_123.png"

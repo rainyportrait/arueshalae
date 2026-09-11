@@ -23,7 +23,7 @@ use crate::{
     ids::{PostId, parse_id_list as parse_post_ids},
     json_ok,
     media_processor::{MediaProcessor, MediaProcessorResult, file_name, mini_thumb},
-    server::{AppError, AppResult, AppState, SearchQuery},
+    server::{AppError, AppResult, AppState},
 };
 
 pub async fn create_post(
@@ -137,17 +137,88 @@ pub async fn list_downloaded_posts(
 pub struct Search<'a> {
     include: Vec<&'a str>,
     exclude: Vec<&'a str>,
+    scores: Vec<ScoreFilter>,
+    sort: SearchSort,
+}
+
+#[derive(Clone, Copy)]
+enum Comparison {
+    Lt,
+    Le,
+    Eq,
+    Ge,
+    Gt,
+}
+struct ScoreFilter {
+    comparison: Comparison,
+    value: i64,
+}
+#[derive(Clone, Copy)]
+enum SortField {
+    Favorite,
+    Id,
+    Score,
+    Random,
+}
+#[derive(Clone, Copy)]
+struct SearchSort {
+    field: SortField,
+    ascending: bool,
 }
 
 impl<'a> Search<'a> {
-    fn new(input: &'a str) -> Self {
+    fn new(input: &'a str) -> AppResult<Self> {
         let mut result = Self {
             include: Vec::new(),
             exclude: Vec::new(),
+            scores: Vec::new(),
+            sort: SearchSort {
+                field: SortField::Favorite,
+                ascending: true,
+            },
         };
+        let mut saw_sort = false;
 
         for term in input.split_whitespace() {
-            if let Some(t) = term.strip_prefix("-") {
+            if let Some(value) = term.strip_prefix("sort:") {
+                if saw_sort {
+                    return Err(AppError::bad_request("multiple sort operators"));
+                }
+                saw_sort = true;
+                let mut parts = value.split(':');
+                result.sort.field = match parts.next() {
+                    Some("id") => SortField::Id,
+                    Some("score") => SortField::Score,
+                    Some("random") => SortField::Random,
+                    _ => return Err(AppError::bad_request("sort must be id, score, or random")),
+                };
+                result.sort.ascending = match parts.next() {
+                    None | Some("desc") => false,
+                    Some("asc") => true,
+                    _ => return Err(AppError::bad_request("sort direction must be asc or desc")),
+                };
+                if parts.next().is_some() {
+                    return Err(AppError::bad_request("invalid sort operator"));
+                }
+            } else if let Some(value) = term.strip_prefix("score:") {
+                let (comparison, number) = if let Some(v) = value.strip_prefix(">=") {
+                    (Comparison::Ge, v)
+                } else if let Some(v) = value.strip_prefix("<=") {
+                    (Comparison::Le, v)
+                } else if let Some(v) = value.strip_prefix('>') {
+                    (Comparison::Gt, v)
+                } else if let Some(v) = value.strip_prefix('<') {
+                    (Comparison::Lt, v)
+                } else if let Some(v) = value.strip_prefix('=') {
+                    (Comparison::Eq, v)
+                } else {
+                    return Err(AppError::bad_request("invalid score comparison"));
+                };
+                let value = number
+                    .parse()
+                    .map_err(|_| AppError::bad_request("score must be an integer"))?;
+                result.scores.push(ScoreFilter { comparison, value });
+            } else if let Some(t) = term.strip_prefix("-") {
                 if !t.is_empty() && !result.exclude.contains(&t) {
                     result.exclude.push(t)
                 }
@@ -156,17 +227,53 @@ impl<'a> Search<'a> {
             }
         }
 
-        result
+        Ok(result)
     }
+}
+
+#[derive(Deserialize)]
+pub struct PostSearchQuery {
+    term: String,
+    #[serde(default)]
+    offset: i64,
+    #[serde(default = "default_search_limit")]
+    limit: i64,
+    #[serde(default)]
+    seed: i64,
+}
+fn default_search_limit() -> i64 {
+    50
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SearchPost {
+    post_id: PostId,
+    downloaded: bool,
+    tags: Vec<String>,
+}
+
+#[derive(Serialize)]
+pub struct SearchResponse {
+    posts: Vec<SearchPost>,
+    total: i64,
 }
 
 pub async fn search(
     State(AppState { database, .. }): State<AppState>,
-    Query(SearchQuery { term }): Query<SearchQuery>,
-) -> AppResult<Json<PostIdsContainer>> {
-    let search = Search::new(&term);
-    let post_ids = database.search(&search).await?;
-    Ok(Json(PostIdsContainer { post_ids }))
+    Query(query): Query<PostSearchQuery>,
+) -> AppResult<Json<SearchResponse>> {
+    if query.offset < 0 || !(1..=100).contains(&query.limit) {
+        return Err(AppError::bad_request(
+            "offset must be non-negative and limit must be 1 through 100",
+        ));
+    }
+    let search = Search::new(&query.term)?;
+    Ok(Json(
+        database
+            .search(&search, query.offset, query.limit, query.seed)
+            .await?,
+    ))
 }
 
 pub async fn get_download_count(
@@ -368,12 +475,19 @@ impl Database {
         }))
     }
 
-    async fn search(&self, search: &Search<'_>) -> Result<Vec<PostId>> {
+    async fn search(
+        &self,
+        search: &Search<'_>,
+        offset: i64,
+        limit: i64,
+        seed: i64,
+    ) -> Result<SearchResponse> {
         let mut query_builder = sqlx::QueryBuilder::new(
-            r#"SELECT p.post_id
+            r#"SELECT p.post_id, pm.post_id IS NOT NULL
             FROM posts p
-            JOIN post_media pm ON pm.post_id = p.post_id
-            WHERE p.status IN ('favorited', 'deleted')"#,
+            JOIN favorite_order f ON f.post_id = p.post_id
+            LEFT JOIN post_media pm ON pm.post_id = p.post_id
+            WHERE p.status = 'favorited'"#,
         );
         for term in &search.include {
             query_builder.push(
@@ -397,12 +511,80 @@ impl Database {
             query_builder.push_bind(term);
             query_builder.push(")");
         }
-        query_builder.push(" ORDER BY p.post_id DESC");
+        for filter in &search.scores {
+            query_builder.push(" AND p.score ");
+            query_builder.push(match filter.comparison {
+                Comparison::Lt => "<",
+                Comparison::Le => "<=",
+                Comparison::Eq => "=",
+                Comparison::Ge => ">=",
+                Comparison::Gt => ">",
+            });
+            query_builder.push_bind(filter.value);
+        }
+        let order = match search.sort.field {
+            SortField::Favorite => "f.position",
+            SortField::Id => "p.post_id",
+            SortField::Score => "p.score",
+            SortField::Random => "((((p.post_id | ",
+        };
+        query_builder.push(" ORDER BY ");
+        if matches!(search.sort.field, SortField::Random) {
+            query_builder
+                .push(order)
+                .push_bind(seed)
+                .push(") - (p.post_id & ")
+                .push_bind(seed)
+                .push(")) * 1103515245) & 2147483647)");
+        } else {
+            query_builder.push(order);
+        }
+        if matches!(search.sort.field, SortField::Random) || !search.sort.ascending {
+            query_builder.push(" DESC");
+        } else {
+            query_builder.push(" ASC");
+        }
+        query_builder
+            .push(", p.post_id DESC LIMIT ")
+            .push_bind(limit)
+            .push(" OFFSET ")
+            .push_bind(offset);
+        let rows: Vec<(i64, bool)> = query_builder.build_query_as().fetch_all(&self.pool).await?;
+        let total = self.search_count(search).await?;
+        let mut posts = Vec::with_capacity(rows.len());
+        for (post_id, downloaded) in rows {
+            let tags = sqlx::query_scalar!("SELECT t.name FROM post_tags pt JOIN tags t USING (tag_id) WHERE pt.post_id = ? ORDER BY t.kind, t.name", post_id).fetch_all(&self.pool).await?;
+            posts.push(SearchPost {
+                post_id: PostId(post_id),
+                downloaded,
+                tags,
+            });
+        }
+        Ok(SearchResponse { posts, total })
+    }
 
-        Ok(query_builder
-            .build_query_scalar()
-            .fetch_all(&self.pool)
-            .await?)
+    async fn search_count(&self, search: &Search<'_>) -> Result<i64> {
+        let mut qb = sqlx::QueryBuilder::new(
+            "SELECT COUNT(*) FROM posts p JOIN favorite_order f ON f.post_id=p.post_id WHERE p.status='favorited'",
+        );
+        for term in &search.include {
+            qb.push(" AND EXISTS (SELECT 1 FROM post_tags pt JOIN tags t USING(tag_id) WHERE pt.post_id=p.post_id AND t.name=").push_bind(term).push(")");
+        }
+        for term in &search.exclude {
+            qb.push(" AND NOT EXISTS (SELECT 1 FROM post_tags pt JOIN tags t USING(tag_id) WHERE pt.post_id=p.post_id AND t.name=").push_bind(term).push(")");
+        }
+        for filter in &search.scores {
+            qb.push(" AND p.score ")
+                .push(match filter.comparison {
+                    Comparison::Lt => "<",
+                    Comparison::Le => "<=",
+                    Comparison::Eq => "=",
+                    Comparison::Ge => ">=",
+                    Comparison::Gt => ">",
+                })
+                .push_bind(filter.value);
+        }
+        Ok(qb.build_query_scalar().fetch_one(&self.pool).await?)
     }
 
     async fn get_post(&self, post_id: PostId) -> Result<Option<PostMedia>> {
@@ -657,26 +839,89 @@ mod tests {
         .unwrap();
     }
 
+    async fn search_ids(database: &Database, term: &str) -> Vec<PostId> {
+        search_ids_with_seed(database, term, 0).await
+    }
+
+    async fn search_ids_with_seed(database: &Database, term: &str, seed: i64) -> Vec<PostId> {
+        database
+            .search(&Search::new(term).unwrap(), 0, 50, seed)
+            .await
+            .unwrap()
+            .posts
+            .into_iter()
+            .map(|post| post.post_id)
+            .collect()
+    }
+
     #[tokio::test]
     async fn search_honors_exclusions_and_empty_queries() {
         let (_directory, database) = test_database().await;
         seed_search_posts(&database).await;
 
         assert_eq!(
-            database.search(&Search::new("cat -dog")).await.unwrap(),
-            vec![PostId(2)]
+            search_ids(&database, "cat -dog").await,
+            vec![PostId(2), PostId(4)]
         );
         assert_eq!(
-            database.search(&Search::new("cat cat")).await.unwrap(),
-            vec![PostId(2), PostId(1)]
+            search_ids(&database, "cat cat").await,
+            vec![PostId(1), PostId(2), PostId(4)]
         );
         assert_eq!(
-            database.search(&Search::new("-dog")).await.unwrap(),
-            vec![PostId(5), PostId(2)]
+            search_ids(&database, "-dog").await,
+            vec![PostId(2), PostId(4), PostId(5)]
         );
         assert_eq!(
-            database.search(&Search::new("")).await.unwrap(),
-            vec![PostId(5), PostId(3), PostId(2), PostId(1)]
+            search_ids(&database, "").await,
+            vec![PostId(1), PostId(2), PostId(3), PostId(4), PostId(5)]
+        );
+    }
+
+    #[tokio::test]
+    async fn search_honors_score_filters_and_sorting() {
+        let (_directory, database) = test_database().await;
+        seed_search_posts(&database).await;
+        sqlx::query("UPDATE posts SET score = post_id * 10")
+            .execute(&database.pool)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            search_ids(&database, "score:>=20 score:<50 sort:score").await,
+            vec![PostId(4), PostId(3), PostId(2)]
+        );
+        assert_eq!(
+            search_ids(&database, "score:>=20 score:<50 sort:id:asc").await,
+            vec![PostId(2), PostId(3), PostId(4)]
+        );
+    }
+
+    #[test]
+    fn search_rejects_invalid_operators() {
+        for query in [
+            "sort:date",
+            "sort:id:sideways",
+            "sort:id sort:score",
+            "score:10",
+            "score:>=nope",
+        ] {
+            assert!(Search::new(query).is_err(), "accepted {query}");
+        }
+    }
+
+    #[tokio::test]
+    async fn random_sort_is_seeded_and_ignores_direction() {
+        let (_directory, database) = test_database().await;
+        seed_search_posts(&database).await;
+
+        let first = search_ids_with_seed(&database, "sort:random", 1234).await;
+        assert_eq!(
+            first,
+            search_ids_with_seed(&database, "sort:random:asc", 1234).await
+        );
+        assert_ne!(
+            first,
+            search_ids_with_seed(&database, "sort:random", 987654).await
         );
     }
 

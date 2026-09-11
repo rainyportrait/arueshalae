@@ -13,6 +13,7 @@ const api = vi.hoisted(() => ({
     getDownloadCount: vi.fn(),
     fetchCachedPostDetails: vi.fn(),
     fetchProfile: vi.fn(async () => ({ favorites: 0 })),
+    downloadKnownPost: vi.fn(async () => {}),
 }))
 
 vi.mock("../../src/api/favorites.ts", () => ({ fetchFavorites: api.fetchFavorites }))
@@ -32,6 +33,12 @@ vi.mock("../../src/api/server.ts", () => ({
 vi.mock("../../src/api/auth.ts", async (importOriginal) => ({
     ...(await importOriginal<object>()),
     fetchProfile: api.fetchProfile,
+}))
+// The details page downloads a favorite missing media on view
+// (sync/download.ts); keep that upload out of the component test.
+vi.mock("../../src/sync/download.ts", () => ({
+    downloadKnownPost: api.downloadKnownPost,
+    drainDownloads: vi.fn(),
 }))
 
 function post(id: number): Post {
@@ -228,6 +235,8 @@ describe("PostDetails favorite button, server state", () => {
         api.checkDownloads.mockReset()
         api.getDownloadCount.mockReset()
         api.checkDownloads.mockResolvedValue(new Set())
+        api.downloadKnownPost.mockReset()
+        api.downloadKnownPost.mockResolvedValue(undefined)
         resetDom("https://rule34.xxx/index.php?page=account&s=options")
     })
 

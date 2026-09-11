@@ -5,7 +5,6 @@ import { CenteredState } from "./CenteredState.ts"
 import { Link } from "./Link.ts"
 import { TagList, TagListSkeleton } from "./TagList.ts"
 import { Toggle } from "./Toggle.ts"
-import type { LibraryPost } from "./api/library.ts"
 import type { PostDetails as PostDetailsData } from "./api/post-details.ts"
 import type { Post } from "./api/post-list.ts"
 import { isAnimated } from "./api/tags.ts"
@@ -238,30 +237,27 @@ function Sidebar({
     return div(
         { class: "flex flex-col gap-6" },
         AddFavoriteButton({ post, favorite, isCurrent }),
-        LibraryDownloadStatus(post.id),
+        DeletedUpstreamNote(post.id),
         OriginalImageToggle({ post, showOriginal }),
         StatsSection({ post }),
         TagList({ tags: post.tags }),
     )
 }
 
-function LibraryDownloadStatus(postId: number) {
+// The only library state the page cannot speak for itself: the post is gone
+// upstream, yet the page still renders — from the server's cached copy, whose
+// media URLs already point at the local server (state/details.ts publishes
+// it when the upstream fetch fails). Deleted posts stay reachable through
+// history and bookmarks, and this is how the page says what it is showing.
+// The other states need no note: a downloaded post is self-evident, and a
+// favorite missing media is downloaded automatically (sync/download.ts)
+// rather than reported.
+function DeletedUpstreamNote(postId: number) {
     return () => {
         if (!serverSettings.val.enabled) return document.createComment("")
-
-        return div(
-            { class: "text-sm text-zinc-400" },
-            libraryDownloadLabel(libraryPosts.val.get(postId)),
-        )
+        if (libraryPosts.val.get(postId)?.status !== "deleted") return document.createComment("")
+        return div({ class: "text-sm text-zinc-400" }, "Deleted upstream — showing local copy.")
     }
-}
-
-function libraryDownloadLabel(post: LibraryPost | undefined): string {
-    if (post === undefined) return "Local status unknown"
-    if (post.downloaded) return "downloaded"
-    if (post.status === "deleted") return "unavailable"
-    if (post.status === "favorited") return "missing"
-    return "not favorited"
 }
 
 // Build the media element for a post without inserting it. The element

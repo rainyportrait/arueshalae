@@ -1,26 +1,15 @@
-import { initApp } from "./App.ts"
-import {
-    isChallengePage,
-    isInIframe,
-    listenForCaptchaSolved,
-    signalCaptchaResolved,
-    styleChallengePage,
-} from "./captcha.ts"
-import { initHead } from "./head.ts"
+import { suppressRule34Player } from "./fluid-player.ts"
 
-// Three-way boot. The userscript matches the site's origin, so it also runs on
-// the challenge page and inside the modal iframe. We handle each case:
-//   - Challenge page (top-level or the iframe's first load): stay dormant so we
-//     don't clobber the challenge widget the user must interact with.
-//   - Not a challenge page but inside an iframe: the challenge was just cleared
-//     in our modal iframe; tell the parent so it can retry its requests.
-//   - Otherwise: a normal top-level page; run the app.
-if (isChallengePage()) {
-    styleChallengePage()
-} else if (isInIframe()) {
-    signalCaptchaResolved()
+// This entrypoint runs before Rule34's scripts. The rest of the app deliberately
+// remains a dynamic import: its modules read the parsed document at load time.
+suppressRule34Player()
+
+function boot(): void {
+    void import("./boot.ts")
+}
+
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot, { once: true })
 } else {
-    listenForCaptchaSolved()
-    initHead()
-    initApp()
+    boot()
 }

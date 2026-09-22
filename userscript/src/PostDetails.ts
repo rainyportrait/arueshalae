@@ -731,32 +731,68 @@ function buildShell(): Node {
     // would read as a swipe. A scrub additionally fires `seeking` on the
     // video, so a seek while a touch is down is the signal that the gesture
     // was aimed at the controls, and it suppresses navigation.
-    let swipeStart: { x: number; y: number; id: number } | undefined
+    let swipeStart: { x: number; y: number; id: number; url: string } | undefined
     let multitouch = false
     let videoSeeking = false
+    const resetSwipe = () => {
+        swipeStart = undefined
+        mediaHolder.style.transition = "transform 180ms ease-out"
+        mediaHolder.style.transform = ""
+    }
     mediaBox.addEventListener("touchstart", (event) => {
         if (event.touches.length !== 1) {
-            swipeStart = undefined
+            resetSwipe()
             multitouch = true
             return
         }
         if (multitouch) return
         const touch = event.touches[0]
         if (touch === undefined) return
-        swipeStart = { x: touch.clientX, y: touch.clientY, id: touch.identifier }
+        // Leave Safari's edge swipe to browser history. Its touchend can
+        // otherwise arrive after popstate and replace the newly active entry.
+        if (touch.clientX < 32 || touch.clientX > window.innerWidth - 32) return
+        mediaHolder.style.transition = "none"
+        swipeStart = {
+            x: touch.clientX,
+            y: touch.clientY,
+            id: touch.identifier,
+            url: window.location.href,
+        }
         // A seek from a previous, already-ended touch can't belong to this
         // one — clear it, otherwise it would suppress this swipe.
         videoSeeking = false
     })
+    mediaBox.addEventListener("touchmove", (event) => {
+        const start = swipeStart
+        if (start === undefined || event.touches.length !== 1) return
+        if (window.location.href !== start.url) {
+            resetSwipe()
+            return
+        }
+        const touch = event.touches[0]
+        if (touch?.identifier !== start.id) return
+        const dx = touch.clientX - start.x
+        const dy = touch.clientY - start.y
+        if (Math.abs(dx) < 8 || Math.abs(dx) < 1.5 * Math.abs(dy)) {
+            mediaHolder.style.transform = ""
+            return
+        }
+        if (shown?.slot.el instanceof HTMLVideoElement && videoSeeking) {
+            resetSwipe()
+            return
+        }
+        mediaHolder.style.transform = `translateX(${Math.sign(dx) * Math.min(Math.abs(dx) * 0.25, 48)}px)`
+    })
     mediaBox.addEventListener("touchend", (event) => {
         if (event.touches.length === 0) multitouch = false
         if (multitouch || event.touches.length !== 0) {
-            swipeStart = undefined
+            resetSwipe()
             return
         }
         const start = swipeStart
-        swipeStart = undefined
+        resetSwipe()
         if (start === undefined) return
+        if (window.location.href !== start.url) return
         const touch = [...event.changedTouches].find((touch) => touch.identifier === start.id)
         if (touch === undefined) return
         const dx = touch.clientX - start.x
@@ -768,7 +804,7 @@ function buildShell(): Node {
         step(dx > 0 ? -1 : 1)
     })
     mediaBox.addEventListener("touchcancel", () => {
-        swipeStart = undefined
+        resetSwipe()
         multitouch = false
         videoSeeking = false
     })

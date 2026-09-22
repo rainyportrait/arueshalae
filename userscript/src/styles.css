@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+.arue-media {
+    touch-action: pan-y pinch-zoom;
+}
+
 :root {
     color-scheme: dark;
 }

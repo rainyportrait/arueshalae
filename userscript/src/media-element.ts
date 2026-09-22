@@ -54,9 +54,9 @@ export function mediaElementClass(fill: boolean): string {
     // then resolves against that inflated track instead of the viewport.
     return clsx(
         fill ? "h-full object-contain" : "max-h-[80vh]",
-        // pan-y lets the page see horizontal swipes (gallery navigation) while
-        // the browser keeps handling vertical page scroll from the media.
-        "w-auto max-w-full touch-pan-y rounded-lg transition-opacity duration-200",
+        // Leave horizontal drags to the gallery, while the browser handles
+        // vertical scrolling and native two-finger pinch zoom.
+        "arue-media w-auto max-w-full rounded-lg transition-opacity duration-200",
     )
 }
 

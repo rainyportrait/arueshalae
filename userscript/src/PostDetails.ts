@@ -731,21 +731,33 @@ function buildShell(): Node {
     // would read as a swipe. A scrub additionally fires `seeking` on the
     // video, so a seek while a touch is down is the signal that the gesture
     // was aimed at the controls, and it suppresses navigation.
-    let swipeStart: { x: number; y: number } | undefined
+    let swipeStart: { x: number; y: number; id: number } | undefined
+    let multitouch = false
     let videoSeeking = false
     mediaBox.addEventListener("touchstart", (event) => {
+        if (event.touches.length !== 1) {
+            swipeStart = undefined
+            multitouch = true
+            return
+        }
+        if (multitouch) return
         const touch = event.touches[0]
         if (touch === undefined) return
-        swipeStart = { x: touch.clientX, y: touch.clientY }
+        swipeStart = { x: touch.clientX, y: touch.clientY, id: touch.identifier }
         // A seek from a previous, already-ended touch can't belong to this
         // one — clear it, otherwise it would suppress this swipe.
         videoSeeking = false
     })
     mediaBox.addEventListener("touchend", (event) => {
+        if (event.touches.length === 0) multitouch = false
+        if (multitouch || event.touches.length !== 0) {
+            swipeStart = undefined
+            return
+        }
         const start = swipeStart
         swipeStart = undefined
         if (start === undefined) return
-        const touch = event.changedTouches[0]
+        const touch = [...event.changedTouches].find((touch) => touch.identifier === start.id)
         if (touch === undefined) return
         const dx = touch.clientX - start.x
         const dy = touch.clientY - start.y
@@ -757,6 +769,7 @@ function buildShell(): Node {
     })
     mediaBox.addEventListener("touchcancel", () => {
         swipeStart = undefined
+        multitouch = false
         videoSeeking = false
     })
     let shown: { slot: MediaSlot; fill: boolean } | undefined

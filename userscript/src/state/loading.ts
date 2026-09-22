@@ -11,6 +11,9 @@ import { listLoading } from "./list.ts"
 // so the bar shows during a load without the page re-rendering. Pages keep
 // showing their previous data during a navigation, so this is what tells the
 // user something is in flight — it drives the bar at the top of the app.
+// detailsLoading additionally covers the post's media: the details payload
+// only publishes once its element is ready (state/details.ts), so the bar
+// runs until the post actually swaps on screen.
 export const pageLoading = van.derive(
     () =>
         listLoading.val ||

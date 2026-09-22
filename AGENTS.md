@@ -62,7 +62,12 @@ Server (the `server/` crate):
   mid-flight. Each loader exposes a `pending` state, and the loading bar (`state/loading.ts`) is
   derived from those. The visible page follows `shownType` (App.ts), which lags behind `route` until
   the target page's fetch settles: a cross-page navigation keeps the old screen (and swaps to the
-  new one only when it is ready or errored), so a page never shows stale content.
+  new one only when it is ready or errored), so a page never shows stale content. The details
+  loader (`state/details.ts`) additionally gates its publish on the post's **media**: it builds the
+  media element detached (`media-element.ts`) as soon as the fetch settles, so the decode runs
+  while the previous page is on screen, and the payload and `detailsLoading` move only once
+  `whenReady` settles — the loading bar and the screen swap therefore wait for the media too.
+  The details page adopts the element from that slot instead of building one itself
 - vanjs prop types do **not** accept `undefined`; pass concrete defaults instead of optional
   `undefined`.
 - `van.add(dom, ...children)` accepts arrays (`ChildDom[]`).

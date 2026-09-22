@@ -9,10 +9,11 @@ import type { PostDetails as PostDetailsData } from "./api/post-details.ts"
 import type { Post } from "./api/post-list.ts"
 import { isAnimated } from "./api/tags.ts"
 import clsx from "./clsx.ts"
-import { imageUrl, thumbnailUrl, videoPosterUrl, videoUrl } from "./media-source.ts"
+import { type MediaSlot, buildMediaSlot, mediaElementClass } from "./media-element.ts"
+import { thumbnailUrl } from "./media-source.ts"
 import { type PostOrigin, postHref, route } from "./router.ts"
 import { auth } from "./state/auth.ts"
-import { details, reloadDetails } from "./state/details.ts"
+import { details, detailsMedia, reloadDetails } from "./state/details.ts"
 import {
     type FavoriteStatus,
     addFavoriteWithStatus,
@@ -33,9 +34,9 @@ import {
     step,
 } from "./state/gallery.ts"
 import { libraryPosts } from "./state/library.ts"
-import { preferOriginal, serverSettings } from "./state/settings.ts"
+import { serverSettings } from "./state/settings.ts"
 
-const { a, aside, button, div, h4, img, span, video } = van.tags
+const { a, aside, button, div, h4, img, span } = van.tags
 
 function StatsSection({ post }: { post: PostDetailsData }) {
     const cells: ChildDom[] = []
@@ -256,7 +257,8 @@ function Sidebar({
 // The only library state the page cannot speak for itself: the post is gone
 // upstream, yet the page still renders — from the server's cached copy, whose
 // media URLs already point at the local server (state/details.ts publishes
-// it when the upstream fetch fails). Deleted posts stay reachable through
+// it once its media is ready, and the failing upstream fetch leaves it
+// alone). Deleted posts stay reachable through
 // history and bookmarks, and this is how the page says what it is showing.
 // The other states need no note: a downloaded post is self-evident, and a
 // favorite missing media is downloaded automatically (sync/download.ts)
@@ -266,85 +268,6 @@ function DeletedUpstreamNote(postId: number) {
         if (!serverSettings.val.enabled) return document.createComment("")
         if (libraryPosts.val.get(postId)?.status !== "deleted") return document.createComment("")
         return div({ class: "text-sm text-zinc-400" }, "Deleted upstream — showing local copy.")
-    }
-}
-
-// Build the media element for a post without inserting it. The element
-// starts transparent; `whenReady` resolves when it can be faded in — images
-// via decode(), videos when playback can start (the poster frame shows until
-// then). The img src stays a live prop so the "original image" toggle keeps
-// working after insertion.
-// The media element's classes: capped to the viewport normally, or filling
-// the container (and object-contain scaled) in focus mode.
-function mediaElementClass(fill: boolean): string {
-    // min-h-0 overrides the grid item's automatic minimum size: without it
-    // the image's natural height sizes the (auto) grid row, and max-h-full
-    // then resolves against that inflated track instead of the viewport.
-    return clsx(
-        fill ? "h-full object-contain" : "max-h-[80vh]",
-        // pan-y lets the page see horizontal swipes (gallery navigation) while
-        // the browser keeps handling vertical page scroll from the media.
-        "w-auto max-w-full touch-pan-y rounded-lg transition-opacity duration-200",
-    )
-}
-
-function buildMediaEl(
-    post: PostDetailsData,
-    showOriginal: State<boolean>,
-    // In focus mode the media box fills its container (flex-1) and the
-    // content is object-contain scaled to the largest size that fits in it.
-    fill: boolean,
-): { el: HTMLElement; whenReady: Promise<void>; fill: boolean } {
-    const media = post.media
-    const elementClass = mediaElementClass(fill)
-    if (media.kind === "video") {
-        const el = video({
-            src: () => videoUrl(post.id, media),
-            poster: () => videoPosterUrl(post.id, media),
-            controls: true,
-            loop: true,
-            muted: true,
-            autoplay: true,
-            // Without playsinline, mobile Safari autoplays videos in its
-            // native fullscreen player instead of inline.
-            playsinline: true,
-            class: elementClass,
-            style: "grid-area: 1 / 1",
-            onerror: (e: Event) => {
-                const video = e.currentTarget as HTMLVideoElement
-                if (video.getAttribute("src") !== media.src) video.src = media.src
-                if (video.getAttribute("poster") !== media.poster) video.poster = media.poster
-            },
-        })
-        const whenReady = new Promise<void>((resolve) => {
-            if (el.readyState >= 2) resolve()
-            else {
-                el.addEventListener("canplay", () => resolve(), { once: true })
-                el.addEventListener("error", () => resolve(), { once: true })
-            }
-        })
-        return { el, whenReady, fill }
-    }
-    const el = img({
-        // Function prop: re-runs when showOriginal changes, swapping the
-        // displayed image for the original (and back).
-        src: () => imageUrl(post.id, media, showOriginal.val),
-        alt: post.title ? `Post ${post.id}: ${post.title}` : `Post ${post.id}`,
-        class: elementClass,
-        style: "grid-area: 1 / 1",
-        onerror: (e: Event) => {
-            const image = e.currentTarget as HTMLImageElement
-            const upstream =
-                showOriginal.val && media.originalImage ? media.originalImage : media.src
-            if (image.getAttribute("src") !== upstream) image.src = upstream
-        },
-    })
-    // A rejected decode (broken image) still resolves: fade in whatever the
-    // browser renders rather than holding the old post forever.
-    return {
-        el,
-        whenReady: el.decode().catch(() => {}),
-        fill,
     }
 }
 
@@ -722,18 +645,6 @@ export function PostDetails() {
 // The static page chrome plus the live per-post slots. Everything here stays
 // mounted across post steps within the same gallery.
 function buildShell(): Node {
-    // "Load original right away" toggle, shared by the sidebar switch and the
-    // media. Reset to the user's setting whenever the post changes (checked
-    // idempotently from both slots; the sidebar slot renders first, and its
-    // reset re-triggers the media's live src in the same pass).
-    let showOriginalFor: number | undefined
-    const showOriginal = van.state(preferOriginal.val)
-    const ensureShowOriginal = (post: PostDetailsData) => {
-        if (showOriginalFor !== post.id) {
-            showOriginalFor = post.id
-            showOriginal.val = preferOriginal.val
-        }
-    }
     // The filmstrip node, memoized per (orientation, origin). Rebuilt when
     // focus mode flips the strip's layout or the gallery origin changes — and
     // whenever the non-gallery branch renders, because the strip was
@@ -744,7 +655,7 @@ function buildShell(): Node {
     const activeId = () => (details.val.status === "ready" ? details.val.post.id : -1)
 
     // The favorite button's per-post status (reset per post, checked
-    // idempotently like showOriginal): rule34 can't tell us beforehand
+    // idempotently): rule34 can't tell us beforehand
     // whether a post is favorited, so every post starts "idle" — the server
     // "already" overlay (AddFavoriteButton) is display-only and rides on the
     // shared downloaded set instead. The button is a toggle, so the
@@ -759,17 +670,17 @@ function buildShell(): Node {
         }
     }
 
-    // Sidebar slot: per-post content inside the static aside. Runs before the
-    // column slot (created first), so its showOriginal reset propagates to
-    // the media within the same update.
+    // Sidebar slot: per-post content inside the static aside. The "original
+    // image" toggle state belongs to the post's media slot (slotFor), and
+    // this slot and the media slot below resolve the same one, so the switch
+    // and the element's live src always agree.
     const sidebarContent = () => {
         const state = details.val
         if (state.status !== "ready") return TagListSkeleton()
-        ensureShowOriginal(state.post)
         ensureFavorite(state.post)
         return Sidebar({
             post: state.post,
-            showOriginal,
+            showOriginal: slotFor(state.post).showOriginal,
             favorite,
             isCurrent: () =>
                 favoriteFor === state.post.id &&
@@ -778,13 +689,15 @@ function buildShell(): Node {
         })
     }
 
-    // Media slot: a stable wrapper (media holder + arrow overlay) whose
-    // media content is crossfaded per post. The holder is a grid whose
-    // children all occupy the same cell, so during a fade the outgoing and
-    // incoming media overlap; the incoming element starts transparent and is
-    // faded in once it is decodable/can-play, then the outgoing one is
-    // removed. The wrapper node never changes identity — swapping it would
-    // cut instead of fade.
+    // Media slot: a stable wrapper (media holder + arrow overlay) whose media
+    // element is adopted per post. The loader builds each element detached
+    // and publishes the payload only once it is ready (state/details.ts), so
+    // the usual adoption is immediate; elements built on the spot for
+    // slotless payloads (the document seed) start transparent and fade in
+    // once decodable/can-play, the outgoing one removed after. The holder is
+    // a grid whose children all occupy the same cell, so during a fade the
+    // outgoing and incoming media overlap. The wrapper node never changes
+    // identity — swapping it would cut instead of fade.
     const mediaHolder = div({
         class: () =>
             clsx(
@@ -837,7 +750,7 @@ function buildShell(): Node {
         const dx = touch.clientX - start.x
         const dy = touch.clientY - start.y
         if (Math.abs(dx) < 48 || Math.abs(dx) < 1.5 * Math.abs(dy)) return
-        const suppress = shown?.el instanceof HTMLVideoElement && videoSeeking
+        const suppress = shown?.slot.el instanceof HTMLVideoElement && videoSeeking
         videoSeeking = false
         if (suppress) return
         step(dx > 0 ? -1 : 1)
@@ -846,47 +759,66 @@ function buildShell(): Node {
         swipeStart = undefined
         videoSeeking = false
     })
-    let shown: { post: PostDetailsData; el: HTMLElement; fill: boolean } | undefined
-    const swapMedia = (post: PostDetailsData, fill: boolean): void => {
-        if (shown?.post === post) {
+    let shown: { slot: MediaSlot; fill: boolean } | undefined
+    let videoSeekingWired: MediaSlot | undefined
+    const adoptMedia = (slot: MediaSlot, fill: boolean): void => {
+        if (shown?.slot === slot) {
             // Same post, but focus mode may have flipped the sizing cap.
             if (shown.fill !== fill) {
                 shown.fill = fill
-                shown.el.className = mediaElementClass(fill)
+                shown.slot.el.className = mediaElementClass(fill)
             }
             return
         }
         // Drop an element from a superseded swap that never got faded in.
-        for (const child of [...mediaHolder.children]) if (child !== shown?.el) child.remove()
+        for (const child of [...mediaHolder.children]) if (child !== shown?.slot.el) child.remove()
         const prev = shown
-        const next = buildMediaEl(post, showOriginal, fill)
-        next.el.style.opacity = "0"
-        mediaHolder.append(next.el)
-        shown = { post, el: next.el, fill }
-        if (next.el instanceof HTMLVideoElement)
-            next.el.addEventListener("seeking", () => {
+        const el = slot.el
+        // The loader built the element detached (state/details.ts), possibly
+        // with a stale sizing cap if focus mode changed since.
+        el.className = mediaElementClass(fill)
+        el.style.opacity = "0"
+        mediaHolder.append(el)
+        shown = { slot, fill }
+        if (el instanceof HTMLVideoElement && videoSeekingWired !== slot) {
+            videoSeekingWired = slot
+            el.addEventListener("seeking", () => {
                 // Only the currently shown video counts (a superseded
                 // outgoing element can still settle for a moment).
-                if (shown?.el === next.el) videoSeeking = true
+                if (shown?.slot.el === el) videoSeeking = true
             })
-        void next.whenReady.then(() => {
-            if (shown?.el !== next.el) {
+        }
+        void slot.whenReady.then(() => {
+            if (shown?.slot !== slot) {
                 // Superseded by another step before it was ready.
-                next.el.remove()
+                el.remove()
                 return
             }
-            next.el.style.opacity = "1"
-            if (prev) window.setTimeout(() => prev.el.remove(), 250)
+            el.style.opacity = "1"
+            if (prev) window.setTimeout(() => prev.slot.el.remove(), 250)
         })
+    }
+    // The media slot of a ready payload: the loader's, built when the fetch
+    // settled (state/details.ts) so the media was loading while the previous
+    // page was on screen. Payloads without one (the document seed, a direct
+    // state write) get an element built on the spot, which starts its load
+    // at adoption and fades in when it is ready.
+    let fallbackSlot: { post: PostDetailsData; slot: MediaSlot } | undefined
+    const slotFor = (post: PostDetailsData): MediaSlot => {
+        const preloaded = detailsMedia.rawVal
+        if (preloaded !== undefined && preloaded.post === post) return preloaded
+        // This page is already showing the post, but the loader's slot for it
+        // was superseded while the payload stayed: keep the adopted element.
+        if (shown?.slot.post === post) return shown.slot
+        if (fallbackSlot?.post !== post)
+            fallbackSlot = { post, slot: buildMediaSlot(post, galleryFocus.rawVal) }
+        return fallbackSlot.slot
     }
     const mediaSlot = () => {
         const state = details.val
         // Off a ready payload (only possible before the first load) the
         // previous media simply stays up.
-        if (state.status === "ready") {
-            ensureShowOriginal(state.post)
-            swapMedia(state.post, galleryFocus.val)
-        }
+        if (state.status === "ready") adoptMedia(slotFor(state.post), galleryFocus.val)
         return mediaBox
     }
 

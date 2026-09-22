@@ -394,3 +394,41 @@ describe("PostDetails favorite button, server state", () => {
         expect(button?.disabled).toBe(false)
     })
 })
+
+describe("PostDetails media", () => {
+    beforeEach(() => {
+        vi.resetModules()
+        api.fetchPostDetails.mockReset()
+        api.fetchCachedPostDetails.mockReset()
+        api.checkDownloads.mockReset()
+        api.fetchPostDetails.mockImplementation((id: number) => Promise.resolve(details(id)))
+        api.checkDownloads.mockResolvedValue(new Set())
+        resetDom("https://rule34.xxx/index.php?page=account&s=options")
+    })
+
+    it("adopts the loader's preloaded media element", async () => {
+        const { details: detailsState, detailsMedia } = await import("../../src/state/details.ts")
+        const { route } = await import("../../src/router.ts")
+        route.val = { type: "postdetails", id: 9, tags: undefined, origin: undefined }
+        await flushVan()
+        // The publish already waited for the (polyfilled, instant) decode.
+        expect(detailsState.val.status).toBe("ready")
+        const { PostDetails } = await import("../../src/PostDetails.ts")
+        document.body.append(PostDetails())
+        await flushVan()
+        // The page shows the element the loader built, not a fresh one.
+        const slot = detailsMedia.rawVal
+        expect(slot?.post.id).toBe(9)
+        expect(document.body.contains(slot!.el)).toBe(true)
+    })
+
+    it("falls back to a built element for a slotless payload", async () => {
+        const { details: detailsState } = await import("../../src/state/details.ts")
+        detailsState.val = { status: "ready", post: details(3), origin: undefined }
+        const { PostDetails } = await import("../../src/PostDetails.ts")
+        document.body.append(PostDetails())
+        await flushVan()
+        const image = document.querySelector<HTMLImageElement>('img[alt="Post 3"]')
+        expect(image?.getAttribute("src")).toBe("//cdn.example/3.jpg")
+    })
+})

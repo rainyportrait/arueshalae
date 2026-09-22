@@ -63,6 +63,9 @@ function screenReady(t: Route["type"]): boolean {
                 list.val.query === r.tags
             )
         }
+        // detailsLoading covers the media as well as the fetch: the payload
+        // is published only once its element can be shown (state/details.ts),
+        // so a false here means the new post is actually on screen.
         case "postdetails":
             return !detailsLoading.val && details.val.status !== "loading"
         case "favorites":

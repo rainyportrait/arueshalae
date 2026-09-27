@@ -187,10 +187,15 @@ impl<'a> Search<'a> {
                 saw_sort = true;
                 let mut parts = value.split(':');
                 result.sort.field = match parts.next() {
+                    Some("favorite") => SortField::Favorite,
                     Some("id") => SortField::Id,
                     Some("score") => SortField::Score,
                     Some("random") => SortField::Random,
-                    _ => return Err(AppError::bad_request("sort must be id, score, or random")),
+                    _ => {
+                        return Err(AppError::bad_request(
+                            "sort must be favorite, id, score, or random",
+                        ));
+                    }
                 };
                 result.sort.ascending = match parts.next() {
                     None | Some("desc") => false,
@@ -838,7 +843,7 @@ mod tests {
                 (3, '3.png', 'png', 'image/png', 1),
                 (5, '5.png', 'png', 'image/png', 1);
             INSERT INTO favorite_order (position, post_id) VALUES
-                (0, 1), (1, 2), (2, 3), (3, 4), (4, 5);
+                (0, 3), (1, 1), (2, 2), (3, 4), (4, 5);
             INSERT INTO tags (tag_id, name, kind) VALUES
                 (1, 'cat', 'general'), (2, 'dog', 'general');
             INSERT INTO post_tags (post_id, tag_id) VALUES
@@ -887,7 +892,7 @@ mod tests {
         );
         assert_eq!(
             search_ids(&database, "").await,
-            vec![PostId(1), PostId(2), PostId(3), PostId(5)]
+            vec![PostId(3), PostId(1), PostId(2), PostId(5)]
         );
     }
 
@@ -907,6 +912,10 @@ mod tests {
         assert_eq!(
             search_ids(&database, "score:>=20 score:<50 sort:id:asc").await,
             vec![PostId(2), PostId(3)]
+        );
+        assert_eq!(
+            search_ids(&database, "sort:favorite:desc").await,
+            vec![PostId(5), PostId(2), PostId(1), PostId(3)]
         );
     }
 

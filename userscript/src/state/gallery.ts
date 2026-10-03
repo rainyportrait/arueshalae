@@ -1,5 +1,6 @@
 import van from "vanjs-core"
 
+import { isShortcutEvent } from "../keyboard.ts"
 import { type PostOrigin, type Route, navigate, route } from "../router.ts"
 import {
     type Collection,
@@ -409,14 +410,8 @@ van.derive(() => {
 document.addEventListener("keydown", (event) => {
     const r = route.val
     if (r.type !== "postdetails" || r.origin === undefined) return
-    if (event.ctrlKey || event.metaKey || event.altKey) return
-    const el = event.target
-    if (
-        el instanceof HTMLElement &&
-        (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)
-    ) {
-        return
-    }
+    const arrow = event.key === "ArrowRight" || event.key === "ArrowLeft"
+    if (!isShortcutEvent(event, arrow)) return
     if (event.key === "ArrowRight") {
         event.preventDefault()
         step(1)

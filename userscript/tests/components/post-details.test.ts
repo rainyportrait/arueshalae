@@ -152,10 +152,60 @@ describe("PostDetails gallery", () => {
             ...strip!.querySelectorAll<HTMLButtonElement>('button[title*="focus mode"]'),
         ]
         expect(focusButtons).toHaveLength(2)
-        expect(focusButtons[0].parentElement?.className).toContain("landscape:block")
+        expect(focusButtons[0].parentElement?.className).toContain("landscape:flex")
         expect(focusButtons[0].parentElement?.className).toContain("hidden")
-        expect(focusButtons[1].parentElement?.className).toContain("portrait:block")
+        expect(focusButtons[1].parentElement?.className).toContain("flex")
         expect(focusButtons[1].parentElement?.className).toContain("landscape:hidden")
+    })
+
+    it("keeps focus hearts in sync with membership, pending writes, and gallery steps", async () => {
+        const origin = { kind: "list" as const, tags: "test", pid: 0 }
+        const { details: detailsState } = await import("../../src/state/details.ts")
+        const { gallery, galleryFocus } = await import("../../src/state/gallery.ts")
+        const { auth } = await import("../../src/state/auth.ts")
+        const { serverSettings } = await import("../../src/state/settings.ts")
+        const { libraryPosts } = await import("../../src/state/library.ts")
+        const { membershipWrites } = await import("../../src/state/favorite-action.ts")
+        auth.val = { status: "authenticated", userId: 5 }
+        serverSettings.val = { ...serverSettings.val, enabled: true }
+        libraryPosts.val = new Map([[1, { postId: 1, status: "favorited", downloaded: true }]])
+        detailsState.val = { status: "ready", post: details(1), origin }
+        gallery.val = {
+            status: "ready",
+            origin,
+            pages: [{ pid: 0, posts: [post(1), post(2)] }],
+            lastPagePID: 0,
+        }
+        galleryFocus.val = true
+        const { PostDetails } = await import("../../src/PostDetails.ts")
+        document.body.append(PostDetails())
+        await flushVan()
+        const focusButton = document.querySelector('button[title*="focus mode"]')!
+        const strip = focusButton.closest("div.flex.px-0\\.5")!
+        const hearts = () => [...strip.querySelectorAll<HTMLButtonElement>("button[aria-pressed]")]
+        expect(hearts()).toHaveLength(2)
+        for (const heart of hearts()) {
+            expect(heart.title).toBe("Remove from favorites (L)")
+            expect(heart.getAttribute("aria-pressed")).toBe("true")
+            expect(heart.querySelector("svg")?.getAttribute("fill")).toBe("currentColor")
+        }
+        membershipWrites.val = new Map([[1, new Promise<boolean>(() => {})]])
+        await flushVan()
+        expect(
+            hearts().every((heart) => heart.disabled && heart.querySelector(".animate-spin")),
+        ).toBe(true)
+        membershipWrites.val = new Map()
+        detailsState.val = { status: "ready", post: details(2), origin }
+        await flushVan()
+        expect(
+            document.querySelector('button[title*="focus mode"]')?.closest("div.flex.px-0\\.5"),
+        ).toBe(strip)
+        for (const heart of hearts()) {
+            expect(heart.title).toBe("Add to favorites (L)")
+            expect(heart.disabled).toBe(false)
+            expect(heart.getAttribute("aria-pressed")).toBe("false")
+            expect(heart.querySelector("svg")?.getAttribute("fill")).toBe("none")
+        }
     })
 
     it("shows a post the feed shift put into two pages only once", async () => {
@@ -354,6 +404,50 @@ describe("PostDetails favorite button, server state", () => {
         ])
         await flushVan()
     }
+
+    it("uses L to activate the current toggle and ignores typing, modifiers, repeats, and pending actions", async () => {
+        api.fetchCachedPostDetails.mockImplementation(() => new Promise(() => {}))
+        api.fetchPostDetails.mockImplementation(() => new Promise(() => {}))
+        await mountDetails(3)
+        const { route } = await import("../../src/router.ts")
+        route.val = { type: "postdetails", id: 3, tags: undefined, origin: undefined }
+        await flushVan()
+        const toggle = favoriteButton()!
+        const click = vi.spyOn(toggle, "click").mockImplementation(() => {})
+        const press = (
+            key: string,
+            init: Record<string, unknown> = {},
+            target: EventTarget = document,
+        ) => {
+            const event = new Event("keydown", { bubbles: true, cancelable: true })
+            Object.assign(event, { key, ...init })
+            target.dispatchEvent(event)
+            return event
+        }
+        expect(press("l").defaultPrevented).toBe(true)
+        expect(press("L").defaultPrevented).toBe(true)
+        expect(click).toHaveBeenCalledTimes(2)
+        for (const init of [
+            { ctrlKey: true },
+            { metaKey: true },
+            { altKey: true },
+            { repeat: true },
+        ]) {
+            expect(press("l", init).defaultPrevented).toBe(false)
+        }
+        for (const tag of ["input", "textarea", "select", "div"]) {
+            const field = document.createElement(tag)
+            if (tag === "div") field.setAttribute("contenteditable", "true")
+            document.body.append(field)
+            expect(press("l", {}, field).defaultPrevented).toBe(false)
+        }
+        toggle.disabled = true
+        expect(press("l").defaultPrevented).toBe(false)
+        toggle.disabled = false
+        route.val = { type: "postdetails", id: 4, tags: undefined, origin: undefined }
+        expect(press("l").defaultPrevented).toBe(false)
+        expect(click).toHaveBeenCalledTimes(2)
+    })
 
     it("starts available when the post is not in the user's library", async () => {
         await mountDetails(3)

@@ -9,6 +9,7 @@ import type { PostDetails as PostDetailsData } from "./api/post-details.ts"
 import type { Post } from "./api/post-list.ts"
 import { isAnimated } from "./api/tags.ts"
 import clsx from "./clsx.ts"
+import { isShortcutEvent } from "./keyboard.ts"
 import { type MediaSlot, buildMediaSlot, mediaElementClass } from "./media-element.ts"
 import { thumbnailUrl } from "./media-source.ts"
 import { type PostOrigin, postHref, route } from "./router.ts"
@@ -37,6 +38,20 @@ import { libraryPosts } from "./state/library.ts"
 import { serverSettings } from "./state/settings.ts"
 
 const { a, aside, button, div, h4, img, span } = van.tags
+
+// Use the mounted toggle so keyboard and pointer actions share pending/retry state.
+document.addEventListener("keydown", (event) => {
+    if (event.defaultPrevented || !isShortcutEvent(event)) return
+    if (event.key !== "l" && event.key !== "L") return
+    const current = route.rawVal
+    if (current.type !== "postdetails") return
+    const toggle = document.querySelector<HTMLButtonElement>(
+        `button[data-favorite-post="${current.id}"]`,
+    )
+    if (!toggle || toggle.disabled) return
+    event.preventDefault()
+    toggle.click()
+})
 
 function StatsSection({ post }: { post: PostDetailsData }) {
     const cells: ChildDom[] = []
@@ -130,10 +145,12 @@ function AddFavoriteButton({
     post,
     favorite,
     isCurrent,
+    compact = false,
 }: {
     post: PostDetailsData
     favorite: State<FavoriteStatus>
     isCurrent: () => boolean
+    compact?: boolean
 }) {
     return () => {
         if (auth.val.status !== "authenticated") return document.createComment("")
@@ -150,9 +167,15 @@ function AddFavoriteButton({
         // The "added"/"already" faces double as the "Remove from favorites"
         // face: the button is a toggle, and both mean "the post is in the
         // user's favorites".
+        const selected = ["added", "already", "library-failed", "stale-session"].includes(state)
+        const busy = ["adding", "removing", "saving"].includes(state)
         return button(
             {
                 type: "button",
+                "aria-label": favoriteButtonLabel(state),
+                "aria-keyshortcuts": "L",
+                "data-favorite-post": post.id,
+                "aria-pressed": selected,
                 // The two failed faces stay clickable: they retry the server
                 // part alone (rule34 already holds the favorite, or already
                 // dropped it).
@@ -163,14 +186,17 @@ function AddFavoriteButton({
                     state !== "library-failed" &&
                     state !== "removal-failed",
                 class: clsx(
-                    "w-full rounded-lg border px-3 py-2 text-sm transition-colors",
+                    compact
+                        ? "flex h-6 w-6 shrink-0 items-center justify-center rounded-md border text-sm transition-colors"
+                        : "w-full rounded-lg border px-3 py-2 text-sm transition-colors",
+                    compact && selected && "text-rose-400!",
                     state === "idle" || state === "added" || state === "already"
                         ? "cursor-pointer border-zinc-700 bg-zinc-900/60 text-zinc-200 hover:bg-zinc-800"
                         : state === "library-failed" || state === "removal-failed"
                           ? "cursor-pointer border-rose-900/70 bg-rose-950/30 text-rose-300 hover:bg-rose-950/50"
                           : "cursor-default border-zinc-800 bg-zinc-900/40 text-zinc-500",
                 ),
-                title: favoriteButtonTitle(state),
+                title: `${favoriteButtonTitle(state) || favoriteButtonLabel(state)} (L)`,
                 // The computed state (not the raw favorite.val) drives
                 // add/remove — that's what makes the "already" overlay work,
                 // where the raw state is still "idle".
@@ -185,9 +211,28 @@ function AddFavoriteButton({
                     else if (state === "idle") void addFavoriteWithStatus(post, favorite, isCurrent)
                 },
             },
-            favoriteButtonLabel(state),
+            compact ? favoriteIcon(selected, busy) : favoriteButtonLabel(state),
         )
     }
+}
+
+function favoriteIcon(selected: boolean, busy: boolean): Node {
+    const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg")
+    icon.setAttribute("viewBox", "0 0 24 24")
+    icon.setAttribute("class", busy ? "h-4 w-4 animate-spin" : "h-4 w-4")
+    icon.setAttribute("aria-hidden", "true")
+    icon.setAttribute("fill", selected && !busy ? "currentColor" : "none")
+    icon.setAttribute("stroke", "currentColor")
+    icon.setAttribute("stroke-width", "2")
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path")
+    path.setAttribute(
+        "d",
+        busy
+            ? "M12 3a9 9 0 1 1-9 9"
+            : "M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z",
+    )
+    icon.append(path)
+    return icon
 }
 
 function favoriteButtonLabel(state: FavoriteStatus): string {
@@ -340,10 +385,12 @@ function Filmstrip({
     origin,
     activeId,
     focus = false,
+    favoriteControl,
 }: {
     origin: PostOrigin
     activeId: () => number
     focus?: boolean
+    favoriteControl: () => Node
 }) {
     const vertical = () => focus && window.innerWidth > window.innerHeight
     // The active post's index over the currently loaded pages (-1 if absent).
@@ -434,14 +481,22 @@ function Filmstrip({
             },
             headerLabel,
             focus
-                ? div({ class: "hidden landscape:block" }, FocusButton())
+                ? div(
+                      { class: "hidden items-center gap-1 landscape:flex" },
+                      favoriteControl,
+                      FocusButton(),
+                  )
                 : document.createComment(""),
         ),
         div(
             { class: "flex items-center gap-2" },
             Counter,
             focus
-                ? div({ class: "portrait:block landscape:hidden" }, FocusButton())
+                ? div(
+                      { class: "flex items-center gap-1 landscape:hidden" },
+                      favoriteControl,
+                      FocusButton(),
+                  )
                 : FocusButton(),
         ),
     )
@@ -671,6 +726,21 @@ function buildShell(): Node {
         }
     }
 
+    const favoriteControl = () => {
+        const state = details.val
+        if (state.status !== "ready") return document.createComment("")
+        ensureFavorite(state.post)
+        return AddFavoriteButton({
+            post: state.post,
+            favorite,
+            compact: true,
+            isCurrent: () =>
+                favoriteFor === state.post.id &&
+                route.val.type === "postdetails" &&
+                route.val.id === state.post.id,
+        })()
+    }
+
     // Sidebar slot: per-post content inside the static aside. The "original
     // image" toggle state belongs to the post's media slot (slotFor), and
     // this slot and the media slot below resolve the same one, so the switch
@@ -887,7 +957,12 @@ function buildShell(): Node {
         if (strip?.key !== key)
             strip = {
                 key,
-                node: Filmstrip({ origin: state.origin, activeId, focus: galleryFocus.val }),
+                node: Filmstrip({
+                    origin: state.origin,
+                    activeId,
+                    focus: galleryFocus.val,
+                    favoriteControl,
+                }),
             }
         return strip.node
     }

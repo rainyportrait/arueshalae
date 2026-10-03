@@ -123,13 +123,51 @@ describe("gallery pagination", () => {
 
         // The unmodified arrow still steps: the listener is live and the
         // guard is what bailed.
-        press("ArrowRight")
+        press("ArrowRight", { repeat: true })
         expect(route.val).toEqual({
             type: "postdetails",
             id: 3,
             tags: "test",
             origin: { kind: "list", tags: "test", pid: 42 },
         })
+    })
+
+    it("toggles focus once per press and ignores typing and modified keys", async () => {
+        const { route } = await import("../../src/router.ts")
+        const origin = { kind: "list" as const, tags: "test", pid: 0 }
+        api.fetchPostList.mockResolvedValue({ posts: [post(1)], lastPagePID: 0, tags: [] })
+        route.val = { type: "postdetails", id: 1, tags: "test", origin }
+        const { galleryFocus } = await import("../../src/state/gallery.ts")
+        const press = (
+            key: string,
+            init: Record<string, unknown> = {},
+            target: EventTarget = document,
+        ) => {
+            const event = new Event("keydown", { bubbles: true, cancelable: true })
+            Object.assign(event, { key, ...init })
+            target.dispatchEvent(event)
+        }
+        press("f")
+        expect(galleryFocus.val).toBe(true)
+        for (const init of [
+            { repeat: true },
+            { ctrlKey: true },
+            { metaKey: true },
+            { altKey: true },
+            { isComposing: true },
+        ]) {
+            press("F", init)
+            expect(galleryFocus.val).toBe(true)
+        }
+        for (const tag of ["input", "textarea", "select", "div"]) {
+            const field = document.createElement(tag)
+            if (tag === "div") field.setAttribute("contenteditable", "true")
+            document.body.append(field)
+            press("f", {}, field)
+            expect(galleryFocus.val).toBe(true)
+        }
+        press("F")
+        expect(galleryFocus.val).toBe(false)
     })
 
     it("deduplicates a post that the feed shift put into two pages", async () => {

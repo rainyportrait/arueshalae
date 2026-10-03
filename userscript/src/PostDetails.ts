@@ -416,14 +416,15 @@ function Filmstrip({
         "Gallery",
     )
     // The landscape header stacks the Gallery label + focus button above the
-    // counter to fit the narrow side strip. In portrait, the focus button
+    // counter to fit the narrow side strip, with the controls below the
+    // thumbnails to stay near their normal position. In portrait, the focus button
     // stays beside the counter at the other end of the bottom strip.
     const header = div(
         {
             class: clsx(
                 "flex px-0.5",
                 focus
-                    ? "items-center justify-between portrait:flex-row landscape:flex-col landscape:items-stretch landscape:gap-1"
+                    ? "items-center justify-between portrait:flex-row landscape:order-last landscape:flex-col landscape:items-stretch landscape:gap-1"
                     : "items-center justify-between",
             ),
         },

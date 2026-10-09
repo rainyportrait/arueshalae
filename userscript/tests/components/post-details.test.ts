@@ -118,6 +118,56 @@ describe("PostDetails gallery", () => {
         ])
     })
 
+    it.each([
+        { name: "downward drag", dx: 10, dy: 80, closes: true },
+        { name: "short downward drag", dx: 0, dy: 30, closes: false },
+        { name: "upward drag", dx: 0, dy: -80, closes: false },
+        { name: "diagonal drag", dx: 70, dy: 80, closes: false },
+        { name: "horizontal drag", dx: 80, dy: 10, closes: false },
+        { name: "cancelled drag", dx: 0, dy: 80, cancel: true, closes: false },
+        { name: "pinch gesture", dx: 0, dy: 80, pinch: true, closes: false },
+        { name: "drag outside focus mode", dx: 0, dy: 80, unfocused: true, closes: false },
+        { name: "drag on media padding", dx: 0, dy: 80, padding: true, closes: false },
+    ])(
+        "handles $name on the image",
+        async ({ dx, dy, closes, cancel, pinch, unfocused, padding }) => {
+            const origin = { kind: "list" as const, tags: "test", pid: 0 }
+            const { details: detailsState } = await import("../../src/state/details.ts")
+            const { galleryFocus } = await import("../../src/state/gallery.ts")
+            detailsState.val = { status: "ready", post: details(1), origin }
+            galleryFocus.val = !unfocused
+            const { PostDetails } = await import("../../src/PostDetails.ts")
+            document.body.append(PostDetails())
+            await flushVan()
+
+            const image = document.querySelector<HTMLImageElement>("img.arue-media")!
+            const holder = image.parentElement!
+            const target = padding ? holder.parentElement! : image
+            const start = { identifier: 1, clientX: 150, clientY: 100 }
+            const end = { ...start, clientX: 150 + dx, clientY: 100 + dy }
+            const touch = (type: string, touches: (typeof start)[], changedTouches = touches) => {
+                const event = new Event(type, { bubbles: true, cancelable: true })
+                Object.defineProperties(event, {
+                    touches: { value: touches },
+                    changedTouches: { value: changedTouches },
+                })
+                target.dispatchEvent(event)
+                return event
+            }
+            touch("touchstart", [start])
+            if (pinch) touch("touchstart", [start, { ...start, identifier: 2 }])
+            const move = touch("touchmove", [end])
+            if (closes) {
+                expect(holder.style.transform).toBe("translateY(40px)")
+                expect(move.defaultPrevented).toBe(true)
+            }
+            if (cancel) touch("touchcancel", [])
+            touch("touchend", [], [end])
+            expect(galleryFocus.val).toBe(!unfocused && !closes)
+            expect(holder.style.transform).toBe("")
+        },
+    )
+
     it("places the focused filmstrip below in portrait and beside in landscape", async () => {
         const origin = { kind: "list" as const, tags: "test", pid: 0 }
         const { details: detailsState } = await import("../../src/state/details.ts")

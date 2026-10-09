@@ -4,6 +4,11 @@
     touch-action: pan-y pinch-zoom;
 }
 
+/* Focused images own single-finger drags while retaining native pinch zoom. */
+body.arue-focus img.arue-media {
+    touch-action: pinch-zoom;
+}
+
 :root {
     color-scheme: dark;
 }

@@ -809,14 +809,15 @@ function buildShell(): Node {
         ),
     )
     // Mobile gallery swipe: a decisive horizontal drag starting on the media
-    // steps to the adjacent post (left = next). Vertical scrolls that begin
-    // on the media are left alone (horizontal-dominance check). On Chrome a
+    // steps to the adjacent post (left = next). A downward image drag closes
+    // focus mode; other vertical drags leave scrolling alone. On Chrome a
     // video's native controls consume the gesture before it reaches the page,
     // but Safari also delivers touches over them — a scrub on the seek bar
     // would read as a swipe. A scrub additionally fires `seeking` on the
     // video, so a seek while a touch is down is the signal that the gesture
     // was aimed at the controls, and it suppresses navigation.
-    let swipeStart: { x: number; y: number; id: number; url: string } | undefined
+    let swipeStart:
+        { x: number; y: number; id: number; url: string; dismissFocus: boolean } | undefined
     let multitouch = false
     let videoSeeking = false
     const resetSwipe = () => {
@@ -842,32 +843,46 @@ function buildShell(): Node {
             y: touch.clientY,
             id: touch.identifier,
             url: window.location.href,
+            dismissFocus:
+                galleryFocus.val &&
+                shown?.slot.el instanceof HTMLImageElement &&
+                event.target === shown.slot.el &&
+                (window.visualViewport?.scale ?? 1) <= 1,
         }
         // A seek from a previous, already-ended touch can't belong to this
         // one — clear it, otherwise it would suppress this swipe.
         videoSeeking = false
     })
-    mediaBox.addEventListener("touchmove", (event) => {
-        const start = swipeStart
-        if (start === undefined || event.touches.length !== 1) return
-        if (window.location.href !== start.url) {
-            resetSwipe()
-            return
-        }
-        const touch = event.touches[0]
-        if (touch?.identifier !== start.id) return
-        const dx = touch.clientX - start.x
-        const dy = touch.clientY - start.y
-        if (Math.abs(dx) < 8 || Math.abs(dx) < 1.5 * Math.abs(dy)) {
-            mediaHolder.style.transform = ""
-            return
-        }
-        if (shown?.slot.el instanceof HTMLVideoElement && videoSeeking) {
-            resetSwipe()
-            return
-        }
-        mediaHolder.style.transform = `translateX(${Math.sign(dx) * Math.min(Math.abs(dx) * 0.25, 48)}px)`
-    })
+    mediaBox.addEventListener(
+        "touchmove",
+        (event) => {
+            const start = swipeStart
+            if (start === undefined || event.touches.length !== 1) return
+            if (window.location.href !== start.url) {
+                resetSwipe()
+                return
+            }
+            const touch = event.touches[0]
+            if (touch?.identifier !== start.id) return
+            const dx = touch.clientX - start.x
+            const dy = touch.clientY - start.y
+            if (start.dismissFocus && galleryFocus.val && dy >= 8 && dy >= 1.5 * Math.abs(dx)) {
+                event.preventDefault()
+                mediaHolder.style.transform = `translateY(${Math.min(dy * 0.5, 96)}px)`
+                return
+            }
+            if (Math.abs(dx) < 8 || Math.abs(dx) < 1.5 * Math.abs(dy)) {
+                mediaHolder.style.transform = ""
+                return
+            }
+            if (shown?.slot.el instanceof HTMLVideoElement && videoSeeking) {
+                resetSwipe()
+                return
+            }
+            mediaHolder.style.transform = `translateX(${Math.sign(dx) * Math.min(Math.abs(dx) * 0.25, 48)}px)`
+        },
+        { passive: false },
+    )
     mediaBox.addEventListener("touchend", (event) => {
         if (event.touches.length === 0) multitouch = false
         if (multitouch || event.touches.length !== 0) {
@@ -882,6 +897,10 @@ function buildShell(): Node {
         if (touch === undefined) return
         const dx = touch.clientX - start.x
         const dy = touch.clientY - start.y
+        if (start.dismissFocus && galleryFocus.val && dy >= 48 && dy >= 1.5 * Math.abs(dx)) {
+            setGalleryFocus(false)
+            return
+        }
         if (Math.abs(dx) < 48 || Math.abs(dx) < 1.5 * Math.abs(dy)) return
         const suppress = shown?.slot.el instanceof HTMLVideoElement && videoSeeking
         videoSeeking = false

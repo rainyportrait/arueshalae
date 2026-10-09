@@ -156,6 +156,18 @@ describe("PostDetails gallery", () => {
         expect(focusButtons[0].parentElement?.className).toContain("hidden")
         expect(focusButtons[1].parentElement?.className).toContain("flex")
         expect(focusButtons[1].parentElement?.className).toContain("landscape:hidden")
+
+        // The landscape pair shares its row with nothing: the w-24 strip is
+        // narrower than the uppercase label plus two w-6 buttons, and
+        // body.arue-focus (overflow: hidden) clips the overflow off-screen.
+        const pair = focusButtons[0].parentElement!
+        const landscapeRow = pair.parentElement!
+        expect(landscapeRow.className).toContain("landscape:flex-col")
+        expect(landscapeRow.firstElementChild?.textContent).toBe("Gallery")
+        expect(landscapeRow.firstElementChild?.nextElementSibling).toBe(pair)
+        // On its own row the pair spreads across the strip instead of
+        // clustering at one edge.
+        expect(pair.className).toContain("landscape:[&>button]:flex-1")
     })
 
     it("keeps focus hearts in sync with membership, pending writes, and gallery steps", async () => {

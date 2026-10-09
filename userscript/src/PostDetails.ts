@@ -462,10 +462,15 @@ function Filmstrip({
         },
         "Gallery",
     )
-    // The landscape header stacks the Gallery label + focus button above the
+    // The landscape header stacks the Gallery label, the controls and the
     // counter to fit the narrow side strip, with the controls below the
-    // thumbnails to stay near their normal position. In portrait, the focus button
-    // stays beside the counter at the other end of the bottom strip.
+    // thumbnails to stay near their normal position. Label and controls need
+    // separate rows: the strip is w-24 (96px) and the uppercase label beside
+    // two w-6 buttons is ~110px, which body.arue-focus (overflow: hidden)
+    // would clip off the screen edge. On its own row the control pair spreads
+    // across the strip's width, so it reads as part of the column rather than
+    // a pair floating at one edge. In portrait, the focus button stays beside
+    // the counter at the other end of the bottom strip.
     const header = div(
         {
             class: clsx(
@@ -477,12 +482,21 @@ function Filmstrip({
         },
         div(
             {
-                class: clsx("flex items-center justify-between", focus && "landscape:w-full"),
+                class: clsx(
+                    "flex items-center justify-between",
+                    focus &&
+                        "landscape:w-full landscape:flex-col landscape:items-stretch landscape:gap-1",
+                ),
             },
             headerLabel,
             focus
                 ? div(
-                      { class: "hidden items-center gap-1 landscape:flex" },
+                      {
+                          // Each button flex-1 across the row; a flex item's 0%
+                          // basis beats its own w-6 on the main axis, so the two
+                          // split the strip and no row can overflow it.
+                          class: "hidden items-center gap-1 landscape:flex landscape:[&>button]:flex-1",
+                      },
                       favoriteControl,
                       FocusButton(),
                   )
